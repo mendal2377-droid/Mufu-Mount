@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.vercel/
+test-results/
+public/world/route_surfaces.json
+public/sunset.png

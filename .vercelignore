@@ -1,0 +1,6 @@
+node_modules
+tests
+test-results
+*.log
+public/world/route_surfaces.json
+public/sunset.png
