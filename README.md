@@ -2,6 +2,8 @@
 
 A browser 3D walking game adapted from the photo-informed Mount Mufu / Yangtze Blender scene. Explore the rainbow road, ridge, forest stairs and riverside; collect five field notes; change the weather or take a guided walk.
 
+**Play:** [mufu-mount.vercel.app](https://mufu-mount.vercel.app)
+
 ## Run locally
 
 Requires Node.js 22.12+ or 24 LTS.
