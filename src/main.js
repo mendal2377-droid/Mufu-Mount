@@ -7,6 +7,7 @@ import {
   constrainToRoute,
 } from "./navigation.js";
 import { NatureAudio } from "./audio.js";
+import { createLivingRiver } from "./river-life.js";
 import "./style.css";
 
 const $ = (s) => document.querySelector(s),
@@ -68,6 +69,7 @@ let renderer,
   hemi,
   sky,
   water,
+  riverLife,
   particles,
   rainLines,
   forestLOD,
@@ -107,13 +109,21 @@ function material(name, color) {
     side: THREE.DoubleSide,
   });
   const noSnow = /water|blue|pink|yellow line/i.test(name);
+  const sway = /leaf|foliage/i.test(name);
+  m.customProgramCacheKey = () => `mufu-${Number(noSnow)}-${Number(sway)}`;
   m.userData.baseColor = m.color.clone();
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uSnow = u.snow;
     shader.uniforms.uRain = u.storm;
+    shader.uniforms.windTime = u.time;
     shader.vertexShader =
-      "varying vec3 vWorldPoint; varying vec3 vWorldUp;\n" +
+      "uniform float windTime; uniform float uRain; varying vec3 vWorldPoint; varying vec3 vWorldUp;\n" +
       shader.vertexShader;
+    if (sway)
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvec3 windOrigin=vec3(0.);\n#ifdef USE_INSTANCING\nwindOrigin=instanceMatrix[3].xyz;\n#endif\ntransformed.x+=sin(windTime*1.25+windOrigin.x*.07)*max(0.,position.y-2.)*.018*(1.+uRain*2.);transformed.z+=cos(windTime*.9+windOrigin.z*.1)*max(0.,position.y-2.)*.01;",
+      );
     shader.vertexShader = shader.vertexShader.replace(
       "#include <worldpos_vertex>",
       "#include <worldpos_vertex>\nvec4 wp=vec4(transformed,1.0);\n#ifdef USE_INSTANCING\nwp=instanceMatrix*wp;\n#endif\nvWorldPoint=(modelMatrix*wp).xyz;vWorldUp=normalize(mat3(modelMatrix)*objectNormal);",
@@ -150,18 +160,8 @@ function createSky() {
   );
   sky.renderOrder = -10;
   scene.add(sky);
-  water = new THREE.Mesh(
-    new THREE.PlaneGeometry(70000, 70000),
-    new THREE.ShaderMaterial({
-      uniforms: u,
-      vertexShader:
-        "varying vec3 p;void main(){vec4 w=modelMatrix*vec4(position,1.);p=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}",
-      fragmentShader: `uniform float time,sunset,storm,snow,flash;varying vec3 p;void main(){vec3 v=normalize(cameraPosition-p);float wave=sin(p.x*.22+time*.9+sin(p.z*.12))*sin(p.z*.5-time*.65);float fine=sin(p.x*1.5+p.z*2.5+time*2.);vec3 col=mix(vec3(.24,.39,.38),vec3(.49,.32,.25),sunset);col=mix(col,vec3(.14,.23,.25),storm);col=mix(col,vec3(.36,.46,.48),snow*.6);col+=(wave*.017+fine*.012)*(1.+storm);float reflection=pow(max(0.,dot(normalize(vec3(v.x,0.,v.z)),normalize(vec3(-.8,0.,-.6)))),90.);col+=vec3(.9,.53,.2)*reflection*(.22+.2*wave)*sunset;float fog=1.-exp(-distance(cameraPosition,p)*.0002);col=mix(col,mix(vec3(.68,.79,.78),vec3(.35,.42,.42),storm),fog*.7);col+=flash*.2;gl_FragColor=vec4(col,1.);}`,
-    }),
-  );
-  water.rotation.x = -Math.PI / 2;
-  water.position.set(2300, 0.1, -1800);
-  scene.add(water);
+  riverLife = createLivingRiver(scene, u, routes[3].points);
+  water = riverLife.water;
 }
 function buildTrees(trees, buffer) {
   // Shared low-poly crowns, with full-height trunks. Placements come from Blender.
@@ -471,7 +471,9 @@ async function load() {
         treeCount: world.trees.length,
         audioReady: audio.started,
         audioEnabled: audio.enabled,
+        audioState: audio.ctx?.state,
         saved: [...saved],
+        river: riverLife.getStats(),
       }),
     };
   } catch (e) {
@@ -763,6 +765,8 @@ function animate() {
     updateTrees();
   }
   audio.update(weather, state.route === 3 ? 1 : 0.03, state.moving);
+  const traffic = riverLife.update(t, weather, camera);
+  audio.riverTraffic(traffic, t, state.playing && !state.overview);
   if (t - lastMap > 0.25) {
     lastMap = t;
     drawMap();
@@ -776,6 +780,24 @@ $("#enter").addEventListener("click", start);
 $("#resume").onclick = lock;
 $("#destination").onchange = (e) => goTo(Number(e.target.value));
 $("#overview").onclick = toggleOverview;
+$("#focus-view").onclick = () => {
+  const active = document.body.classList.toggle("focus-mode");
+  $("#focus-view").setAttribute("aria-pressed", String(active));
+  $("#focus-view").textContent = active ? "Show controls" : "Focus view";
+};
+$("#river-watch").onclick = () => {
+  goTo(3, false);
+  state.auto = false;
+  $("#auto").classList.remove("active");
+  $("#auto").textContent = "▷ Guided walk";
+  const view = riverLife.watchView(camera.aspect);
+  camera.position.copy(view.position);
+  camera.lookAt(view.target);
+  $("#resume").hidden = controls.isLocked;
+  lastTreeUpdate = -10;
+  drawMap();
+  toast("Passing ships, flowing water, and the riverside beacon. Try Sunset.");
+};
 document
   .querySelectorAll("[data-weather]")
   .forEach((b) => (b.onclick = () => setWeather(b.dataset.weather)));

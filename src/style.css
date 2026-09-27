@@ -7,6 +7,18 @@
   --lime: #e0edb0;
   --glass: rgba(18, 36, 31, 0.78);
 }
+body.focus-mode .trail-card,
+body.focus-mode .map-card,
+body.focus-mode .bottom-panel {
+  display: none;
+}
+body.focus-mode #touch-controls {
+  bottom: 24px;
+}
+#focus-view[aria-pressed="true"] {
+  background: #dbe8b6;
+  color: #18382b;
+}
 * {
   box-sizing: border-box;
 }

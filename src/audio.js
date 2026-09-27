@@ -4,6 +4,7 @@ export class NatureAudio {
     this.nodes = {};
     this.lastStep = 0;
     this.started = false;
+    this.lastHorn = -60;
   }
   async start() {
     if (this.ctx) {
@@ -88,5 +89,62 @@ export class NatureAudio {
   }
   thunder() {
     this.noise(3.8, 0.38, 170);
+  }
+  riverTraffic(traffic, time, active) {
+    if (!this.ctx || !this.started) return;
+    const c = this.ctx,
+      level = active ? Math.max(0, 1 - traffic.distance / 850) : 0;
+    if (!this.engine) {
+      const gain = c.createGain(),
+        pan = c.createStereoPanner();
+      gain.gain.value = 0;
+      gain.connect(pan);
+      pan.connect(this.master);
+      for (const hz of [43, 64.5]) {
+        const o = c.createOscillator();
+        o.type = "sine";
+        o.frequency.value = hz;
+        o.connect(gain);
+        o.start();
+      }
+      this.engine = { gain, pan };
+    }
+    this.engine.gain.gain.setTargetAtTime(
+      level * level * 0.013,
+      c.currentTime,
+      1.5,
+    );
+    this.engine.pan.pan.setTargetAtTime(traffic.pan, c.currentTime, 0.7);
+    if (
+      this.enabled &&
+      active &&
+      traffic.distance < 700 &&
+      time - this.lastHorn > 85
+    ) {
+      this.lastHorn = time;
+      const gain = c.createGain(),
+        pan = c.createStereoPanner();
+      pan.pan.value = traffic.pan;
+      gain.gain.setValueAtTime(0, c.currentTime);
+      gain.gain.linearRampToValueAtTime(0.027 * level, c.currentTime + 0.5);
+      gain.gain.setValueAtTime(0.027 * level, c.currentTime + 1.5);
+      gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 3.4);
+      gain.connect(pan);
+      pan.connect(this.master);
+      const voices = [110, 146.8, 220].map((hz) => {
+        const o = c.createOscillator();
+        o.type = "sine";
+        o.frequency.value = hz;
+        o.connect(gain);
+        o.start();
+        o.stop(c.currentTime + 3.5);
+        return o;
+      });
+      voices[0].onended = () => {
+        voices.forEach((o) => o.disconnect());
+        gain.disconnect();
+        pan.disconnect();
+      };
+    }
   }
 }

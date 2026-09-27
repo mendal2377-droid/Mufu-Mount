@@ -24,6 +24,9 @@ Open the local URL printed by Vite. `npm run build` creates the static site in `
 - Morning, sunset, storm and snow blend gradually. Sound starts after your click and can be muted.
 - **Save this moment** adds a field note. Notes persist in local browser storage; Help includes a reset button.
 - **Postcard** downloads your current view as a PNG.
+- **Watch river & beacon** takes you to the waterside viewing spot. Four cargo ships follow river-side lanes with animated wakes, gentle rocking and navigation lamps. A rotating beacon, circling birds, wind-driven leaves, distant engines and occasional directional ship horns bring movement to the scene.
+
+The water uses layered advected wave normals, view-dependent sky reflection, sunlight glints, current streaks and vessel wakes. The beacon includes a rotating beam, pulsing lens and water glimmer; storm conditions strengthen the waves. Ships and the beacon are artistic additions, not a live maritime data feed or surveyed landmark reconstruction. Engine and horn sounds are synthesized in the browser.
 
 ## Model and sound
 
