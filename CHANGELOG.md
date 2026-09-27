@@ -1,5 +1,32 @@
 # Change log
 
+## 2026-09-27 (third pass) — a camera on rails
+
+`src/tour.js` adds one piece of machinery used twice: a list of legs, each
+either a glide along a stretch of an exported route at eye height, a lift off
+it to show where you have been, or a stand-and-look, with each leg fading up
+from black and back down so the cuts are cuts rather than jumps.
+
+**The loop behind the title now reaches the river.** It was a single slow drift
+along the rainbow road. It is now four legs — the road in morning light, the
+riverside promenade at golden hour, the ridge at first light, and the Yangtze
+again — and the mood moves with them.
+
+**A hands-free circuit.** `Whole circuit`, or `T`: about five minutes up
+through the woods at first light, out over the ridge, along the ridge trail,
+onto the river terrace, down the coloured road and the green-barrier road,
+down to the water, and then the long riverside into the evening. Two of the
+ten legs are aerial, to give the overview across the mountain and the river.
+A caption names each stretch with a progress bar, the interface clears itself
+away, and Esc or any movement key steps off wherever you are and puts you back
+on the nearest corridor.
+
+`tests/tour.test.js` checks both tours are actually playable: every leg names
+a route that exists, ground legs move at a walking pace rather than a sprint,
+aerial legs stay over the modelled world and look downwards, the circuit
+touches all five corridors and runs dawn to sunset, and the title loop reaches
+the river. `tests/tour-browser.mjs` drives the real thing.
+
 ## 2026-09-27 (later) — a way onto the terrace, and a real sky
 
 Follow-up to the same day's work, after looking at the result and at three of

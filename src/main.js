@@ -19,6 +19,7 @@ import {
 import { createMemories, createMemoryWalk } from "./memories.js";
 import { createUndergrowth, createMotes, createFallingLeaves } from "./life.js";
 import { createCameraFeel } from "./camera-feel.js";
+import { createCinematic, titleLoop, wholeCircuit } from "./tour.js";
 import "./style.css";
 
 const $ = (s) => document.querySelector(s),
@@ -28,6 +29,7 @@ const state = {
   playing: false,
   auto: false,
   memoryWalk: false,
+  tour: false,
   overview: false,
   photoMode: false,
   weather: "morning",
@@ -102,6 +104,7 @@ let renderer,
   leaves,
   postfx,
   feel,
+  cinematic,
   particles,
   rainLines,
   forestLOD,
@@ -132,13 +135,14 @@ const sunsetDirection = SUNSET_DIRECTION.clone(),
   sunScreen = new THREE.Vector3();
 let toastTimer,
   simTime = 0,
+  cinematicFade = 0,
+  lastTourLeg = -1,
   flashTimer = 0,
   lastTreeUpdate = -10,
   lastMap = -10,
   lastLightning = 0,
   lastGrowth = -10,
   walkTimeBlend = 0,
-  introPhase = 0,
   fadeIn = 1,
   qualitySamples = [],
   qualityLocked = false;
@@ -760,6 +764,9 @@ async function load() {
     memoryWalk = createMemoryWalk(memories, routes);
     buildMemoryStrip();
 
+    cinematic = createCinematic(routes);
+    cinematic.play(titleLoop(), { loop: true });
+
     postfx = createPostFX(renderer, scene, camera, pickInitialQuality());
     applyQuality(postfx.tier);
 
@@ -784,6 +791,10 @@ async function load() {
       postfx,
       goTo,
       setWeather,
+      startTour,
+      endTour,
+      cinematic: () => cinematic,
+      circuitLegs: wholeCircuit,
       step: (count = 1, dt = 1 / 60) => {
         for (let i = 0; i < count; i++) frame(dt);
       },
@@ -965,7 +976,62 @@ function startMemoryWalk() {
   }
 }
 
+// --- the whole circuit ------------------------------------------------------
+
+function startTour() {
+  if (!state.ready) return;
+  if (state.tour) {
+    endTour(false);
+    return;
+  }
+  if (state.overview) toggleOverview();
+  stopWalks();
+  state.tour = true;
+  lastTourLeg = -1;
+  controls.unlock();
+  keys.clear();
+  feel.reset();
+  const legs = wholeCircuit();
+  cinematic.play(legs);
+  // Set the opening light now rather than a frame later, so the circuit does
+  // not start on whatever mood happened to be showing.
+  if (legs[0].mood) setWeather(legs[0].mood);
+  $("#tour-label").textContent = legs[0].label;
+  $("#tour-bar").style.width = "0%";
+  document.body.classList.add("touring");
+  $("#tour-button").classList.add("active");
+  $("#tour-button").textContent = "■ Leave the circuit";
+  $("#resume").hidden = true;
+  toast("The whole circuit: woods, ridge, terrace, road, river. Press Esc to step off.");
+}
+
+function endTour(completed) {
+  if (!state.tour) return;
+  state.tour = false;
+  cinematic.stop();
+  cinematicFade = 0;
+  document.body.classList.remove("touring");
+  $("#tour-button").classList.remove("active");
+  $("#tour-button").textContent = "⛰ Whole circuit";
+  $("#resume").hidden = controls.isLocked;
+  feel.reset();
+  // Put the walker back on the nearest corridor so free walking just works.
+  const near = closestRoute(
+    [camera.position.x, camera.position.y - 1.7, camera.position.z],
+    routes,
+  );
+  state.route = near.route;
+  camera.position.set(near.position[0], near.position[1] + 1.7, near.position[2]);
+  drawMap();
+  toast(
+    completed
+      ? "That is the whole circuit. Wander it yourself now."
+      : "Back on your own feet.",
+  );
+}
+
 function stopWalks() {
+  if (state.tour) endTour(false);
   state.auto = false;
   state.memoryWalk = false;
   $("#auto").classList.remove("active");
@@ -1009,9 +1075,12 @@ function lock() {
 function start() {
   if (!state.ready) return;
   state.playing = true;
+  cinematic.stop();
+  cinematicFade = 0;
   $("#welcome").hidden = true;
   $("#hud").hidden = false;
   document.body.classList.add("playing");
+  setWeather("morning");
   goTo(0, false);
   lock();
   audio
@@ -1352,22 +1421,23 @@ function frame(elapsed) {
   let strafe = 0,
     sprinting = false;
 
-  if (!state.playing && !state.overview) {
-    // A slow drift over the rainbow road behind the title, so the first thing
-    // anyone sees is already moving.
-    introPhase += dt * 0.014;
-    const path = routes[2].points;
-    const i = Math.min(
-      path.length - 2,
-      Math.floor((introPhase % 1) * (path.length - 2)),
-    );
-    const a = path[i],
-      b = path[i + 1];
-    camera.position.set(a[0], a[1] + 2.4, a[2]);
-    camera.lookAt(b[0], b[1] + 2.0, b[2]);
-    camera.rotation.y += Math.sin(t * 0.12) * 0.16;
-    camera.rotation.x = Math.sin(t * 0.09) * 0.045;
-    camera.rotation.z = 0;
+  if ((!state.playing || state.tour) && !state.overview && cinematic?.running) {
+    // The loop behind the title, and the hands-free circuit, are the same
+    // machinery: a camera on rails through the road, the ridge and the river.
+    const shot = cinematic.update(dt, camera, t);
+    if (shot) {
+      cinematicFade = shot.fade;
+      if (shot.leg.mood && shot.leg.mood !== state.weather) setWeather(shot.leg.mood);
+      if (state.tour) {
+        if (shot.index !== lastTourLeg) {
+          lastTourLeg = shot.index;
+          $("#tour-label").textContent = shot.leg.label;
+          if (shot.leg.route !== undefined) state.route = shot.leg.route;
+        }
+        $("#tour-bar").style.width = `${(cinematic.progress * 100).toFixed(1)}%`;
+        if (shot.finished) endTour(true);
+      }
+    }
   } else if (state.playing && !state.overview && !$("#info").open) {
     const f =
         (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) -
@@ -1514,7 +1584,7 @@ function frame(elapsed) {
     dt,
   );
   fadeIn = Math.max(0, fadeIn - dt * 0.7);
-  postfx.grade.uniforms.uFade.value = fadeIn;
+  postfx.grade.uniforms.uFade.value = Math.max(fadeIn, cinematicFade);
   postfx.grade.uniforms.uVignette.value = state.overview ? 0.5 : 1;
 
   if (t - lastMap > 0.25) {
@@ -1541,6 +1611,7 @@ $("#focus-view").onclick = () => {
   $("#focus-view").textContent = active ? "Show controls" : "Focus view";
 };
 $("#memory-walk").onclick = startMemoryWalk;
+$("#tour-button").onclick = startTour;
 $("#photo-mode").onclick = () => {
   state.photoMode = !state.photoMode;
   document.body.classList.toggle("photo-mode", state.photoMode);
@@ -1651,6 +1722,16 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "Escape") {
     controls?.unlock();
     keys.clear();
+    if (state.tour) endTour(false);
+  }
+  // Any attempt to walk takes the circuit off the rails.
+  if (
+    state.tour &&
+    ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
+      e.code,
+    )
+  ) {
+    endTour(false);
   }
   if (e.target.matches("input,select,textarea") || $("#info").open) return;
   if (e.code === "KeyP" && state.ready) {
@@ -1660,6 +1741,11 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.code === "KeyM" && state.ready) {
     startMemoryWalk();
+    e.preventDefault();
+    return;
+  }
+  if (e.code === "KeyT" && state.ready) {
+    startTour();
     e.preventDefault();
     return;
   }

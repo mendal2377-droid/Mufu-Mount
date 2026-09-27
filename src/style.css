@@ -673,6 +673,86 @@ body.memory-open .trail-card {
   transition: opacity 0.45s ease 0.15s;
 }
 
+/* --- the whole circuit ------------------------------------------------- */
+.tour-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 164px;
+  transform: translate(-50%, 10px);
+  width: min(420px, calc(100vw - 48px));
+  text-align: center;
+  padding: 14px 20px 15px;
+  border-radius: 14px;
+  background: rgba(12, 24, 20, 0.66);
+  backdrop-filter: blur(12px);
+  border: 1px solid #e6edcc24;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 4;
+}
+body.touring .tour-banner {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.tour-banner .eyebrow {
+  font-size: 8px;
+  letter-spacing: 2.6px;
+  color: #a9bda4;
+}
+.tour-banner strong {
+  display: block;
+  margin: 5px 0 9px;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+}
+.tour-track {
+  height: 2px;
+  border-radius: 2px;
+  background: #ffffff1f;
+  overflow: hidden;
+}
+.tour-track i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--lime);
+  transition: width 0.35s linear;
+}
+.tour-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: #93a78f;
+}
+/* Nothing but the landscape while the circuit plays. */
+body.touring .trail-card,
+body.touring .map-card,
+body.touring .memory-rail,
+body.touring .memory-card,
+body.touring .crosshair,
+body.touring #touch-controls,
+body.touring .resume {
+  opacity: 0;
+  pointer-events: none;
+}
+body.touring .map-card,
+body.touring .trail-card,
+body.touring .memory-rail {
+  transition: opacity 0.6s ease;
+}
+body.touring .control-hint {
+  display: none;
+}
+#tour-button.active {
+  background: #f2cf95;
+  color: #2a1c0c;
+}
+
 #memory-walk.active,
 #photo-mode[aria-pressed="true"] {
   background: #f2cf95;
