@@ -41,12 +41,13 @@ export function makeRiverRoute(points) {
 }
 
 const waterFragment = `
-uniform float time,sunset,storm,snow,flash;
+uniform float time,sunset,storm,snow,flash,dawn;
+uniform vec3 uSunDir;
 uniform vec4 ships[4]; uniform vec3 beacon; uniform float beaconPower;
 varying vec3 p;
 float hash(vec2 q){return fract(sin(dot(q,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 q){vec2 i=floor(q),f=fract(q);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
-vec3 reflectedSky(vec3 d){float h=max(d.y,0.);vec3 horizon=mix(vec3(.48,.64,.60),vec3(.78,.39,.20),sunset);vec3 zenith=mix(vec3(.14,.30,.43),vec3(.25,.20,.32),sunset);vec3 sky=mix(horizon,zenith,pow(h,.55));sky=mix(sky,mix(vec3(.25,.33,.34),vec3(.07,.12,.15),h),storm*.87);sky=mix(sky,vec3(.46,.55,.58),snow*.5);vec2 c=d.xz/(.3+abs(d.y))*2.+vec2(time*.009,0.);float cloud=smoothstep(.4,.8,noise(c)*.7+noise(c*2.1)*.3);return mix(sky,mix(vec3(.68,.74,.68),vec3(.20,.26,.27),storm),cloud*.22)*.48;}
+vec3 reflectedSky(vec3 d){float h=max(d.y,0.);vec3 horizon=mix(vec3(.48,.64,.60),vec3(.80,.46,.26),sunset);vec3 zenith=mix(vec3(.14,.30,.43),vec3(.10,.24,.46),sunset);vec3 sky=mix(horizon,zenith,pow(h,.55));sky=mix(sky,mix(vec3(.25,.33,.34),vec3(.07,.12,.15),h),storm*.87);sky=mix(sky,vec3(.46,.55,.58),snow*.5);vec2 c=d.xz/(.3+abs(d.y))*2.+vec2(time*.009,0.);float cloud=smoothstep(.4,.8,noise(c)*.7+noise(c*2.1)*.3);return mix(sky,mix(vec3(.68,.74,.68),vec3(.20,.26,.27),storm),cloud*.22)*.48;}
 void main(){
   vec3 V=normalize(cameraPosition-p);float dist=distance(cameraPosition,p);
   vec2 flow=normalize(vec2(.68,-.73));vec2 q=p.xz-flow*time*.9;
@@ -56,11 +57,28 @@ void main(){
   float chop=noise(q*.065+vec2(swell));slope+=vec2(sin(q.y*.9+chop*5.),cos(q.x*.7+chop*5.))*.032*(1.-smoothstep(80.,700.,dist));
   vec3 N=normalize(vec3(-slope.x,1.,-slope.y));vec3 R=reflect(-V,N);
   float fresnel=.035+.965*pow(1.-max(0.,dot(N,V)),5.);
-  vec3 sediment=mix(vec3(.12,.205,.17),vec3(.22,.265,.18),chop);sediment=mix(sediment,vec3(.09,.14,.14),storm*.55);
+  // The Yangtze here carries a heavy silt load: the body colour is a turbid
+  // brown-green, not the blue-green of open water.
+  vec3 sediment=mix(vec3(.150,.150,.112),vec3(.232,.222,.158),chop);sediment=mix(sediment,vec3(.105,.120,.112),storm*.55);
   vec3 color=mix(sediment,reflectedSky(R),.28+fresnel*.68);
-  vec3 L=normalize(vec3(-.8,mix(.55,.08,sunset),-.6));vec3 H=normalize(L+V);
+  vec3 L=normalize(uSunDir);vec3 H=normalize(L+V);
+  float dusk=max(sunset,dawn*.8);
+  vec3 sunTint=mix(vec3(1.,.88,.62),vec3(1.,.47,.15),dusk);
+  float clarity=(1.-storm*.93)*(1.-snow*.65);
   float spec=pow(max(dot(N,H),0.),mix(180.,65.,storm));
-  color+=vec3(1.,mix(.88,.49,sunset),mix(.62,.20,sunset))*spec*(1.-storm*.93)*(1.-snow*.65)*1.6;
+  color+=sunTint*spec*clarity*1.4;
+  // The glitter path. A low sun over broken water does not make one highlight,
+  // it makes a column of them running from the horizon back to the observer:
+  // narrow across the sun's bearing, long along it, and breaking up into
+  // separate sparks as the chop catches.
+  vec2 sunAz=normalize(uSunDir.xz+vec2(1e-5));
+  vec2 toFrag=normalize(p.xz-cameraPosition.xz+vec2(1e-5));
+  float along=max(dot(toFrag,sunAz),0.);
+  float lowSun=1.-smoothstep(.02,.42,uSunDir.y);
+  float path=pow(along,mix(900.,230.,lowSun));
+  float sparkle=smoothstep(.40,.92,noise(q*1.7)*.5+noise(q*8.5)*.5+swell*.55);
+  float reach=smoothstep(12.,60.,dist);
+  color+=sunTint*path*sparkle*reach*lowSun*clarity*3.4;
   // Thin foam streaks travel downstream instead of a tiled stationary pattern.
   float streak=pow(noise(vec2(dot(q,vec2(-flow.y,flow.x))*.14,dot(q,flow)*.009)),9.);
   color+=vec3(.24,.28,.24)*streak*(.18+storm*.8)*(1.-smoothstep(300.,1600.,dist));
@@ -69,6 +87,13 @@ void main(){
   color=mix(color,vec3(.71,.79,.74),clamp(wake,0.,.8));
   // Lantern glitter is stretched towards the observer across the ripples.
   vec2 toLight=beacon.xz-p.xz;vec3 B=normalize(vec3(toLight.x,beacon.y,toLight.y));float bspec=pow(max(dot(N,normalize(B+V)),0.),55.);color+=vec3(1.,.48,.12)*bspec*beaconPower*4./(1.+dot(toLight,toLight)/6000.);
+  // and, like the buoy in the dusk photographs, it drags a broken column of
+  // light straight down the water towards whoever is looking at it.
+  vec2 beaconAz=normalize(beacon.xz-cameraPosition.xz+vec2(1e-5));
+  float bAlong=max(dot(toFrag,beaconAz),0.);
+  float bPath=pow(bAlong,620.)*smoothstep(10.,45.,dist)
+             *(1.-smoothstep(0.,1.15,length(p.xz-cameraPosition.xz)/max(60.,length(beacon.xz-cameraPosition.xz))));
+  color+=vec3(1.,.55,.16)*bPath*sparkle*beaconPower*2.6;
   float fog=1.-exp(-dist*.00017);color=mix(color,reflectedSky(vec3(R.x,.04,R.z)),fog*.7);color+=flash*.2;
   // Left in linear HDR: the post-processing chain tone maps and encodes once,
   // for the water, the sky dome and the lit scene together.

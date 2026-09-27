@@ -183,14 +183,19 @@ function mergePlanes(geometries) {
   return merged;
 }
 
-/** Pollen and dust that only really shows when the sun is low and clear. */
-export function createMotes(scene, shared, count = 900) {
+/**
+ * Pollen and dust. Real motes only read where there is something dark behind
+ * them and light across them: low down, close by, and never as a field of
+ * specks against open sky. The box is deliberately shallow and the alpha dies
+ * off above eye level.
+ */
+export function createMotes(scene, shared, count = 240) {
   const positions = new Float32Array(count * 3);
   const seeds = new Float32Array(count);
   for (let i = 0; i < count; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * 54;
-    positions[i * 3 + 1] = Math.random() * 16;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * 54;
+    positions[i * 3] = (Math.random() - 0.5) * 26;
+    positions[i * 3 + 1] = Math.random() * 7;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 26;
     seeds[i] = Math.random();
   }
   const geometry = new THREE.BufferGeometry();
@@ -204,24 +209,30 @@ export function createMotes(scene, shared, count = 900) {
         ...shared,
         uMap: { value: softDot() },
         uTint: { value: new THREE.Color(0xffe6b4) },
+        uEyeHeight: { value: 3.5 },
       },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       vertexShader: `
-        uniform float time, storm, snow, sunset;
+        uniform float time, storm, snow, sunset, dawn;
+        uniform float uEyeHeight;
         attribute float seed;
         varying float vAlpha;
         void main(){
           vec3 p = position;
-          p.y = mod(p.y + time * (0.15 + seed * 0.25), 16.0);
-          p.x += sin(time * 0.31 + seed * 25.0) * 1.6;
-          p.z += cos(time * 0.27 + seed * 31.0) * 1.6;
+          p.y = mod(p.y + time * (0.10 + seed * 0.16), 7.0);
+          p.x += sin(time * 0.31 + seed * 25.0) * 1.1;
+          p.z += cos(time * 0.27 + seed * 31.0) * 1.1;
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
-          float near = 1.0 - smoothstep(6.0, 34.0, -mv.z);
-          vAlpha = near * (0.30 + sunset * 0.55) * (1.0 - storm * 0.85) * (1.0 - snow * 0.6);
+          float near = smoothstep(1.5, 4.0, -mv.z) * (1.0 - smoothstep(9.0, 20.0, -mv.z));
+          // Fade out as a mote rises past the eye, where it would only ever be
+          // seen as a speck on the sky.
+          float low = 1.0 - smoothstep(0.4, 2.6, p.y - uEyeHeight);
+          vAlpha = near * low * (0.16 + sunset * 0.30 + dawn * 0.10)
+                 * (1.0 - storm * 0.9) * (1.0 - snow * 0.7);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = clamp((2.0 + seed * 3.4) * 90.0 / max(2.0, -mv.z), 1.0, 9.0);
+          gl_PointSize = clamp((1.4 + seed * 1.6) * 60.0 / max(2.0, -mv.z), 1.0, 4.0);
         }`,
       fragmentShader: `
         uniform sampler2D uMap; uniform vec3 uTint;
@@ -238,15 +249,19 @@ export function createMotes(scene, shared, count = 900) {
   return points;
 }
 
-/** A slow drift of leaves, heavier when the wind picks up. */
-export function createFallingLeaves(scene, shared, count = 260) {
-  const geometry = new THREE.PlaneGeometry(0.19, 0.13);
+/**
+ * A slow drift of leaves, heavier when the wind picks up. Kept few, close and
+ * below the canopy: a sky full of drifting flecks reads as dirt on the lens,
+ * not as weather.
+ */
+export function createFallingLeaves(scene, shared, count = 80) {
+  const geometry = new THREE.PlaneGeometry(0.125, 0.085);
   const offsets = new Float32Array(count * 3);
   const seeds = new Float32Array(count);
   for (let i = 0; i < count; i++) {
-    offsets[i * 3] = (Math.random() - 0.5) * 60;
-    offsets[i * 3 + 1] = Math.random() * 22;
-    offsets[i * 3 + 2] = (Math.random() - 0.5) * 60;
+    offsets[i * 3] = (Math.random() - 0.5) * 34;
+    offsets[i * 3 + 1] = Math.random() * 13;
+    offsets[i * 3 + 2] = (Math.random() - 0.5) * 34;
     seeds[i] = Math.random();
   }
   geometry.setAttribute("offset", new THREE.InstancedBufferAttribute(offsets, 3));
@@ -255,21 +270,22 @@ export function createFallingLeaves(scene, shared, count = 260) {
   const instanced = new THREE.InstancedMesh(
     geometry,
     new THREE.ShaderMaterial({
-      uniforms: { ...shared },
+      uniforms: { ...shared, uEyeHeight: { value: 3.5 } },
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: false,
       vertexShader: `
         uniform float time, storm, snow;
+        uniform float uEyeHeight;
         attribute vec3 offset; attribute float seed;
         varying float vShade; varying float vAlpha;
         void main(){
           float fall = 0.55 + seed * 0.7 + storm * 1.9;
           vec3 base = offset;
-          base.y = mod(offset.y - time * fall, 22.0);
+          base.y = mod(offset.y - time * fall, 13.0);
           float swirl = time * (0.7 + seed * 1.3) + seed * 40.0;
-          base.x += sin(swirl) * (1.5 + storm * 2.4);
-          base.z += cos(swirl * 0.8) * (1.5 + storm * 2.4);
+          base.x += sin(swirl) * (1.2 + storm * 2.0);
+          base.z += cos(swirl * 0.8) * (1.2 + storm * 2.0);
           // Spin each leaf about its own centre before placing it.
           float a = swirl * 1.4;
           vec3 local = position;
@@ -277,16 +293,19 @@ export function createFallingLeaves(scene, shared, count = 260) {
           local = vec3(local.x, local.y * cos(a * 0.7), local.y * sin(a * 0.7) + local.z);
           vec4 mv = modelViewMatrix * vec4(base + local, 1.0);
           vShade = 0.55 + 0.45 * abs(sin(a));
-          vAlpha = (1.0 - smoothstep(18.0, 32.0, -mv.z)) * (1.0 - snow * 0.8);
+          // Below the eye, and not so close that one leaf fills the frame.
+          float low = 1.0 - smoothstep(-1.2, 2.0, base.y - uEyeHeight);
+          float near = smoothstep(1.6, 3.6, -mv.z) * (1.0 - smoothstep(9.0, 17.0, -mv.z));
+          vAlpha = low * near * (1.0 - snow * 0.8);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
         uniform float sunset;
         varying float vShade; varying float vAlpha;
         void main(){
-          vec3 leaf = mix(vec3(0.42, 0.40, 0.14), vec3(0.62, 0.34, 0.11), vShade);
+          vec3 leaf = mix(vec3(0.24, 0.23, 0.08), vec3(0.38, 0.20, 0.07), vShade);
           leaf = mix(leaf, leaf * vec3(1.2, 0.9, 0.7), sunset);
-          gl_FragColor = vec4(leaf * (0.5 + vShade * 0.7), vAlpha * 0.85);
+          gl_FragColor = vec4(leaf * (0.4 + vShade * 0.5), vAlpha * 0.8);
         }`,
     }),
     count,

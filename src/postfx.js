@@ -90,7 +90,7 @@ const AtmosphereShader = {
         }
         gathered /= 22.0;
         float falloff = pow(1.0 - clamp(spread / 1.15, 0.0, 1.0), 2.2);
-        base.rgb += uSunColor * gathered * falloff * uSunVisible * uShafts * 1.5;
+        base.rgb += uSunColor * gathered * falloff * uSunVisible * uShafts * 0.85;
       }
     }
 
@@ -175,7 +175,9 @@ export function createPostFX(renderer, scene, camera, tierName = "cinematic") {
   const renderPass = new RenderPass(scene, camera);
   const atmosphere = new ShaderPass(AtmosphereShader);
   atmosphere.uniforms.tDepth.value = depthTexture;
-  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.52, 0.72, 0.86);
+  // A high threshold: only the sun, the water glitter and the lit frames
+  // should bloom. Lower than this and a sunlit tree canopy turns to soup.
+  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.45, 0.55, 1.15);
   const output = new OutputPass();
   const grade = new ShaderPass(GradeShader);
   const antialias = new FXAAPass();

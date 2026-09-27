@@ -319,7 +319,8 @@ export function createMemories(scene, data, options = {}) {
           0.4 + 0.6 * THREE.MathUtils.clamp(1 - item.distance / 30, 0, 1);
         item.border.material.opacity = shown * 0.85;
         item.backing.material.opacity = shown * 0.5;
-        item.motes.material.opacity = THREE.MathUtils.clamp(1 - item.distance / 42, 0, 1) * 0.85;
+        item.motes.material.opacity =
+          THREE.MathUtils.clamp(1 - item.distance / 26, 0, 1) * 0.42;
         item.shaft.material.uniforms.uTime.value = time;
         item.shaft.material.uniforms.uPower.value =
           THREE.MathUtils.clamp(1 - item.distance / 70, 0, 1) * (0.55 + shown * 0.45);

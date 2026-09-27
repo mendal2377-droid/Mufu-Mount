@@ -1,5 +1,55 @@
 # Change log
 
+## 2026-09-27 (later) — a way onto the terrace, and a real sky
+
+Follow-up to the same day's work, after looking at the result and at three of
+the user's own sunset photographs of this bank.
+
+**A way onto the river terrace.** The square-spiral lookout could be seen but
+not reached: the ridge trail's balustrade sealed it off, and the walking
+corridors were islands with no way between them. `RAIL_OPENINGS` in
+`src/main.js` now cuts a gate in that balustrade at load — a browser-side edit
+by world-space box, so the export and the Blender scene keep their rail
+unbroken — and a short `River terrace` spur route runs through the gate, along
+the west edge of the deck, clear of the two benches, to the open river side.
+Walking into a junction now hands you to whichever corridor you are actually
+heading down, so the whole network is connected rather than a set of rails.
+`03 · River lookout` puts you on the terrace instead of outside it.
+
+**Far fewer things in the sky.** Pollen went from 900 motes in a 54 × 16 × 54
+box to 240 in a 26 × 7 × 26 one, leaves from 260 to 80 and smaller; both now
+fade out above the eye and very close to the camera. They were reading as a
+field of specks on the sky.
+
+**The sun was in the wrong place.** The scene's compass can be solved from its
+own geometry — see the README — and with it fixed, the sky now follows real
+NOAA solar positions for Nanjing on 26 September 2026. The old arc put the
+*morning* sun in the west; every shadow on the walk fell the wrong way. Sunset
+moved to azimuth 265°, low over the water, which is what 燕矶夕照 means and
+what the user's photographs show.
+
+**A sky built from those photographs.** Blue overhead with the warmth held in
+a shallow band along the horizon, widest towards the sun, instead of a pink
+wash over everything. Cirrus on a stretched noise grid so it streaks. Cloud
+only takes the sunset's colour where the sunset can reach it. A crescent moon
+with an evening star. A low dark far shore — Bagua Island and the north bank —
+with pylons, and after sunset a scatter of shore lights and a lit crossing.
+
+**A glitter path on the water.** A low sun over broken water makes a column of
+highlights running back to the observer, not one blob. Narrow across the sun's
+bearing, long along it, breaking into sparks on the chop. The riverside beacon
+drags one too. The water body colour also moved from blue-green to the turbid
+brown-green the Yangtze actually is here.
+
+Bloom was blowing out sunlit foliage: threshold 0.86 → 1.15, per-mood strengths
+cut by roughly a third, sun shafts from 1.5 to 0.85, and the sun disc
+tightened from about 1.25° across to about 0.5°.
+
+Still not verified: frame rates anywhere but one Intel Iris Xe laptop and
+headless Chrome. Still not done: the barges are tall cargo vessels rather than
+the low flat sand carriers in the photographs, and there are no people on the
+bank.
+
 ## 2026-09-27 — the morning, and a rebuilt renderer
 
 Two commits on top of `1c40e2c`, the last verified production revision.

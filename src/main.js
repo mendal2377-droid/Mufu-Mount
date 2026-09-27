@@ -12,6 +12,7 @@ import { createPostFX, TIERS } from "./postfx.js";
 import {
   createSkyDome,
   sunDirectionForMinutes,
+  SUNSET_DIRECTION,
   WALK_START_MINUTES,
   WALK_END_MINUTES,
 } from "./sky.js";
@@ -110,6 +111,9 @@ let renderer,
   returnPose,
   geometryBytes = 0;
 const weather = { dawn: 0, sunset: 0, storm: 0, snow: 0 };
+// One sun for everything. The sky draws its disc here, the water lays its
+// glitter path along it, and the directional light casts from it.
+const sunDirection = new THREE.Vector3(-0.8, 0.55, -0.6).normalize();
 const u = {
   time: { value: 0 },
   dawn: { value: 0 },
@@ -117,11 +121,14 @@ const u = {
   storm: { value: 0 },
   snow: { value: 0 },
   flash: { value: 0 },
+  uSunDir: { value: sunDirection },
+  // Elevation of the water plane's far edge for the current eye height, so
+  // the far bank can be drawn where the water actually ends.
+  uHorizon: { value: 0 },
 };
 const clock = new THREE.Clock(),
   dummy = new THREE.Object3D();
-const sunDirection = new THREE.Vector3(),
-  sunsetDirection = new THREE.Vector3(0.82, 0.075, 0.56).normalize(),
+const sunsetDirection = SUNSET_DIRECTION.clone(),
   sunScreen = new THREE.Vector3();
 let toastTimer,
   simTime = 0,
@@ -143,7 +150,7 @@ const GRADES = {
     gain: [1.02, 1.01, 0.99],
     saturation: 1.12,
     contrast: 1.16,
-    bloom: 0.46,
+    bloom: 0.30,
     exposure: 1.16,
   },
   dawn: {
@@ -151,15 +158,15 @@ const GRADES = {
     gain: [1.04, 0.96, 0.95],
     saturation: 1.0,
     contrast: 1.2,
-    bloom: 0.8,
+    bloom: 0.52,
     exposure: 0.9,
   },
   sunset: {
-    lift: [0.02, 0.01, 0.006],
-    gain: [1.08, 0.99, 0.92],
-    saturation: 1.24,
-    contrast: 1.16,
-    bloom: 0.84,
+    lift: [0.014, 0.008, 0.006],
+    gain: [1.04, 1.0, 0.97],
+    saturation: 1.14,
+    contrast: 1.15,
+    bloom: 0.55,
     exposure: 1.12,
   },
   storm: {
@@ -167,7 +174,7 @@ const GRADES = {
     gain: [0.93, 0.96, 1.0],
     saturation: 0.74,
     contrast: 1.2,
-    bloom: 0.32,
+    bloom: 0.22,
     exposure: 0.86,
   },
   snow: {
@@ -175,7 +182,7 @@ const GRADES = {
     gain: [0.99, 1.0, 1.03],
     saturation: 0.68,
     contrast: 1.04,
-    bloom: 0.6,
+    bloom: 0.40,
     exposure: 1.1,
   },
 };
@@ -262,9 +269,63 @@ function material(name, color) {
 function createSky() {
   const built = createSkyDome(scene, u);
   sky = built.dome;
-  sky.material.uniforms.uSunDir.value = sunDirection;
   riverLife = createLivingRiver(scene, u, routes[3].points);
   water = riverLife.water;
+}
+
+/**
+ * Gaps cut into the exported railings so that a place you can see can also be
+ * reached. Each one is a world-space box; triangles whose centre falls inside
+ * it are collapsed to nothing. The export itself is untouched — this is a
+ * browser-side edit, and the Blender scene still has the rail unbroken.
+ */
+const RAIL_OPENINGS = [
+  {
+    // The ridge trail runs along the back of the square-spiral river terrace,
+    // and its balustrade sealed the terrace off. This is the way in.
+    name: /pale weathered balustrade/i,
+    min: [2627.4, 187.4, -973.6],
+    max: [2632.4, 191.5, -969.9],
+  },
+];
+
+function carveOpenings(mesh) {
+  const cuts = RAIL_OPENINGS.filter((o) => o.name.test(mesh.name));
+  if (!cuts.length) return 0;
+  const position = mesh.geometry.attributes.position;
+  const index = mesh.geometry.index;
+  if (!index) return 0;
+  const array = index.array;
+  const inside = (cut, x, y, z) =>
+    x >= cut.min[0] && x <= cut.max[0] &&
+    y >= cut.min[1] && y <= cut.max[1] &&
+    z >= cut.min[2] && z <= cut.max[2];
+  let removed = 0;
+  for (let t = 0; t < array.length; t += 3) {
+    const a = array[t],
+      b = array[t + 1],
+      c = array[t + 2];
+    const xs = [position.getX(a), position.getX(b), position.getX(c)];
+    const ys = [position.getY(a), position.getY(b), position.getY(c)];
+    const zs = [position.getZ(a), position.getZ(b), position.getZ(c)];
+    for (const cut of cuts) {
+      // Either the triangle sits in the gap, or it reaches into it — a rail
+      // span two metres long has its centre outside but still bars the way.
+      const hit =
+        inside(cut, (xs[0] + xs[1] + xs[2]) / 3, (ys[0] + ys[1] + ys[2]) / 3, (zs[0] + zs[1] + zs[2]) / 3) ||
+        inside(cut, xs[0], ys[0], zs[0]) ||
+        inside(cut, xs[1], ys[1], zs[1]) ||
+        inside(cut, xs[2], ys[2], zs[2]);
+      if (hit) {
+        array[t + 1] = a;
+        array[t + 2] = a;
+        removed++;
+        break;
+      }
+    }
+  }
+  if (removed) index.needsUpdate = true;
+  return removed;
 }
 
 /** Concatenate a few small geometries, indexed or not, into one. */
@@ -645,6 +706,7 @@ async function load() {
     });
     const buffer = bytes.buffer;
     geometryBytes = size;
+    let railsRemoved = 0;
     for (const rec of world.meshes) {
       const g = new THREE.BufferGeometry();
       g.setAttribute(
@@ -677,8 +739,10 @@ async function load() {
       const radius = g.boundingSphere?.radius ?? Infinity;
       mesh.castShadow =
         radius < 55 && !/floor|grass|asphalt|promenade|avenue|lane|stripe/i.test(rec.name);
+      railsRemoved += carveOpenings(mesh);
       scene.add(mesh);
     }
+    if (railsRemoved) console.info(`Mufu: opened ${railsRemoved} rail triangles`);
     buildTrees(world.trees, buffer);
     createSky();
     createParticles();
@@ -1052,6 +1116,35 @@ function drawMap() {
 
 // --- frame ------------------------------------------------------------------
 
+/**
+ * Corridors used to be islands: you could only ever walk the one path you
+ * arrived on. Where two of them touch at the same height — the spur onto the
+ * river terrace, or the places the ridge trail meets the road — walking into
+ * the junction now hands you over to whichever corridor you are actually
+ * heading down.
+ */
+let lastJunction = -10;
+function takeJunction(before, proposed, t) {
+  if (t - lastJunction < 0.2) return proposed;
+  lastJunction = t;
+  const here = [proposed.x, before.y - 1.7, proposed.z];
+  const current = nearestOnRoute(here, routes[state.route]);
+  let best = null;
+  for (let i = 0; i < routes.length; i++) {
+    if (i === state.route) continue;
+    const n = nearestOnRoute(here, routes[i]);
+    if (Math.abs(n.position[1] - (before.y - 1.7)) > 1.4) continue;
+    if (n.distance > routes[i].width * 0.5 + 0.6) continue;
+    if (n.distance > current.distance - 0.25) continue;
+    if (!best || n.distance < best.distance) best = { ...n, route: i };
+  }
+  if (best) {
+    state.route = best.route;
+    drawMap();
+  }
+  return proposed;
+}
+
 const direction = new THREE.Vector3(),
   right = new THREE.Vector3(),
   grade = { lift: new THREE.Vector3(), gain: new THREE.Vector3(1, 1, 1) },
@@ -1119,9 +1212,13 @@ function updateSunPosition() {
   // hour the mood implies.
   const minutes = state.memoryWalk
     ? THREE.MathUtils.lerp(WALK_START_MINUTES, WALK_END_MINUTES, walkTimeBlend)
-    : THREE.MathUtils.lerp(WALK_END_MINUTES + 150, WALK_START_MINUTES, weather.dawn);
+    : THREE.MathUtils.lerp(WALK_END_MINUTES + 94, WALK_START_MINUTES, weather.dawn);
   sunDirectionForMinutes(minutes, sunDirection);
   sunDirection.lerp(sunsetDirection, weather.sunset).normalize();
+
+  // Where the 70 km water plane ends for this eye height. The far bank is
+  // drawn just above it, so it has to move as you climb the mountain.
+  u.uHorizon.value = -(camera.position.y - 0.1) / 35000;
 
   const anchor = state.overview ? orbit.target : camera.position;
   sun.position.copy(anchor).addScaledVector(sunDirection, 900);
@@ -1231,9 +1328,13 @@ function frame(elapsed) {
   particles.visible = weather.snow > 0.02 && !state.overview;
   rainLines.position.copy(camera.position);
   rainLines.visible = weather.storm > 0.02 && !state.overview;
-  motes.position.set(camera.position.x, camera.position.y - 8, camera.position.z);
+  // Both drifting layers sit mostly below the eye, and each is told where the
+  // eye is so it can fade out anything that would only be a speck on the sky.
+  motes.position.set(camera.position.x, camera.position.y - 4.6, camera.position.z);
+  motes.material.uniforms.uEyeHeight.value = camera.position.y - motes.position.y;
   motes.visible = !state.overview && weather.storm < 0.7;
-  leaves.position.set(camera.position.x, camera.position.y - 11, camera.position.z);
+  leaves.position.set(camera.position.x, camera.position.y - 8.5, camera.position.z);
+  leaves.material.uniforms.uEyeHeight.value = camera.position.y - leaves.position.y;
   leaves.visible = !state.overview;
 
   if (weather.storm > 0.8 && t - lastLightning > 17) {
@@ -1341,6 +1442,7 @@ function frame(elapsed) {
         direction.multiplyScalar(f).addScaledVector(right, s).normalize();
         proposed.addScaledVector(direction, (sprinting ? 5.2 : 2.1) * dt);
       }
+      if (!auto) proposed = takeJunction(before, proposed, t);
       const safe = constrainToRoute(
         [proposed.x, before.y - 1.7, proposed.z],
         routes[state.route],

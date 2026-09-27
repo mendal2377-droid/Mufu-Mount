@@ -47,7 +47,19 @@ Everything is drawn into one linear HDR buffer and tone mapped exactly once, at 
 3. **Bloom**, then **AgX tone mapping and sRGB encoding**.
 4. **Grade pass** — per-weather lift/gain, saturation and contrast, vignette, corner chromatic aberration, film grain and the photo-mode letterbox.
 
-The sky is a single shader: a scattering-style gradient, a sun disc with limb glow, two parallaxed cloud decks lit from the sun's side, stars and a moon for the 06:16 end of the walk, and a horizon haze band. Path-side grass, pollen and falling leaves are instanced around the camera; the camera itself has a footfall bob, a lean into strafing, breathing at rest and a field of view that opens when you run.
+The sky is a single shader: a gradient that stays blue overhead, a warm band held tight to the horizon and widest towards the sun, a sun disc with limb glow, high cirrus drawn on a stretched noise grid so it streaks rather than blobs, a lower overcast deck that keeps out of the way in clear weather, a crescent moon with an evening star beside it, and the dark far shore. Path-side grass, pollen and falling leaves are instanced around the camera — kept low, few and below the eye, because a sky full of drifting specks reads as dirt on the lens rather than as weather. The camera itself has a footfall bob, a lean into strafing, breathing at rest and a field of view that opens when you run.
+
+## Where the sun is
+
+The scene's compass is recoverable from its own geometry. The promenade bookmark faces along the bank with the water to its left, and the Muyan riverside sits on the **south** bank of the Yangtze with its decks looking north across to Bagua Island — so that heading is about 060°. Solving from that puts model north at `(-0.3377, -0.9412)` and east at `(0.9412, -0.3377)`, and the whole promenade then runs at 072°, ENE, which is how the river actually lies here.
+
+With the compass fixed, `src/sky.js` carries NOAA solar positions for 32.1161° N, 118.7771° E on **26 September 2026**, converted into model space: sunrise at azimuth 93.6° and altitude 3.5° at 06:16, climbing to 30.2° by 08:26. Sunset that day is azimuth 265°, low over the water to the west — this bank's classic view is 燕矶夕照, *Yanji evening glow*, because the sun goes down over the river and not behind the mountain.
+
+Before this the sun followed a hand-waved arc that put the **morning sun in the west**. Every shadow on the walk fell the wrong way.
+
+Beyond the water the sky draws a low far shore — Bagua Island and the north bank — with an occasional pylon or mast, and after sunset a scatter of shore lights and the lit line of a crossing. Those are generic. The real view includes the Second Bridge, but nothing here is a surveyed skyline.
+
+Sources: [Qixia District — 幕燕滨江风貌区](https://www.njqxq.gov.cn/lydt/202211/t20221128_3767167.html) (south bank; observation decks facing north to Bagua Island and the north bank; Second Bridge visible from the ridge viewpoints), [幕府山 — 维基百科](https://zh.wikipedia.org/zh-tw/%E5%B9%95%E5%BA%9C%E5%B1%B1) (a ridge on the south bank running about 5.8 km west to east; the historic 204–205 m main peak was cut down by decades of limestone quarrying, which is why the modelled ridge tops out near 190 m).
 
 `src/postfx.js` pins the composer's buffer roles each frame: `RenderPass` writes into the composer's *read* buffer without swapping, so the depth texture has to live on that target, and only that target — sampling a depth texture attached to the pass's own render target is a framebuffer feedback loop.
 
