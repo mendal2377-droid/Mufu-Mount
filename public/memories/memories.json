@@ -1,0 +1,531 @@
+{
+ "title": "Mufu memory walk",
+ "date": "2026-09-26",
+ "window": {
+  "start": "06:16",
+  "end": "08:26"
+ },
+ "note": "Twenty frames from a single morning walk, 06:16 to 08:26 on 26 September 2026. Web copies are resized and carry no EXIF; the full-resolution originals are private. Their world positions are placed by chronological order along the modelled routes, not by measured GPS — the recorded fixes are mostly network fixes and cannot establish an exact route.",
+ "memories": [
+  {
+   "id": "001",
+   "src": "/memories/m001.jpg",
+   "thumb": "/memories/m001_t.jpg",
+   "time": "06:16",
+   "minutes": 376,
+   "zh": "幕燕风景名胜区入口",
+   "en": "The gate",
+   "note": "Six sixteen. The scooters are still parked in rows and the whole road is yours.",
+   "route": 1,
+   "t": 0.02,
+   "side": -1,
+   "position": [
+    1396.79,
+    45.99,
+    -832.65
+   ],
+   "facing": [
+    -0.4726,
+    0.8813
+   ],
+   "along": [
+    0.8813,
+    0.4726
+   ]
+  },
+  {
+   "id": "008",
+   "src": "/memories/m008.jpg",
+   "thumb": "/memories/m008_t.jpg",
+   "time": "06:22",
+   "minutes": 382,
+   "zh": "白云亭",
+   "en": "Baiyun Pavilion",
+   "note": "Grey tiles, burgundy columns, a rock garden still holding the last of the dark.",
+   "route": 1,
+   "t": 0.3,
+   "side": 1,
+   "position": [
+    1488.94,
+    57.85,
+    -776.17
+   ],
+   "facing": [
+    0.5623,
+    -0.827
+   ],
+   "along": [
+    0.827,
+    0.5623
+   ]
+  },
+  {
+   "id": "011",
+   "src": "/memories/m011.jpg",
+   "thumb": "/memories/m011_t.jpg",
+   "time": "06:25",
+   "minutes": 385,
+   "zh": "林荫上山路",
+   "en": "Shaded ascent",
+   "note": "The road tilts upward and the canopy closes over the top of it.",
+   "route": 1,
+   "t": 0.58,
+   "side": -1,
+   "position": [
+    1570.51,
+    69.55,
+    -705.67
+   ],
+   "facing": [
+    -0.7047,
+    0.7095
+   ],
+   "along": [
+    0.7095,
+    0.7047
+   ]
+  },
+  {
+   "id": "016",
+   "src": "/memories/m016.jpg",
+   "thumb": "/memories/m016_t.jpg",
+   "time": "06:28",
+   "minutes": 388,
+   "zh": "怀德亭",
+   "en": "Huaide Pavilion",
+   "note": "A curved roof over red timber. Somewhere to stand and get your breath back.",
+   "route": 1,
+   "t": 0.9,
+   "side": 1,
+   "position": [
+    1660.31,
+    74.36,
+    -620.72
+   ],
+   "facing": [
+    0.6517,
+    -0.7585
+   ],
+   "along": [
+    0.7585,
+    0.6517
+   ]
+  },
+  {
+   "id": "031",
+   "src": "/memories/m031.jpg",
+   "thumb": "/memories/m031_t.jpg",
+   "time": "06:37",
+   "minutes": 397,
+   "zh": "环翠轩",
+   "en": "Huancui Xuan",
+   "note": "Two tiers and a long covered corridor around an uneven stone court.",
+   "route": 0,
+   "t": 0.06,
+   "side": -1,
+   "position": [
+    1517.42,
+    36.63,
+    -878.78
+   ],
+   "facing": [
+    0.3816,
+    0.9243
+   ],
+   "along": [
+    0.9243,
+    -0.3816
+   ]
+  },
+  {
+   "id": "035",
+   "src": "/memories/m035.jpg",
+   "thumb": "/memories/m035_t.jpg",
+   "time": "06:38",
+   "minutes": 398,
+   "zh": "树旁观景小平台",
+   "en": "Tree-side deck",
+   "note": "A small deck built around a tree, looking out over the old quarry.",
+   "route": 0,
+   "t": 0.12,
+   "side": 1,
+   "position": [
+    1620.14,
+    41.78,
+    -839.94
+   ],
+   "facing": [
+    0.6993,
+    0.7149
+   ],
+   "along": [
+    -0.7149,
+    0.6993
+   ]
+  },
+  {
+   "id": "041",
+   "src": "/memories/m041.jpg",
+   "thumb": "/memories/m041_t.jpg",
+   "time": "06:42",
+   "minutes": 402,
+   "zh": "云幕小径",
+   "en": "Yunmu Path",
+   "note": "A sign, a flagstone path, a few shallow steps. The name means cloud curtain.",
+   "route": 0,
+   "t": 0.2,
+   "side": -1,
+   "position": [
+    1771.25,
+    51.14,
+    -831.95
+   ],
+   "facing": [
+    0.4482,
+    0.8939
+   ],
+   "along": [
+    0.8939,
+    -0.4482
+   ]
+  },
+  {
+   "id": "047",
+   "src": "/memories/m047.jpg",
+   "thumb": "/memories/m047_t.jpg",
+   "time": "06:43",
+   "minutes": 403,
+   "zh": "回纹铺地观江平台",
+   "en": "Ridge terrace",
+   "note": "Square spirals underfoot, and the river a pale band beyond the rail.",
+   "route": 0,
+   "t": 0.29,
+   "side": 1,
+   "position": [
+    1754.28,
+    61.38,
+    -687.5
+   ],
+   "facing": [
+    0.7091,
+    0.7051
+   ],
+   "along": [
+    -0.7051,
+    0.7091
+   ]
+  },
+  {
+   "id": "060",
+   "src": "/memories/m060.jpg",
+   "thumb": "/memories/m060_t.jpg",
+   "time": "06:47",
+   "minutes": 407,
+   "zh": "山脊石径",
+   "en": "Ridge stone trail",
+   "note": "Flagstones, one pale railing, trunks standing close on the other side.",
+   "route": 0,
+   "t": 0.44,
+   "side": -1,
+   "position": [
+    2330.01,
+    150.71,
+    -914.38
+   ],
+   "facing": [
+    0.2263,
+    0.9741
+   ],
+   "along": [
+    0.9741,
+    -0.2263
+   ]
+  },
+  {
+   "id": "075",
+   "src": "/memories/m075.jpg",
+   "thumb": "/memories/m075_t.jpg",
+   "time": "06:57",
+   "minutes": 417,
+   "zh": "山脊石径",
+   "en": "Where the trail ends",
+   "note": "The woodland path lets go of you and hands you to the road.",
+   "route": 0,
+   "t": 0.68,
+   "side": 1,
+   "position": [
+    3212.72,
+    146.27,
+    -1807.21
+   ],
+   "facing": [
+    -0.8563,
+    -0.5165
+   ],
+   "along": [
+    0.5165,
+    -0.8563
+   ]
+  },
+  {
+   "id": "078",
+   "src": "/memories/m078.jpg",
+   "thumb": "/memories/m078_t.jpg",
+   "time": "06:59",
+   "minutes": 419,
+   "zh": "彩虹线山路",
+   "en": "Rainbow road",
+   "note": "Three narrow lines — blue, yellow, pink — running on ahead of you.",
+   "route": 2,
+   "t": 0.07,
+   "side": -1,
+   "position": [
+    2323.23,
+    159.06,
+    -788.79
+   ],
+   "facing": [
+    -0.7441,
+    0.668
+   ],
+   "along": [
+    0.668,
+    0.7441
+   ]
+  },
+  {
+   "id": "085",
+   "src": "/memories/m085.jpg",
+   "thumb": "/memories/m085_t.jpg",
+   "time": "07:06",
+   "minutes": 426,
+   "zh": "绿色护栏林道",
+   "en": "Green-barrier road",
+   "note": "Bright green steel on the outside of every bend.",
+   "route": 2,
+   "t": 0.3,
+   "side": 1,
+   "position": [
+    2704.52,
+    173.53,
+    -787.03
+   ],
+   "facing": [
+    -0.3339,
+    -0.9426
+   ],
+   "along": [
+    0.9426,
+    -0.3339
+   ]
+  },
+  {
+   "id": "094",
+   "src": "/memories/m094.jpg",
+   "thumb": "/memories/m094_t.jpg",
+   "time": "07:13",
+   "minutes": 433,
+   "zh": "棋盘铺地小平台",
+   "en": "Checker-paved lookout",
+   "note": "Light and dark squares, silver pickets, and the whole valley underneath.",
+   "route": 2,
+   "t": 0.53,
+   "side": -1,
+   "position": [
+    3014.29,
+    128.43,
+    -1034.96
+   ],
+   "facing": [
+    0.7719,
+    0.6357
+   ],
+   "along": [
+    0.6357,
+    -0.7719
+   ]
+  },
+  {
+   "id": "098",
+   "src": "/memories/m098.jpg",
+   "thumb": "/memories/m098_t.jpg",
+   "time": "07:15",
+   "minutes": 435,
+   "zh": "路边木槿",
+   "en": "A flower worth stopping for",
+   "note": "Pink hibiscus at the edge of the platform, wide open at quarter past seven.",
+   "route": 2,
+   "t": 0.62,
+   "side": 1,
+   "position": [
+    3113.8,
+    118.08,
+    -1156.88
+   ],
+   "facing": [
+    -0.83,
+    -0.5577
+   ],
+   "along": [
+    0.5577,
+    -0.83
+   ]
+  },
+  {
+   "id": "113",
+   "src": "/memories/m113.jpg",
+   "thumb": "/memories/m113_t.jpg",
+   "time": "07:33",
+   "minutes": 453,
+   "zh": "小桥与石阶",
+   "en": "Small bridge and steps",
+   "note": "A salmon-brown bridge with three rails, a brick approach, stone stairs beyond.",
+   "route": 2,
+   "t": 0.88,
+   "side": -1,
+   "position": [
+    3255.96,
+    114.09,
+    -1582.46
+   ],
+   "facing": [
+    0.9999,
+    0.0104
+   ],
+   "along": [
+    0.0104,
+    -0.9999
+   ]
+  },
+  {
+   "id": "120",
+   "src": "/memories/m120.jpg",
+   "thumb": "/memories/m120_t.jpg",
+   "time": "07:44",
+   "minutes": 464,
+   "zh": "下山路",
+   "en": "The way down",
+   "note": "Downhill now. The forest road quietly becomes an ordinary one.",
+   "route": 2,
+   "t": 0.98,
+   "side": 1,
+   "position": [
+    3210.93,
+    137.87,
+    -1749.03
+   ],
+   "facing": [
+    -0.8902,
+    0.4557
+   ],
+   "along": [
+    -0.4557,
+    -0.8902
+   ]
+  },
+  {
+   "id": "127",
+   "src": "/memories/m127.jpg",
+   "thumb": "/memories/m127_t.jpg",
+   "time": "08:03",
+   "minutes": 483,
+   "zh": "滨江公园",
+   "en": "Riverside park",
+   "note": "Lawns, pale benches, and then the red pavement begins.",
+   "route": 3,
+   "t": 0.24,
+   "side": 1,
+   "position": [
+    1134.42,
+    8.03,
+    -867.61
+   ],
+   "facing": [
+    -0.5185,
+    -0.8551
+   ],
+   "along": [
+    0.8551,
+    -0.5185
+   ]
+  },
+  {
+   "id": "135",
+   "src": "/memories/m135.jpg",
+   "thumb": "/memories/m135_t.jpg",
+   "time": "08:08",
+   "minutes": 488,
+   "zh": "滨江步道",
+   "en": "Riverside promenade",
+   "note": "Red walkway, silver railing, and the Yangtze under a grey morning sky.",
+   "route": 3,
+   "t": 0.37,
+   "side": 1,
+   "position": [
+    1773.09,
+    8.03,
+    -1312.43
+   ],
+   "facing": [
+    -0.7099,
+    -0.7043
+   ],
+   "along": [
+    0.7043,
+    -0.7099
+   ]
+  },
+  {
+   "id": "145",
+   "src": "/memories/m145.jpg",
+   "thumb": "/memories/m145_t.jpg",
+   "time": "08:11",
+   "minutes": 491,
+   "zh": "滨江步道",
+   "en": "Grass to the bank",
+   "note": "The embankment runs down to the water. Light poles waiting for the evening.",
+   "route": 3,
+   "t": 0.52,
+   "side": 1,
+   "position": [
+    2422.65,
+    8.03,
+    -1931.72
+   ],
+   "facing": [
+    -0.6718,
+    -0.7407
+   ],
+   "along": [
+    0.7407,
+    -0.6718
+   ]
+  },
+  {
+   "id": "153",
+   "src": "/memories/m153.jpg",
+   "thumb": "/memories/m153_t.jpg",
+   "time": "08:26",
+   "minutes": 506,
+   "zh": "滨江步道",
+   "en": "The last frame",
+   "note": "Eight twenty-six. Water, cloud, and a ship on its way somewhere else.",
+   "route": 3,
+   "t": 0.8,
+   "side": 1,
+   "position": [
+    3767.31,
+    8.03,
+    -2925.23
+   ],
+   "facing": [
+    -0.6298,
+    -0.7768
+   ],
+   "along": [
+    0.7768,
+    -0.6298
+   ]
+  }
+ ]
+}

@@ -58,10 +58,6 @@ export class NatureAudio {
     Object.entries(this.nodes).forEach(([n, v]) =>
       v.gain.gain.setTargetAtTime(levels[n], this.ctx.currentTime, 0.7),
     );
-    if (moving && this.ctx.currentTime - this.lastStep > 0.58 && snow < 0.6) {
-      this.lastStep = this.ctx.currentTime;
-      this.noise(0.11, 0.025, 260);
-    }
   }
   noise(duration, volume, frequency) {
     if (!this.ctx || !this.enabled) return;
@@ -89,6 +85,38 @@ export class NatureAudio {
   }
   thunder() {
     this.noise(3.8, 0.38, 170);
+  }
+  /** A soft two-note bell for the moment a memory opens. */
+  chime() {
+    if (!this.ctx || !this.enabled) return;
+    const c = this.ctx,
+      now = c.currentTime;
+    [
+      [587.33, 0, 0.055],
+      [880.0, 0.16, 0.038],
+    ].forEach(([hz, delay, peak]) => {
+      const o = c.createOscillator(),
+        g = c.createGain();
+      o.type = "sine";
+      o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, now + delay);
+      g.gain.exponentialRampToValueAtTime(peak, now + delay + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + delay + 2.1);
+      o.connect(g);
+      g.connect(this.master);
+      o.start(now + delay);
+      o.stop(now + delay + 2.2);
+      o.onended = () => {
+        o.disconnect();
+        g.disconnect();
+      };
+    });
+  }
+  /** Footsteps now come from the walk cycle rather than a fixed interval. */
+  footstep(weather) {
+    if (!this.ctx || !this.enabled) return;
+    const wet = weather?.storm || 0;
+    this.noise(0.1 + wet * 0.04, 0.02 + wet * 0.012, 240 + wet * 420);
   }
   riverTraffic(traffic, time, active) {
     if (!this.ctx || !this.started) return;

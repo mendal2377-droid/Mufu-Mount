@@ -349,7 +349,7 @@ select {
   display: flex;
   align-items: center;
   padding: 17px 23px;
-  gap: 30px;
+  gap: 22px;
 }
 .weather-controls .eyebrow {
   font-size: 8px;
@@ -357,8 +357,13 @@ select {
   margin-bottom: 10px;
   color: #adbba1;
 }
+.weather-controls > div {
+  display: flex;
+  flex-wrap: nowrap;
+}
 .weather-controls button {
-  padding: 7px 10px;
+  padding: 7px 9px;
+  white-space: nowrap;
   font-size: 13px;
   border-radius: 5px;
   color: #aebda9;
@@ -375,7 +380,8 @@ select {
   display: flex;
   gap: 10px;
   border-left: 1px solid #c2d1b72c;
-  padding-left: 25px;
+  padding-left: 20px;
+  flex: none;
 }
 .mode-controls button {
   border: 1px solid #c8d4bd44;
@@ -521,6 +527,200 @@ body.locked #touch-controls {
 [hidden] {
   display: none !important;
 }
+
+/* --- the morning: memory frames, their card and the frame strip --------- */
+.memory-card {
+  position: fixed;
+  left: 30px;
+  top: 96px;
+  width: 300px;
+  max-height: calc(100vh - 230px);
+  overflow: hidden;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(24, 20, 14, 0.88), rgba(14, 24, 21, 0.92));
+  border: 1px solid rgba(240, 206, 148, 0.28);
+  box-shadow:
+    0 22px 60px rgba(0, 0, 0, 0.55),
+    0 0 40px rgba(255, 186, 104, 0.1);
+  opacity: 0;
+  transform: translateY(14px) scale(0.985);
+  pointer-events: none;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 4;
+}
+.memory-card.show {
+  opacity: 1;
+  transform: none;
+}
+.memory-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #14201c;
+}
+.memory-body {
+  padding: 14px 16px 16px;
+}
+.memory-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #ffce8f;
+}
+.memory-card h3 {
+  margin: 6px 0 1px;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+.memory-card h4 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: #a9bda4;
+}
+.memory-card p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #dfe6d4;
+}
+
+.memory-rail {
+  position: fixed;
+  right: 30px;
+  top: 104px;
+  width: 132px;
+  max-height: calc(100vh - 512px);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  z-index: 4;
+}
+.memory-rail-head {
+  font-size: 8px;
+  letter-spacing: 2.4px;
+  color: #a9bda4;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+.memory-rail-head span {
+  color: #ffce8f;
+}
+#memory-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #4c6157 transparent;
+}
+.memory-chip {
+  position: relative;
+  padding: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  opacity: 0.42;
+  filter: grayscale(0.7);
+  transition:
+    opacity 0.25s ease,
+    filter 0.25s ease,
+    transform 0.25s ease;
+  border: 1px solid transparent;
+}
+.memory-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.memory-chip span {
+  position: absolute;
+  inset: auto 0 0 0;
+  font-size: 7.5px;
+  letter-spacing: 0.6px;
+  padding: 1px 0;
+  background: rgba(10, 20, 17, 0.72);
+  font-variant-numeric: tabular-nums;
+}
+.memory-chip.seen {
+  opacity: 1;
+  filter: none;
+  border-color: rgba(255, 206, 143, 0.55);
+}
+.memory-chip:hover,
+.memory-chip:focus-visible {
+  opacity: 1;
+  filter: none;
+  transform: scale(1.07);
+}
+
+body.memory-open .trail-card {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.trail-card {
+  transition: opacity 0.45s ease 0.15s;
+}
+
+#memory-walk.active,
+#photo-mode[aria-pressed="true"] {
+  background: #f2cf95;
+  color: #2a1c0c;
+}
+
+.quality-group {
+  display: inline-flex;
+  gap: 6px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.quality-group button {
+  border: 1px solid #ffffff2e;
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+}
+.quality-group button.active {
+  background: var(--lime);
+  color: #18382b;
+  border-color: transparent;
+}
+
+/* Photo mode clears everything but the picture. */
+body.photo-mode .trail-card,
+body.photo-mode .map-card,
+body.photo-mode .bottom-panel,
+body.photo-mode .memory-rail,
+body.photo-mode header .brand,
+body.photo-mode #touch-controls,
+body.photo-mode .crosshair,
+body.photo-mode .resume {
+  opacity: 0;
+  pointer-events: none;
+}
+body.photo-mode .vignette {
+  background: none;
+}
+body.photo-mode .memory-card {
+  opacity: 0;
+  pointer-events: none;
+}
+body.focus-mode .memory-rail {
+  display: none;
+}
+
 @media (max-width: 1000px) {
   .control-hint {
     display: none;
@@ -679,5 +879,59 @@ body.locked #touch-controls {
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+  }
+}
+
+@media (max-width: 1000px) {
+  .memory-rail {
+    width: 106px;
+    top: 96px;
+    max-height: calc(100vh - 470px);
+  }
+  .memory-card {
+    width: 250px;
+  }
+}
+@media (max-width: 650px) {
+  .memory-rail {
+    left: 18px;
+    right: 18px;
+    top: auto;
+    bottom: 214px;
+    width: auto;
+    max-height: none;
+  }
+  #memory-strip {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 40px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .memory-card {
+    left: 18px;
+    right: 18px;
+    width: auto;
+    top: auto;
+    bottom: 286px;
+    max-height: none;
+    display: flex;
+    align-items: stretch;
+  }
+  .memory-card img {
+    width: 104px;
+    flex: none;
+    aspect-ratio: auto;
+  }
+  .memory-body {
+    padding: 10px 12px;
+  }
+  .memory-card h3 {
+    font-size: 15px;
+  }
+  .memory-card p {
+    font-size: 11px;
+    max-height: 3.4em;
+    overflow: hidden;
   }
 }

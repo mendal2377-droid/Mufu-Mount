@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#142b27" />
+    <meta name="theme-color" content="#0f221f" />
     <meta
       name="description"
-      content="A quiet 3D walking game on Mount Mufu and the Yangtze. Explore forest paths, chase a sunset, and wander through changing seasons."
+      content="A quiet 3D walk on Mount Mufu and the Yangtze, hung with twenty photographs from one morning between 06:16 and 08:26."
     />
     <title>Mufu · A little further</title>
     <link
@@ -31,16 +31,18 @@
           title="Nature sound"
         >
           Sound off</button
+        ><button id="photo-mode" aria-pressed="false" title="Photo mode (P)">
+          ▦ Photo</button
         ><button id="focus-view" aria-pressed="false">Focus view</button
         ><button id="help" aria-label="Open controls and credits">?</button>
       </div>
     </header>
     <main id="welcome" class="welcome">
-      <div class="eyebrow">A WALK ALONG THE YANGTZE</div>
+      <div class="eyebrow">26 SEPTEMBER 2026 · 06:16 — 08:26</div>
       <h1>A little<br /><em>further.</em></h1>
       <p>
-        Follow the forest. Stay for the river.<br />A familiar mountain, in a
-        different light.
+        One morning on 幕府山, walked again.<br />Twenty photographs are still
+        standing where they were taken.
       </p>
       <button id="enter" class="primary" disabled>
         Preparing your walk… <span>↗</span>
@@ -49,7 +51,7 @@
       <div id="load-status" role="status">Opening the mountain</div>
       <div class="welcome-foot">
         NO RUSH. NO FINISH LINE.<br /><span
-          >Find five places worth pausing for.</span
+          >Walk the morning, or wander off the order entirely.</span
         >
       </div>
     </main>
@@ -80,9 +82,20 @@
           ><span id="height">155 m</span>
         </div>
       </aside>
+
+      <aside class="memory-card" id="memory-card" aria-live="polite">
+        <img id="memory-photo" alt="" />
+        <div class="memory-body">
+          <span class="memory-time" id="memory-time">06:16</span>
+          <h3 id="memory-zh">幕燕风景名胜区入口</h3>
+          <h4 id="memory-en">The gate</h4>
+          <p id="memory-note"></p>
+        </div>
+      </aside>
+
       <aside class="map-card glass">
         <div class="eyebrow">
-          MOUNTAIN & RIVER <button id="overview">Overview ↗</button>
+          MOUNTAIN &amp; RIVER <button id="overview">Overview ↗</button>
         </div>
         <canvas
           id="map"
@@ -91,18 +104,21 @@
           aria-label="Trail map with your position"
         ></canvas>
         <div class="map-legend">
-          <span>— Trails</span><span>● You</span><span>≈ Yangtze</span>
+          <span>— Trails</span><span>● You</span><span>◦ Memories</span>
         </div>
       </aside>
+
       <div class="crosshair" id="crosshair">·</div>
       <button id="resume" class="resume">
         Click to walk <span>W A S D · Mouse to look</span>
       </button>
+
       <footer class="bottom-panel glass">
         <div class="weather-controls">
           <span class="eyebrow">CHANGE THE AIR</span>
           <div role="group" aria-label="Weather">
-            <button data-weather="morning" class="active">
+            <button data-weather="dawn">✦ <span>06:16</span></button
+            ><button data-weather="morning" class="active">
               ☀ <span>Morning</span></button
             ><button data-weather="sunset">◒ <span>Sunset</span></button
             ><button data-weather="storm">ϟ <span>Storm</span></button
@@ -110,17 +126,27 @@
           </div>
         </div>
         <div class="mode-controls">
-          <button id="auto">▷ Guided walk</button
+          <button id="memory-walk" title="Walk the memories in order (M)">
+            ❍ Walk the morning</button
+          ><button id="auto">▷ Guided walk</button
           ><button id="postcard" title="Download a landscape image">
             ▣ Postcard
           </button>
         </div>
         <div class="control-hint">
           WASD move · Mouse look · Shift faster · Esc pause<br /><span
-            >Or drag to look and use the arrow buttons</span
+            >M walks the morning · P frames a photo</span
           >
         </div>
       </footer>
+
+      <aside class="memory-rail" aria-label="The morning, frame by frame">
+        <div class="memory-rail-head">
+          THE MORNING <span id="memory-count">0 / 20</span>
+        </div>
+        <div id="memory-strip"></div>
+      </aside>
+
       <div id="touch-controls" aria-label="Movement controls">
         <button data-move="forward" aria-label="Walk forward">↑</button>
         <div>
@@ -141,11 +167,33 @@
         move faster. <strong>Esc</strong> releases the mouse. You can also drag
         the scenery and use the arrows, or choose <strong>Guided walk</strong>.
       </p>
+      <h3>The morning</h3>
       <p>
-        Choose a place from the field-notes menu. Explore its path and save your
-        view to fill your five field notes. Progress stays in this browser.
-        Overview lets you orbit the whole mountain; press it again to return to
-        the path.
+        Twenty photographs from a single walk on
+        <strong>26 September 2026, 06:16 to 08:26</strong>, stand beside the
+        path as lit frames. Walk up to one and it opens with the time it was
+        taken. <strong>Walk the morning</strong> (or <strong>M</strong>) follows
+        them in order and moves the light from first light towards mid-morning
+        as you go. The strip on the right jumps straight to any of them.
+      </p>
+      <p>
+        The frames sit in the order the walk happened, along the modelled
+        routes. They are <em>not</em> placed by GPS: most of the original fixes
+        are network fixes that cannot establish a real route. The published
+        images are resized copies with all camera, location and timestamp
+        metadata removed; the full-resolution originals are private and are not
+        part of this site.
+      </p>
+      <h3>Picture quality</h3>
+      <p>
+        <span role="group" aria-label="Quality" class="quality-group"
+          ><button data-quality="smooth">Smooth</button
+          ><button data-quality="balanced">Balanced</button
+          ><button data-quality="cinematic">Cinematic</button></span
+        >
+        Cinematic adds sun shafts, soft shadows, contact shading, bloom and
+        grain. If the frame rate drops the site will step down on its own once;
+        choosing a setting here fixes it for good.
       </p>
       <h3>A personal reconstruction</h3>
       <p>
@@ -180,7 +228,8 @@
         >,
         <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>).
         Clips are trimmed, faded and remixed interactively; they were not
-        recorded at Mufu. Footsteps and lightning thunder are also synthesized.
+        recorded at Mufu. Footsteps, the memory chime and lightning thunder are
+        synthesized.
         <a href="/SOUND_CREDITS.md" target="_blank">Full source credits</a>.
       </p>
       <button id="reset-notes">Reset my field notes</button>

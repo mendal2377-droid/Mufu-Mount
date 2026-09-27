@@ -70,9 +70,9 @@ void main(){
   // Lantern glitter is stretched towards the observer across the ripples.
   vec2 toLight=beacon.xz-p.xz;vec3 B=normalize(vec3(toLight.x,beacon.y,toLight.y));float bspec=pow(max(dot(N,normalize(B+V)),0.),55.);color+=vec3(1.,.48,.12)*bspec*beaconPower*4./(1.+dot(toLight,toLight)/6000.);
   float fog=1.-exp(-dist*.00017);color=mix(color,reflectedSky(vec3(R.x,.04,R.z)),fog*.7);color+=flash*.2;
+  // Left in linear HDR: the post-processing chain tone maps and encodes once,
+  // for the water, the sky dome and the lit scene together.
   gl_FragColor=vec4(color,1.);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
 }`;
 
 export function createLivingRiver(scene, shared, points) {

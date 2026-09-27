@@ -8,6 +8,16 @@ import {
 } from "./navigation.js";
 import { NatureAudio } from "./audio.js";
 import { createLivingRiver } from "./river-life.js";
+import { createPostFX, TIERS } from "./postfx.js";
+import {
+  createSkyDome,
+  sunDirectionForMinutes,
+  WALK_START_MINUTES,
+  WALK_END_MINUTES,
+} from "./sky.js";
+import { createMemories, createMemoryWalk } from "./memories.js";
+import { createUndergrowth, createMotes, createFallingLeaves } from "./life.js";
+import { createCameraFeel } from "./camera-feel.js";
 import "./style.css";
 
 const $ = (s) => document.querySelector(s),
@@ -16,8 +26,11 @@ const state = {
   ready: false,
   playing: false,
   auto: false,
+  memoryWalk: false,
   overview: false,
+  photoMode: false,
   weather: "morning",
+  quality: "cinematic",
   route: 2,
   place: 0,
   distance: 0,
@@ -26,11 +39,21 @@ const state = {
 };
 const audio = new NatureAudio(),
   keys = new Set();
-let saved = [];
+let saved = [],
+  foundMemories = [];
 try {
   saved = JSON.parse(localStorage.getItem("mufu-notes") || "[]");
   if (!Array.isArray(saved)) saved = [];
 } catch {}
+try {
+  foundMemories = JSON.parse(localStorage.getItem("mufu-memories") || "[]");
+  if (!Array.isArray(foundMemories)) foundMemories = [];
+} catch {}
+let storedQuality = null;
+try {
+  storedQuality = localStorage.getItem("mufu-quality");
+} catch {}
+
 const places = [
   {
     name: "Rainbow road",
@@ -66,20 +89,30 @@ let renderer,
   routes,
   world,
   sun,
+  fill,
   hemi,
   sky,
   water,
   riverLife,
+  memories,
+  memoryWalk,
+  undergrowth,
+  motes,
+  leaves,
+  postfx,
+  feel,
   particles,
   rainLines,
   forestLOD,
+  shadowTrees,
   treeMeshes = [],
   nearTrees = [],
   returnPose,
   geometryBytes = 0;
-const weather = { sunset: 0, storm: 0, snow: 0 };
+const weather = { dawn: 0, sunset: 0, storm: 0, snow: 0 };
 const u = {
   time: { value: 0 },
+  dawn: { value: 0 },
   sunset: { value: 0 },
   storm: { value: 0 },
   snow: { value: 0 },
@@ -87,11 +120,73 @@ const u = {
 };
 const clock = new THREE.Clock(),
   dummy = new THREE.Object3D();
+const sunDirection = new THREE.Vector3(),
+  sunsetDirection = new THREE.Vector3(0.82, 0.075, 0.56).normalize(),
+  sunScreen = new THREE.Vector3();
 let toastTimer,
+  simTime = 0,
   flashTimer = 0,
   lastTreeUpdate = -10,
   lastMap = -10,
-  lastLightning = 0;
+  lastLightning = 0,
+  lastGrowth = -10,
+  walkTimeBlend = 0,
+  introPhase = 0,
+  fadeIn = 1,
+  qualitySamples = [],
+  qualityLocked = false;
+
+// The morning this walk happened, and the moods layered on top of it.
+const GRADES = {
+  morning: {
+    lift: [0.004, 0.008, 0.014],
+    gain: [1.02, 1.01, 0.99],
+    saturation: 1.12,
+    contrast: 1.16,
+    bloom: 0.46,
+    exposure: 1.16,
+  },
+  dawn: {
+    lift: [0.014, 0.014, 0.034],
+    gain: [1.04, 0.96, 0.95],
+    saturation: 1.0,
+    contrast: 1.2,
+    bloom: 0.8,
+    exposure: 0.9,
+  },
+  sunset: {
+    lift: [0.02, 0.01, 0.006],
+    gain: [1.08, 0.99, 0.92],
+    saturation: 1.24,
+    contrast: 1.16,
+    bloom: 0.84,
+    exposure: 1.12,
+  },
+  storm: {
+    lift: [0.014, 0.018, 0.026],
+    gain: [0.93, 0.96, 1.0],
+    saturation: 0.74,
+    contrast: 1.2,
+    bloom: 0.32,
+    exposure: 0.86,
+  },
+  snow: {
+    lift: [0.03, 0.033, 0.038],
+    gain: [0.99, 1.0, 1.03],
+    saturation: 0.68,
+    contrast: 1.04,
+    bloom: 0.6,
+    exposure: 1.1,
+  },
+};
+const WEATHER_LABEL = {
+  dawn: "06:16 · FIRST LIGHT",
+  morning: "MORNING LIGHT",
+  sunset: "GOLDEN HOUR",
+  storm: "A STORM PASSES",
+  snow: "WINTER STILLNESS",
+};
+
 function toast(text) {
   $("#toast").textContent = text;
   $("#toast").classList.add("show");
@@ -102,15 +197,24 @@ function progress(value, text) {
   $("#load-bar").style.width = `${value}%`;
   $("#load-status").textContent = text;
 }
+
+// Surfaces are grouped by the material names the Blender export carries, so a
+// railing behaves like metal and a road behaves like wet asphalt in the rain.
 function material(name, color) {
+  const metal = /metal|railing|rail |silver|steel|picket|fixture|barrier|bronze/i.test(name);
+  const stone = /limestone|granite|flagstone|paver|paving|stone|brick|terrace/i.test(name);
+  const road = /asphalt|avenue|road|promenade|lane|stripe/i.test(name);
+  const noSnow = /water|blue|pink|yellow line|stripe/i.test(name);
+  const sway = /leaf|foliage/i.test(name);
   const m = new THREE.MeshStandardMaterial({
     color: new THREE.Color().fromArray(color),
-    roughness: 0.91,
+    roughness: metal ? 0.36 : road ? 0.82 : stone ? 0.88 : 0.91,
+    metalness: metal ? 0.72 : 0,
     side: THREE.DoubleSide,
   });
-  const noSnow = /water|blue|pink|yellow line/i.test(name);
-  const sway = /leaf|foliage/i.test(name);
-  m.customProgramCacheKey = () => `mufu-${Number(noSnow)}-${Number(sway)}`;
+  const detail = stone || road ? 1 : 0;
+  m.customProgramCacheKey = () =>
+    `mufu-${Number(noSnow)}-${Number(sway)}-${detail}-${Number(metal)}`;
   m.userData.baseColor = m.color.clone();
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uSnow = u.snow;
@@ -129,41 +233,66 @@ function material(name, color) {
       "#include <worldpos_vertex>\nvec4 wp=vec4(transformed,1.0);\n#ifdef USE_INSTANCING\nwp=instanceMatrix*wp;\n#endif\nvWorldPoint=(modelMatrix*wp).xyz;vWorldUp=normalize(mat3(modelMatrix)*objectNormal);",
     );
     shader.fragmentShader =
-      "uniform float uSnow;uniform float uRain;varying vec3 vWorldPoint;varying vec3 vWorldUp;\n" +
+      "uniform float uSnow;uniform float uRain;varying vec3 vWorldPoint;varying vec3 vWorldUp;\nfloat mufuHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\nfloat mufuNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mufuHash(i),mufuHash(i+vec2(1,0)),f.x),mix(mufuHash(i+vec2(0,1)),mufuHash(i+1.),f.x),f.y);}\n" +
       shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <color_fragment>",
-      `#include <color_fragment>\nfloat grain=fract(sin(dot(floor(vWorldPoint.xz*8.0),vec2(12.9898,78.233)))*43758.5453);diffuseColor.rgb*=.92+grain*.13;diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.79,.86,.86),uSnow*${noSnow ? "0.18" : "0.92"}*smoothstep(.05,.6,vWorldUp.y));diffuseColor.rgb*=1.0-uRain*.17;`,
+      `#include <color_fragment>\nfloat grain=fract(sin(dot(floor(vWorldPoint.xz*8.0),vec2(12.9898,78.233)))*43758.5453);diffuseColor.rgb*=.92+grain*.13;\nfloat blotch=mufuNoise(vWorldPoint.xz*0.21)*0.55+mufuNoise(vWorldPoint.xz*0.83)*0.3;diffuseColor.rgb*=0.86+blotch*0.3;\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(.79,.86,.86),uSnow*${noSnow ? "0.18" : "0.92"}*smoothstep(.05,.6,vWorldUp.y));diffuseColor.rgb*=1.0-uRain*.17;`,
     );
+    if (detail)
+      // Break up the large flat exported faces with a shallow procedural bump.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>\nvec2 np=vWorldPoint.xz*1.7;float n0=mufuNoise(np);float nx=mufuNoise(np+vec2(0.12,0.));float nz=mufuNoise(np+vec2(0.,0.12));normal=normalize(normal+vec3((nx-n0)*0.9,0.0,(nz-n0)*0.9));`,
+      );
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <roughnessmap_fragment>",
-      "#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,.28,uRain*.7);",
+      "#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,.22,uRain*.75*smoothstep(.2,.75,vWorldUp.y));",
     );
+    if (sway)
+      // A cheap stand-in for light coming through a leaf from behind.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <output_fragment>",
+        "float mufuBack=max(0.,dot(normalize(vWorldPoint-cameraPosition),normalize(vec3(-0.8,0.5,-0.6))));outgoingLight+=diffuseColor.rgb*pow(mufuBack,2.5)*0.55;\n#include <output_fragment>",
+      );
   };
   return m;
 }
+
 function createSky() {
-  const vs =
-    "varying vec3 vDir;void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}";
-  const fs = `uniform float time,sunset,storm,snow,flash;varying vec3 vDir;
-  float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}float fbm(vec2 p){return noise(p)*.55+noise(p*2.1)*.27+noise(p*4.2)*.12;}
-  void main(){vec3 d=normalize(vDir);float h=max(0.,d.y);vec3 top=mix(vec3(.23,.47,.63),vec3(.26,.26,.43),sunset);vec3 horizon=mix(vec3(.80,.87,.80),vec3(1.,.51,.27),sunset);vec3 col=mix(horizon,top,pow(h,.45));col=mix(col,mix(vec3(.36,.43,.44),vec3(.075,.13,.16),h),storm*.9);col=mix(col,mix(vec3(.79,.84,.83),vec3(.52,.63,.68),h),snow*.82);vec2 uv=d.xz/(max(.08,d.y)+.25)*1.8+vec2(time*.007,0.);float n=fbm(uv);float c=smoothstep(.40-storm*.12,.7,n)*smoothstep(0.,.12,d.y);col=mix(col,mix(vec3(.97,.96,.86),vec3(.26,.30,.31),storm),c*.7);vec3 sd=normalize(vec3(-.8,mix(.55,.08,sunset),-.6));float sun=pow(max(0.,dot(d,sd)),900.);col+=vec3(1.,.75,.37)*sun*1.2*(1.-storm)*(1.-snow);col+=flash*.7;gl_FragColor=vec4(col,1.);}`;
-  sky = new THREE.Mesh(
-    new THREE.SphereGeometry(18000, 24, 16),
-    new THREE.ShaderMaterial({
-      uniforms: u,
-      vertexShader: vs,
-      fragmentShader: fs,
-      side: THREE.BackSide,
-      depthWrite: false,
-    }),
-  );
-  sky.renderOrder = -10;
-  scene.add(sky);
+  const built = createSkyDome(scene, u);
+  sky = built.dome;
+  sky.material.uniforms.uSunDir.value = sunDirection;
   riverLife = createLivingRiver(scene, u, routes[3].points);
   water = riverLife.water;
 }
+
+/** Concatenate a few small geometries, indexed or not, into one. */
+function mergeSimpleGeometries(list) {
+  const position = [],
+    normal = [],
+    index = [];
+  let offset = 0;
+  for (const g of list) {
+    const p = g.attributes.position;
+    position.push(...p.array);
+    normal.push(...g.attributes.normal.array);
+    if (g.index) {
+      for (const i of g.index.array) index.push(i + offset);
+    } else {
+      for (let i = 0; i < p.count; i++) index.push(i + offset);
+    }
+    offset += p.count;
+  }
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+  merged.setAttribute("normal", new THREE.Float32BufferAttribute(normal, 3));
+  merged.setIndex(index);
+  return merged;
+}
+
 function buildTrees(trees, buffer) {
+
   // Shared low-poly crowns, with full-height trunks. Placements come from Blender.
   const trunkGeo = new THREE.CylinderGeometry(0.11, 0.2, 5.7, 5);
   trunkGeo.translate(0, 2.85, 0);
@@ -198,6 +327,7 @@ function buildTrees(trees, buffer) {
   });
   trunk.frustumCulled = false;
   crown.frustumCulled = false;
+  crown.receiveShadow = true;
   scene.add(trunk, crown);
   treeMeshes = [trunk, crown];
   nearTrees = (world.treePrototype || []).map((rec) => {
@@ -225,9 +355,28 @@ function buildTrees(trees, buffer) {
     const m = new THREE.InstancedMesh(g, material(rec.name, rec.color), 220);
     m.frustumCulled = false;
     m.count = 0;
+    // The detailed crowns are far too heavy to push through the shadow map;
+    // shadowTrees below stands in for them.
+    m.castShadow = false;
+    m.receiveShadow = true;
     scene.add(m);
     return m;
   });
+
+  // A forty-triangle stand-in for each nearby tree, drawn with no colour or
+  // depth writes: invisible in the beauty pass, but it casts the shadow.
+  const proxyGeo = mergeSimpleGeometries([trunkGeo.clone(), crownGeo.clone()]);
+  shadowTrees = new THREE.InstancedMesh(
+    proxyGeo,
+    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
+    220,
+  );
+  shadowTrees.name = "Near-tree shadow proxies";
+  shadowTrees.frustumCulled = false;
+  shadowTrees.castShadow = true;
+  shadowTrees.receiveShadow = false;
+  shadowTrees.count = 0;
+  scene.add(shadowTrees);
   const fg = new THREE.BufferGeometry();
   fg.setAttribute(
     "position",
@@ -244,17 +393,20 @@ function buildTrees(trees, buffer) {
       uniforms: {
         snow: u.snow,
         storm: u.storm,
+        sunset: u.sunset,
+        dawn: u.dawn,
         viewport: { value: innerHeight },
       },
       vertexShader:
         "attribute float size;uniform float viewport;varying float shade;varying float distanceToEye;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);distanceToEye=-mv.z;shade=fract(sin(position.x*.7+position.z)*43758.5);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(size*projectionMatrix[1][1]*viewport*.5/max(1.,-mv.z),1.,120.);}",
       fragmentShader:
-        "uniform float snow,storm;varying float shade;varying float distanceToEye;void main(){vec2 p=gl_PointCoord*2.-1.;float d=dot(p,p);if(d>1.)discard;float nz=sqrt(1.-d);float light=.55+max(0.,dot(vec3(p.x,-p.y,nz),normalize(vec3(-.4,.6,.7))))*.45;vec3 green=mix(vec3(.16,.26,.07),vec3(.34,.43,.17),shade);green=mix(green,vec3(.69,.77,.75),snow*max(0.,-p.y)*.8);green*=light*(1.-storm*.3);gl_FragColor=vec4(green,1.);}",
+        "uniform float snow,storm,sunset,dawn;varying float shade;varying float distanceToEye;void main(){vec2 p=gl_PointCoord*2.-1.;float d=dot(p,p);if(d>1.)discard;float nz=sqrt(1.-d);float light=.55+max(0.,dot(vec3(p.x,-p.y,nz),normalize(vec3(-.4,.6,.7))))*.45;vec3 green=mix(vec3(.16,.26,.07),vec3(.34,.43,.17),shade);green=mix(green,vec3(.42,.30,.13),sunset*.35);green=mix(green,vec3(.69,.77,.75),snow*max(0.,-p.y)*.8);green*=light*(1.-storm*.3);green=mix(green,green*vec3(.30,.34,.52),dawn*.85);gl_FragColor=vec4(green,1.);}",
     }),
   );
   forestLOD.frustumCulled = false;
   scene.add(forestLOD);
 }
+
 function updateTrees() {
   let far = 0,
     near = 0,
@@ -271,6 +423,7 @@ function updateTrees() {
     dummy.updateMatrix();
     if (!state.overview && d < 115 && near < 160 && nearTrees.length) {
       nearTrees.forEach((m) => m.setMatrixAt(near, dummy.matrix));
+      shadowTrees.setMatrixAt(near, dummy.matrix);
       near++;
     } else if (t[5]) {
       fp.setXYZ(forest, t[0], t[1] + 6 * t[4], t[2]);
@@ -289,12 +442,15 @@ function updateTrees() {
     m.count = near;
     m.instanceMatrix.needsUpdate = true;
   });
+  shadowTrees.count = near;
+  shadowTrees.instanceMatrix.needsUpdate = true;
   fp.needsUpdate = true;
   fs.needsUpdate = true;
   forestLOD.geometry.setDrawRange(0, forest);
   forestLOD.material.uniforms.viewport.value =
     innerHeight * renderer.getPixelRatio();
 }
+
 function createParticles() {
   const count = 1800,
     positions = new Float32Array(count * 3);
@@ -343,19 +499,71 @@ function createParticles() {
   rainLines.frustumCulled = false;
   scene.add(rainLines);
 }
+
+function pickInitialQuality() {
+  if (storedQuality && TIERS[storedQuality]) return storedQuality;
+  const coarse = matchMedia("(pointer: coarse)").matches;
+  const cores = navigator.hardwareConcurrency || 4;
+  const memory = navigator.deviceMemory || 4;
+  if (coarse || cores <= 4 || memory <= 4) return "balanced";
+  return "cinematic";
+}
+
+function applyQuality(name, announce = false) {
+  if (!TIERS[name]) return;
+  state.quality = name;
+  const hadShadows = renderer.shadowMap.enabled;
+  const tier = postfx.setTier(name);
+  renderer.shadowMap.enabled = tier.shadow > 0;
+  if (tier.shadow > 0) {
+    sun.castShadow = true;
+    if (sun.shadow.mapSize.x !== tier.shadow) {
+      sun.shadow.mapSize.set(tier.shadow, tier.shadow);
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
+    }
+  } else {
+    sun.castShadow = false;
+  }
+  // Turning shadows on or off changes the shader defines. Recompiling every
+  // material for anything else is a good way to make a laptop GPU give up.
+  if (hadShadows !== renderer.shadowMap.enabled) {
+    scene.traverse((o) => {
+      if (o.isMesh && o.material?.needsUpdate !== undefined)
+        o.material.needsUpdate = true;
+    });
+  }
+  document
+    .querySelectorAll("[data-quality]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.quality === name));
+  try {
+    localStorage.setItem("mufu-quality", name);
+  } catch {}
+  if (announce)
+    toast(
+      {
+        smooth: "Smooth: effects off, frame rate first.",
+        balanced: "Balanced: shafts, bloom and soft shadows.",
+        cinematic: "Cinematic: shadows, shafts, bloom and grain.",
+      }[name],
+    );
+}
+
 async function load() {
   try {
     renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      antialias: false,
       preserveDrawingBuffer: true,
       powerPreference: "high-performance",
     });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     renderer.setSize(innerWidth, innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMapping = THREE.AgXToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0xadbdb3, 0.00026);
     camera = new THREE.PerspectiveCamera(
@@ -365,11 +573,28 @@ async function load() {
       25000,
     );
     camera.rotation.order = "YXZ";
-    hemi = new THREE.HemisphereLight(0xd9ebff, 0x4b5b30, 2.3);
+    feel = createCameraFeel(camera, 68);
+
+    hemi = new THREE.HemisphereLight(0xcfe6ff, 0x3f5228, 1.25);
     scene.add(hemi);
-    sun = new THREE.DirectionalLight(0xffedc4, 2.5);
+    sun = new THREE.DirectionalLight(0xffeccb, 3.6);
     sun.position.set(-800, 650, -600);
-    scene.add(sun);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 2600;
+    sun.shadow.camera.left = -70;
+    sun.shadow.camera.right = 70;
+    sun.shadow.camera.top = 70;
+    sun.shadow.camera.bottom = -70;
+    sun.shadow.bias = -0.0009;
+    sun.shadow.normalBias = 0.05;
+    scene.add(sun, sun.target);
+    // A dim opposing light so shadowed faces keep some shape.
+    fill = new THREE.DirectionalLight(0x9fc0d8, 0.35);
+    fill.position.set(700, 380, 620);
+    scene.add(fill);
+
     controls = new PointerLockControls(camera, canvas);
     controls.pointerSpeed = 0.7;
     controls.addEventListener("lock", () => {
@@ -379,7 +604,7 @@ async function load() {
     controls.addEventListener("unlock", () => {
       keys.clear();
       document.body.classList.remove("locked");
-      $("#resume").hidden = state.auto || state.overview;
+      $("#resume").hidden = state.auto || state.memoryWalk || state.overview;
     });
     orbit = new OrbitControls(camera, canvas);
     orbit.enabled = false;
@@ -387,10 +612,15 @@ async function load() {
     orbit.maxDistance = 12000;
     orbit.minDistance = 200;
     orbit.maxPolarAngle = Math.PI * 0.47;
+
     progress(10, "Finding the trails");
-    [world, routes] = await Promise.all([
+    let memoryData;
+    [world, routes, memoryData] = await Promise.all([
       fetch("/world/scene.json").then(checkJSON),
       fetch("/world/routes.json").then(checkJSON),
+      fetch("/memories/memories.json")
+        .then(checkJSON)
+        .catch(() => ({ memories: [] })),
     ]);
     const response = await fetch("/world/geometry.bin");
     if (!response.ok) throw Error("The landscape could not be downloaded.");
@@ -403,7 +633,7 @@ async function load() {
       chunks.push(value);
       size += value.length;
       progress(
-        Math.min(83, 15 + (size / 20543220) * 68),
+        Math.min(78, 15 + (size / 20543220) * 63),
         "Bringing the landscape into view",
       );
     }
@@ -440,18 +670,44 @@ async function load() {
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, material(rec.name, rec.color));
       mesh.name = rec.name;
+      mesh.receiveShadow = true;
+      // Only compact built objects — railings, pavilions, planters, fixtures —
+      // are worth a second pass. Terrain and road slabs are large, nearly flat
+      // and would double the cost of every frame for almost no shadow.
+      const radius = g.boundingSphere?.radius ?? Infinity;
+      mesh.castShadow =
+        radius < 55 && !/floor|grass|asphalt|promenade|avenue|lane|stripe/i.test(rec.name);
       scene.add(mesh);
     }
     buildTrees(world.trees, buffer);
     createSky();
     createParticles();
+
+    progress(86, "Letting the grass back in");
+    undergrowth = createUndergrowth(scene, routes, u);
+    motes = createMotes(scene, u);
+    leaves = createFallingLeaves(scene, u);
+
+    progress(92, "Hanging twenty mornings on the path");
+    memories = createMemories(scene, memoryData, {
+      found: foundMemories,
+      anisotropy: renderer.capabilities.getMaxAnisotropy?.() || 4,
+    });
+    memoryWalk = createMemoryWalk(memories, routes);
+    buildMemoryStrip();
+
+    postfx = createPostFX(renderer, scene, camera, pickInitialQuality());
+    applyQuality(postfx.tier);
+
     progress(97, "Your quiet place is ready");
     goTo(0, false);
+    setWeather("morning");
     state.ready = true;
     updateNotes();
     $("#enter").disabled = false;
     $("#enter").innerHTML = "Enter the mountain <span>↗</span>";
     progress(100, "Ready · Headphones recommended");
+    memories.preloadNear(camera.position, 4);
     animate();
     window.__mufu = {
       state,
@@ -460,8 +716,16 @@ async function load() {
       routes,
       camera,
       renderer,
+      scene,
+      postfx,
       goTo,
       setWeather,
+      step: (count = 1, dt = 1 / 60) => {
+        for (let i = 0; i < count; i++) frame(dt);
+      },
+      setQuality: (name) => applyQuality(name, false),
+      startMemoryWalk,
+      memories,
       getStats: () => ({
         ...state,
         position: camera.position.toArray(),
@@ -474,6 +738,10 @@ async function load() {
         audioState: audio.ctx?.state,
         saved: [...saved],
         river: riverLife.getStats(),
+        memory: memories.getStats(),
+        quality: state.quality,
+        shadows: renderer.shadowMap.enabled,
+        undergrowth: undergrowth.mesh.count,
       }),
     };
   } catch (e) {
@@ -485,10 +753,12 @@ async function load() {
     $("#enter").onclick = () => location.reload();
   }
 }
+
 async function checkJSON(r) {
   if (!r.ok) throw Error("Scene data unavailable");
   return r.json();
 }
+
 function goTo(index, notify = true) {
   if (state.overview) toggleOverview();
   state.place = index;
@@ -499,6 +769,7 @@ function goTo(index, notify = true) {
     routes,
   );
   state.route = near.route;
+  feel.reset();
   camera.position.fromArray(near.position);
   camera.position.y += 1.7;
   camera.lookAt(
@@ -511,9 +782,12 @@ function goTo(index, notify = true) {
   $("#height").textContent = `${Math.round(camera.position.y - 1.7)} m`;
   updateNotes();
   drawMap();
+  memories?.preloadNear(camera.position, 3);
   lastTreeUpdate = -10;
+  lastGrowth = -10;
   if (notify) toast(place.name + " · You’re on the path");
 }
+
 function updateNotes() {
   $("#found").textContent = `${saved.length} / 5`;
   $("#stamps").innerHTML = places
@@ -526,20 +800,128 @@ function updateNotes() {
     ? "✓ Moment saved"
     : "＋ Save this moment";
 }
+
+// --- memories ---------------------------------------------------------------
+
+function buildMemoryStrip() {
+  const strip = $("#memory-strip");
+  if (!strip || !memories) return;
+  strip.innerHTML = memories.items
+    .slice()
+    .sort((a, b) => a.record.minutes - b.record.minutes)
+    .map(
+      (item) =>
+        `<button type="button" class="memory-chip${foundMemories.includes(item.record.id) ? " seen" : ""}" data-memory="${item.record.id}" title="${item.record.time} · ${item.record.en}"><img src="${item.record.thumb}" alt="" loading="lazy" /><span>${item.record.time}</span></button>`,
+    )
+    .join("");
+  strip.querySelectorAll("[data-memory]").forEach((b) => {
+    b.onclick = () => goToMemory(b.dataset.memory);
+  });
+  updateMemoryCount();
+}
+
+function updateMemoryCount() {
+  const stats = memories.getStats();
+  $("#memory-count").textContent = `${stats.found} / ${stats.total}`;
+}
+
+function goToMemory(id) {
+  const item = memories.byId(id);
+  if (!item) return;
+  if (state.overview) toggleOverview();
+  stopWalks();
+  const ri = item.record.route;
+  state.route = ri;
+  const target = new THREE.Vector3().fromArray(item.record.position);
+  const safe = constrainToRoute([target.x, target.y, target.z], routes[ri]);
+  feel.reset();
+  camera.position.fromArray(safe.position);
+  camera.lookAt(item.node.position);
+  camera.rotation.z = 0;
+  memories.preloadNear(camera.position, 3);
+  lastTreeUpdate = -10;
+  lastGrowth = -10;
+  drawMap();
+}
+
+function showMemoryCard(item) {
+  const card = $("#memory-card");
+  // The memory takes over the field-notes slot while you are standing at it,
+  // rather than covering it up.
+  document.body.classList.toggle("memory-open", !!item);
+  if (!item) {
+    card.classList.remove("show");
+    return;
+  }
+  const r = item.record;
+  $("#memory-time").textContent = r.time;
+  $("#memory-zh").textContent = r.zh;
+  $("#memory-en").textContent = r.en;
+  $("#memory-note").textContent = r.note;
+  $("#memory-photo").src = r.src;
+  card.classList.add("show");
+}
+
+function startMemoryWalk() {
+  if (!state.ready) return;
+  if (state.overview) toggleOverview();
+  state.auto = false;
+  $("#auto").classList.remove("active");
+  $("#auto").textContent = "▷ Guided walk";
+  state.memoryWalk = !state.memoryWalk;
+  $("#memory-walk").classList.toggle("active", state.memoryWalk);
+  $("#memory-walk").textContent = state.memoryWalk
+    ? "Ⅱ Pause the morning"
+    : "❍ Walk the morning";
+  if (state.memoryWalk) {
+    memoryWalk.reset();
+    const first = memoryWalk.target;
+    if (first) {
+      state.route = first.record.route;
+      const safe = constrainToRoute(
+        [
+          first.record.position[0] - first.record.along[0] * 26,
+          first.record.position[1],
+          first.record.position[2] - first.record.along[1] * 26,
+        ],
+        routes[state.route],
+      );
+      feel.reset();
+      camera.position.fromArray(safe.position);
+      camera.lookAt(first.node.position);
+      camera.rotation.z = 0;
+    }
+    controls.unlock();
+    keys.clear();
+    $("#resume").hidden = true;
+    setWeather("dawn");
+    toast("06:16. Twenty frames between here and the river.");
+  } else {
+    $("#resume").hidden = controls.isLocked;
+  }
+}
+
+function stopWalks() {
+  state.auto = false;
+  state.memoryWalk = false;
+  $("#auto").classList.remove("active");
+  $("#auto").textContent = "▷ Guided walk";
+  $("#memory-walk").classList.remove("active");
+  $("#memory-walk").textContent = "❍ Walk the morning";
+}
+
+// --- weather ----------------------------------------------------------------
+
 function setWeather(name) {
   state.weather = name;
   document
     .querySelectorAll("[data-weather]")
     .forEach((b) => b.classList.toggle("active", b.dataset.weather === name));
-  $("#weather-label").textContent = {
-    morning: "MORNING LIGHT",
-    sunset: "GOLDEN HOUR",
-    storm: "A STORM PASSES",
-    snow: "WINTER STILLNESS",
-  }[name];
+  $("#weather-label").textContent = WEATHER_LABEL[name];
   if (state.playing)
     toast(
       {
+        dawn: "The light the morning actually started in.",
         morning: "Birdsong returns to the mountain.",
         sunset: "Stay a while. Watch the light turn gold.",
         storm: "Rain on the path. Thunder across the river.",
@@ -547,6 +929,7 @@ function setWeather(name) {
       }[name],
     );
 }
+
 function lock() {
   if (state.overview) return;
   try {
@@ -558,12 +941,14 @@ function lock() {
     toast("Drag to look; use WASD or the arrows to walk.");
   }
 }
+
 function start() {
   if (!state.ready) return;
   state.playing = true;
   $("#welcome").hidden = true;
   $("#hud").hidden = false;
   document.body.classList.add("playing");
+  goTo(0, false);
   lock();
   audio
     .start()
@@ -574,36 +959,40 @@ function start() {
     })
     .catch(() => toast("Sound could not load. You can still explore."));
 }
+
 function toggleOverview() {
   if (!state.ready) return;
   state.overview = !state.overview;
   camera.near = state.overview ? 2 : 0.12;
+  camera.fov = state.overview ? 55 : feel.baseFov;
   camera.updateProjectionMatrix();
   lastTreeUpdate = -10;
+  lastGrowth = -10;
   if (state.overview) {
     returnPose = {
       position: camera.position.clone(),
       quaternion: camera.quaternion.clone(),
     };
     controls.unlock();
-    state.auto = false;
-    $("#auto").classList.remove("active");
-    $("#auto").textContent = "▷ Guided walk";
+    stopWalks();
     camera.position.set(1100, 2900, 1100);
     orbit.target.set(2450, 90, -1600);
     orbit.enabled = true;
     camera.lookAt(orbit.target);
     $("#overview").textContent = "Back to path ↙";
     $("#resume").hidden = true;
+    showMemoryCard(null);
     toast("Drag to orbit · Scroll to zoom · Back to path to walk");
   } else {
     orbit.enabled = false;
     camera.position.copy(returnPose.position);
     camera.quaternion.copy(returnPose.quaternion);
+    feel.reset();
     $("#overview").textContent = "Overview ↗";
     $("#resume").hidden = false;
   }
 }
+
 function drawMap() {
   if (!routes) return;
   const c = $("#map").getContext("2d"),
@@ -632,6 +1021,16 @@ function drawMap() {
     c.lineWidth = i === state.route ? 1.5 : 0.8;
     c.stroke();
   });
+  if (memories) {
+    const seen = new Set(memories.found);
+    memories.items.forEach((item) => {
+      const [x, y] = map(item.record.position);
+      c.fillStyle = seen.has(item.record.id) ? "#ffd79a" : "#c99a5a88";
+      c.beginPath();
+      c.arc(x, y, 1.9, 0, 7);
+      c.fill();
+    });
+  }
   places.forEach((p, i) => {
     const [x, y] = map(world.bookmarks[p.bookmark].position);
     c.fillStyle = saved.includes(i) ? "#e4eec0" : "#839e80";
@@ -650,17 +1049,152 @@ function drawMap() {
   c.fill();
   c.shadowBlur = 0;
 }
+
+// --- frame ------------------------------------------------------------------
+
 const direction = new THREE.Vector3(),
-  right = new THREE.Vector3();
+  right = new THREE.Vector3(),
+  grade = { lift: new THREE.Vector3(), gain: new THREE.Vector3(1, 1, 1) },
+  blendedGrade = {
+    lift: new THREE.Vector3(),
+    gain: new THREE.Vector3(1, 1, 1),
+    saturation: 1.08,
+    contrast: 1.05,
+    bloom: 0.5,
+    exposure: 1.08,
+  };
+
+function updateGrade(dt) {
+  const clear = 1 - weather.dawn - weather.sunset - weather.storm - weather.snow;
+  const mix = {
+    morning: Math.max(0, clear),
+    dawn: weather.dawn,
+    sunset: weather.sunset,
+    storm: weather.storm,
+    snow: weather.snow,
+  };
+  let total = 0;
+  grade.lift.set(0, 0, 0);
+  grade.gain.set(0, 0, 0);
+  let saturation = 0,
+    contrast = 0,
+    bloom = 0,
+    exposure = 0;
+  for (const [key, amount] of Object.entries(mix)) {
+    if (amount <= 0) continue;
+    const g = GRADES[key];
+    total += amount;
+    grade.lift.x += g.lift[0] * amount;
+    grade.lift.y += g.lift[1] * amount;
+    grade.lift.z += g.lift[2] * amount;
+    grade.gain.x += g.gain[0] * amount;
+    grade.gain.y += g.gain[1] * amount;
+    grade.gain.z += g.gain[2] * amount;
+    saturation += g.saturation * amount;
+    contrast += g.contrast * amount;
+    bloom += g.bloom * amount;
+    exposure += g.exposure * amount;
+  }
+  if (total <= 0.0001) return;
+  grade.lift.divideScalar(total);
+  grade.gain.divideScalar(total);
+  blendedGrade.lift.lerp(grade.lift, 1 - Math.exp(-dt * 3));
+  blendedGrade.gain.lerp(grade.gain, 1 - Math.exp(-dt * 3));
+  blendedGrade.saturation = THREE.MathUtils.damp(blendedGrade.saturation, saturation / total, 3, dt);
+  blendedGrade.contrast = THREE.MathUtils.damp(blendedGrade.contrast, contrast / total, 3, dt);
+  blendedGrade.bloom = THREE.MathUtils.damp(blendedGrade.bloom, bloom / total, 3, dt);
+  blendedGrade.exposure = THREE.MathUtils.damp(blendedGrade.exposure, exposure / total, 3, dt);
+
+  const gu = postfx.grade.uniforms;
+  gu.uLift.value.copy(blendedGrade.lift);
+  gu.uGain.value.copy(blendedGrade.gain);
+  gu.uSaturation.value = blendedGrade.saturation;
+  gu.uContrast.value = blendedGrade.contrast;
+  postfx.bloom.strength = blendedGrade.bloom;
+  renderer.toneMappingExposure = blendedGrade.exposure;
+}
+
+function updateSunPosition() {
+  // The memory walk carries its own clock; otherwise the sky sits at the
+  // hour the mood implies.
+  const minutes = state.memoryWalk
+    ? THREE.MathUtils.lerp(WALK_START_MINUTES, WALK_END_MINUTES, walkTimeBlend)
+    : THREE.MathUtils.lerp(WALK_END_MINUTES + 150, WALK_START_MINUTES, weather.dawn);
+  sunDirectionForMinutes(minutes, sunDirection);
+  sunDirection.lerp(sunsetDirection, weather.sunset).normalize();
+
+  const anchor = state.overview ? orbit.target : camera.position;
+  sun.position.copy(anchor).addScaledVector(sunDirection, 900);
+  // Snap the shadow centre to the shadow map grid so edges stop crawling.
+  const texel = 140 / (sun.shadow.mapSize.x || 2048);
+  sun.target.position.set(
+    Math.round(anchor.x / texel) * texel,
+    Math.round(anchor.y / texel) * texel,
+    Math.round(anchor.z / texel) * texel,
+  );
+  sun.target.updateMatrixWorld();
+
+  // project() folds points behind the camera back onto the screen, so test
+  // the view direction before trusting the projected position.
+  camera.getWorldDirection(direction);
+  const ahead = direction.dot(sunDirection);
+  sunScreen.copy(camera.position).addScaledVector(sunDirection, 6000).project(camera);
+  const onScreen = ahead > 0.12 && sunScreen.z < 1;
+  postfx.atmosphere.uniforms.uSun.value.set(
+    sunScreen.x * 0.5 + 0.5,
+    sunScreen.y * 0.5 + 0.5,
+  );
+  const clarity =
+    (1 - weather.storm * 0.95) *
+    (1 - weather.snow * 0.7) *
+    THREE.MathUtils.smoothstep(ahead, 0.12, 0.55);
+  postfx.atmosphere.uniforms.uSunVisible.value =
+    onScreen && !state.overview ? clarity : 0;
+  postfx.atmosphere.uniforms.uSunColor.value
+    .setRGB(1, 0.86, 0.62)
+    .lerp(new THREE.Color(1, 0.48, 0.2), Math.max(weather.sunset, weather.dawn * 0.8));
+}
+
+function trackQuality(dt) {
+  if (qualityLocked || storedQuality || state.overview || !state.playing) return;
+  qualitySamples.push(dt);
+  if (qualitySamples.length < 150) return;
+  const sorted = qualitySamples.slice().sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  qualitySamples = [];
+  if (median > 1 / 26 && state.quality === "cinematic") {
+    applyQuality("balanced");
+    toast("Lowered to Balanced so the walk stays smooth. Change it under ?");
+  } else if (median > 1 / 20 && state.quality === "balanced") {
+    applyQuality("smooth");
+    qualityLocked = true;
+    toast("Lowered to Smooth for frame rate. Change it under ?");
+  } else if (median < 1 / 58 && state.quality === "balanced") {
+    applyQuality("cinematic");
+    qualityLocked = true;
+  } else {
+    qualityLocked = true;
+  }
+}
+
 function animate() {
   requestAnimationFrame(animate);
-  const elapsed = clock.getDelta(),
-    dt = Math.min(elapsed, 0.1),
+  frame(clock.getDelta());
+}
+
+// Split out so the walk can also be stepped by hand, frame by frame, when
+// something needs to be inspected without a running animation loop.
+function frame(elapsed) {
+  simTime += elapsed;
+  const dt = Math.min(elapsed, 0.1),
     weatherDt = Math.min(elapsed, 0.5),
-    t = clock.elapsedTime;
+    t = simTime;
   state.frames++;
   u.time.value = t;
-  for (const key of ["sunset", "storm", "snow"]) {
+
+  feel.unapply();
+
+  for (const key of ["dawn", "sunset", "storm", "snow"]) {
     weather[key] = THREE.MathUtils.damp(
       weather[key],
       state.weather === key ? 1 : 0,
@@ -669,24 +1203,39 @@ function animate() {
     );
     u[key].value = weather[key];
   }
-  hemi.intensity = 2.3 - weather.storm * 1.5;
-  sun.intensity = 2.5 - weather.storm * 2.3 - weather.snow * 1.6;
-  sun.color.setRGB(1, 1 - weather.sunset * 0.42, 1 - weather.sunset * 0.7);
-  sun.position.y = 650 - weather.sunset * 550;
+
+  const daylight = 1 - weather.dawn * 0.72;
+  hemi.intensity = (1.25 - weather.storm * 0.45) * daylight;
+  hemi.color.setRGB(0.85 - weather.dawn * 0.35, 0.92 - weather.dawn * 0.3, 1.0);
+  sun.intensity =
+    Math.max(0, 3.6 - weather.storm * 3.35 - weather.snow * 2.2) *
+    (1 - weather.dawn * 0.6);
+  sun.color.setRGB(
+    1,
+    1 - weather.sunset * 0.42 - weather.dawn * 0.22,
+    1 - weather.sunset * 0.7 - weather.dawn * 0.44,
+  );
+  fill.intensity = 0.35 * daylight * (1 - weather.storm * 0.4);
+
   scene.fog.color.setRGB(
-    0.67 + weather.sunset * 0.12 - weather.storm * 0.4,
-    0.76 - weather.sunset * 0.17 - weather.storm * 0.4,
-    0.72 - weather.sunset * 0.22 - weather.storm * 0.33,
+    0.67 + weather.sunset * 0.12 - weather.storm * 0.4 - weather.dawn * 0.4,
+    0.76 - weather.sunset * 0.17 - weather.storm * 0.4 - weather.dawn * 0.45,
+    0.72 - weather.sunset * 0.22 - weather.storm * 0.33 - weather.dawn * 0.3,
   );
   scene.fog.density = state.overview
     ? 0.000035
-    : 0.00026 + weather.storm * 0.0007 + weather.snow * 0.0004;
-  renderer.toneMappingExposure = 1.1 - weather.storm * 0.3;
+    : 0.000155 + weather.storm * 0.00068 + weather.snow * 0.00042 + weather.dawn * 0.00014;
+
   sky.position.copy(camera.position);
   particles.position.copy(camera.position);
   particles.visible = weather.snow > 0.02 && !state.overview;
   rainLines.position.copy(camera.position);
   rainLines.visible = weather.storm > 0.02 && !state.overview;
+  motes.position.set(camera.position.x, camera.position.y - 8, camera.position.z);
+  motes.visible = !state.overview && weather.storm < 0.7;
+  leaves.position.set(camera.position.x, camera.position.y - 11, camera.position.z);
+  leaves.visible = !state.overview;
+
   if (weather.storm > 0.8 && t - lastLightning > 17) {
     lastLightning = t;
     flashTimer = 0.22;
@@ -697,36 +1246,85 @@ function animate() {
   flashTimer = Math.max(0, flashTimer - dt);
   u.flash.value = flashTimer > 0 ? 0.65 : 0;
   sun.intensity += u.flash.value * 3;
+
   state.moving = false;
-  if (state.playing && !state.overview && !$("#info").open) {
+  let strafe = 0,
+    sprinting = false;
+
+  if (!state.playing && !state.overview) {
+    // A slow drift over the rainbow road behind the title, so the first thing
+    // anyone sees is already moving.
+    introPhase += dt * 0.014;
+    const path = routes[2].points;
+    const i = Math.min(
+      path.length - 2,
+      Math.floor((introPhase % 1) * (path.length - 2)),
+    );
+    const a = path[i],
+      b = path[i + 1];
+    camera.position.set(a[0], a[1] + 2.4, a[2]);
+    camera.lookAt(b[0], b[1] + 2.0, b[2]);
+    camera.rotation.y += Math.sin(t * 0.12) * 0.16;
+    camera.rotation.x = Math.sin(t * 0.09) * 0.045;
+    camera.rotation.z = 0;
+  } else if (state.playing && !state.overview && !$("#info").open) {
     const f =
         (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) -
         (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0),
       s =
         (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0) -
         (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0);
-    if (f || s || state.auto) {
+    strafe = s;
+    sprinting = keys.has("ShiftLeft") || keys.has("ShiftRight");
+    const auto = state.auto || state.memoryWalk;
+    if (f || s || auto) {
       const before = camera.position.clone();
       let proposed = before.clone();
-      if (state.auto) {
-        const n = nearestOnRoute(
-          [before.x, before.y - 1.7, before.z],
-          routes[state.route],
-        );
-        const target =
-          routes[state.route].points[
-            Math.min(n.index + 3, routes[state.route].points.length - 1)
-          ];
-        direction.fromArray(target).sub(before);
+      if (auto) {
+        let goal = null;
+        if (state.memoryWalk) {
+          const phase = memoryWalk.advance(camera, dt);
+          if (phase === "finished") {
+            state.memoryWalk = false;
+            $("#memory-walk").classList.remove("active");
+            $("#memory-walk").textContent = "❍ Walk the morning";
+            $("#resume").hidden = false;
+            toast("08:26. That is the whole morning.");
+          } else if (phase === "walking") {
+            const item = memoryWalk.target;
+            if (item && item.record.route !== state.route) {
+              state.route = item.record.route;
+            }
+            goal = item ? item.node.position : null;
+          }
+          walkTimeBlend = THREE.MathUtils.damp(
+            walkTimeBlend,
+            memoryWalk.progress(),
+            1.2,
+            dt,
+          );
+        }
+        if (!goal) {
+          const n = nearestOnRoute(
+            [before.x, before.y - 1.7, before.z],
+            routes[state.route],
+          );
+          const target =
+            routes[state.route].points[
+              Math.min(n.index + 3, routes[state.route].points.length - 1)
+            ];
+          goal = new THREE.Vector3().fromArray(target);
+        }
+        direction.copy(goal).sub(before);
         direction.y = 0;
-        if (direction.length() < 0.4) {
+        if (direction.length() < 0.4 && state.auto) {
           state.auto = false;
           $("#auto").classList.remove("active");
           $("#auto").textContent = "▷ Guided walk";
           toast("End of this path. Choose another place to keep exploring.");
         }
         direction.normalize();
-        proposed.addScaledVector(direction, 2.2 * dt);
+        proposed.addScaledVector(direction, (state.memoryWalk ? 2.6 : 2.2) * dt);
         const desired = new THREE.Quaternion().setFromRotationMatrix(
           new THREE.Matrix4().lookAt(
             before,
@@ -741,10 +1339,7 @@ function animate() {
         direction.normalize();
         right.crossVectors(direction, camera.up);
         direction.multiplyScalar(f).addScaledVector(right, s).normalize();
-        proposed.addScaledVector(
-          direction,
-          (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 5.2 : 2.1) * dt,
-        );
+        proposed.addScaledVector(direction, (sprinting ? 5.2 : 2.1) * dt);
       }
       const safe = constrainToRoute(
         [proposed.x, before.y - 1.7, proposed.z],
@@ -759,14 +1354,67 @@ function animate() {
       state.moving = travel > 0.0005;
     }
   }
+
   if (state.overview) orbit.update();
+
+  if (!state.overview) {
+    feel.update(dt, {
+      moving: state.moving,
+      running: sprinting,
+      strafe,
+      sprinting,
+    });
+    if (feel.step) audio.footstep(weather);
+  }
+
   if (t - lastTreeUpdate > 0.8) {
     lastTreeUpdate = t;
     updateTrees();
   }
+  if (!state.overview && t - lastGrowth > 0.35) {
+    lastGrowth = t;
+    undergrowth.update(camera);
+  } else if (state.overview) {
+    undergrowth.mesh.count = 0;
+  }
+
+  if (memories) {
+    const result = memories.update(t, camera, dt);
+    if (state.overview) {
+      showMemoryCard(null);
+    } else if (result.changed) {
+      showMemoryCard(result.active);
+      if (result.active && result.firstTime) {
+        audio.chime();
+        foundMemories = memories.found;
+        try {
+          localStorage.setItem("mufu-memories", JSON.stringify(foundMemories));
+        } catch {}
+        document
+          .querySelector(`[data-memory="${result.active.record.id}"]`)
+          ?.classList.add("seen");
+        updateMemoryCount();
+      }
+    }
+  }
+
   audio.update(weather, state.route === 3 ? 1 : 0.03, state.moving);
   const traffic = riverLife.update(t, weather, camera);
   audio.riverTraffic(traffic, t, state.playing && !state.overview);
+
+  updateGrade(dt);
+  updateSunPosition();
+  postfx.grade.uniforms.uTime.value = t;
+  postfx.grade.uniforms.uLetterbox.value = THREE.MathUtils.damp(
+    postfx.grade.uniforms.uLetterbox.value,
+    state.photoMode ? 1 : 0,
+    5,
+    dt,
+  );
+  fadeIn = Math.max(0, fadeIn - dt * 0.7);
+  postfx.grade.uniforms.uFade.value = fadeIn;
+  postfx.grade.uniforms.uVignette.value = state.overview ? 0.5 : 1;
+
   if (t - lastMap > 0.25) {
     lastMap = t;
     drawMap();
@@ -774,8 +1422,13 @@ function animate() {
     $("#height").textContent =
       `${Math.round((state.overview ? returnPose.position.y : camera.position.y) - 1.7)} m`;
   }
-  renderer.render(scene, camera);
+
+  postfx.render();
+  trackQuality(elapsed);
 }
+
+// --- wiring -----------------------------------------------------------------
+
 $("#enter").addEventListener("click", start);
 $("#resume").onclick = lock;
 $("#destination").onchange = (e) => goTo(Number(e.target.value));
@@ -785,22 +1438,37 @@ $("#focus-view").onclick = () => {
   $("#focus-view").setAttribute("aria-pressed", String(active));
   $("#focus-view").textContent = active ? "Show controls" : "Focus view";
 };
+$("#memory-walk").onclick = startMemoryWalk;
+$("#photo-mode").onclick = () => {
+  state.photoMode = !state.photoMode;
+  document.body.classList.toggle("photo-mode", state.photoMode);
+  $("#photo-mode").setAttribute("aria-pressed", String(state.photoMode));
+  if (state.photoMode) toast("Photo mode. Press ▣ Postcard to keep the frame.");
+};
 $("#river-watch").onclick = () => {
   goTo(3, false);
-  state.auto = false;
-  $("#auto").classList.remove("active");
-  $("#auto").textContent = "▷ Guided walk";
+  stopWalks();
   const view = riverLife.watchView(camera.aspect);
   camera.position.copy(view.position);
   camera.lookAt(view.target);
+  camera.rotation.z = 0;
+  feel.reset();
   $("#resume").hidden = controls.isLocked;
   lastTreeUpdate = -10;
+  lastGrowth = -10;
   drawMap();
   toast("Passing ships, flowing water, and the riverside beacon. Try Sunset.");
 };
 document
   .querySelectorAll("[data-weather]")
   .forEach((b) => (b.onclick = () => setWeather(b.dataset.weather)));
+document
+  .querySelectorAll("[data-quality]")
+  .forEach((b) => (b.onclick = () => {
+    qualityLocked = true;
+    storedQuality = b.dataset.quality;
+    applyQuality(b.dataset.quality, true);
+  }));
 $("#sound").onclick = async () => {
   try {
     await audio.start();
@@ -816,6 +1484,7 @@ $("#sound").onclick = async () => {
 };
 $("#auto").onclick = () => {
   if (state.overview) toggleOverview();
+  if (state.memoryWalk) startMemoryWalk();
   state.auto = !state.auto;
   controls.unlock();
   $("#auto").classList.toggle("active", state.auto);
@@ -842,7 +1511,7 @@ $("#collect").onclick = () => {
   } else toast("This moment is already in your field notes.");
 };
 $("#postcard").onclick = () => {
-  renderer.render(scene, camera);
+  postfx.render();
   canvas.toBlob((blob) => {
     if (!blob) return;
     const a = document.createElement("a");
@@ -861,10 +1530,19 @@ $("#help").onclick = () => {
 $("#close-info").onclick = () => $("#info").close();
 $("#reset-notes").onclick = () => {
   saved = [];
+  foundMemories = [];
+  memories?.reset();
   try {
     localStorage.removeItem("mufu-notes");
+    localStorage.removeItem("mufu-memories");
   } catch {}
-  if (state.ready) updateNotes();
+  if (state.ready) {
+    updateNotes();
+    document
+      .querySelectorAll(".memory-chip.seen")
+      .forEach((c) => c.classList.remove("seen"));
+    updateMemoryCount();
+  }
   toast("A fresh notebook for your next walk.");
 };
 window.addEventListener("keydown", (e) => {
@@ -873,6 +1551,16 @@ window.addEventListener("keydown", (e) => {
     keys.clear();
   }
   if (e.target.matches("input,select,textarea") || $("#info").open) return;
+  if (e.code === "KeyP" && state.ready) {
+    $("#photo-mode").click();
+    e.preventDefault();
+    return;
+  }
+  if (e.code === "KeyM" && state.ready) {
+    startMemoryWalk();
+    e.preventDefault();
+    return;
+  }
   if (
     [
       "KeyW",
@@ -936,9 +1624,32 @@ window.addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  postfx?.resize();
 });
 canvas.addEventListener("webglcontextlost", (e) => {
   e.preventDefault();
-  toast("Graphics paused. Reload this page to restart the scene.");
+  // Come back once on the cheapest settings. Reloading in a loop makes the
+  // browser block WebGL for the page altogether.
+  let alreadyRecovered = "1";
+  try {
+    alreadyRecovered = sessionStorage.getItem("mufu-recovered");
+    localStorage.setItem("mufu-quality", "smooth");
+    sessionStorage.setItem("mufu-recovered", "1");
+  } catch {}
+  $("#welcome").hidden = false;
+  $("#hud").hidden = true;
+  if (alreadyRecovered) {
+    $("#load-status").textContent =
+      "The graphics driver dropped the scene. Reload the page to try again on the Smooth setting.";
+    $("#enter").hidden = false;
+    $("#enter").disabled = false;
+    $("#enter").textContent = "Reload the landscape";
+    $("#enter").onclick = () => location.reload();
+    return;
+  }
+  $("#load-status").textContent =
+    "The graphics driver dropped the scene. Reloading on the Smooth setting…";
+  toast("Graphics were lost. Reloading on lighter settings…");
+  setTimeout(() => location.reload(), 2200);
 });
 load();
