@@ -836,6 +836,9 @@ async function checkJSON(r) {
 
 function goTo(index, notify = true) {
   if (state.overview) toggleOverview();
+  // Asking to be somewhere else ends whatever was walking you around;
+  // otherwise the guided walk drags you straight back off the destination.
+  stopWalks();
   state.place = index;
   const place = places[index],
     mark = world.bookmarks[place.bookmark];
@@ -1619,8 +1622,7 @@ $("#photo-mode").onclick = () => {
   if (state.photoMode) toast("Photo mode. Press ▣ Postcard to keep the frame.");
 };
 $("#river-watch").onclick = () => {
-  goTo(3, false);
-  stopWalks();
+  goTo(3, false); // which stops any walk in progress
   const view = riverLife.watchView(camera.aspect);
   camera.position.copy(view.position);
   camera.lookAt(view.target);

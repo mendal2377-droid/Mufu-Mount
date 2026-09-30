@@ -70,19 +70,21 @@ try {
   });
 
   // Now let the guided morning walk run and watch the clock move with it.
+  // Driven by stepped frames rather than wall time: against a remote host a
+  // software renderer manages a frame or two a second, which is not enough to
+  // cover any ground inside a sensible timeout.
   await page.click("#memory-walk");
   const startWeather = await page.evaluate(() => ({ ...window.__mufu.weather }));
-  await page.waitForFunction(
-    () => window.__mufu.state.distance > 12,
-    null,
-    { timeout: 120000 },
-  );
-  const walking = await page.evaluate(() => ({
-    memoryWalk: window.__mufu.state.memoryWalk,
-    weather: { ...window.__mufu.weather },
-    distance: window.__mufu.state.distance,
-    found: window.__mufu.memories.getStats().found,
-  }));
+  const walking = await page.evaluate(() => {
+    const mufu = window.__mufu;
+    mufu.step(200, 0.05); // ten seconds of the walk
+    return {
+      memoryWalk: mufu.state.memoryWalk,
+      weather: { ...mufu.weather },
+      distance: mufu.state.distance,
+      found: mufu.memories.getStats().found,
+    };
+  });
   await page.screenshot({
     path: "test-results/memory-walk.png",
     timeout: 90000,
@@ -112,6 +114,10 @@ try {
   if (opened.time !== "07:13") failures.push(`wrong time shown: ${opened.time}`);
   if (!opened.found) failures.push("opening a frame did not record it");
   if (!walking.memoryWalk) failures.push("memory walk stopped early");
+  if (walking.distance < 10) {
+    failures.push(`the morning walk covered ${walking.distance.toFixed(1)} m in ten seconds`);
+  }
+  if (!report.startedAtFirstLight) failures.push("the morning walk did not start at first light");
   if (failures.length) {
     console.error("FAILED:\n - " + failures.join("\n - "));
     process.exitCode = 1;
