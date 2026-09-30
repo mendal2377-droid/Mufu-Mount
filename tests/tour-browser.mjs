@@ -4,6 +4,7 @@
 import { chromium } from "@playwright/test";
 import fs from "node:fs/promises";
 
+
 const browser = await chromium.launch({
   headless: true,
   channel: "chrome",

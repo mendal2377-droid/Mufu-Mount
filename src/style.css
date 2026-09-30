@@ -801,10 +801,14 @@ body.focus-mode .memory-rail {
   display: none;
 }
 
-@media (max-width: 1000px) {
+/* Four mode buttons leave the keyboard hint too little room below about
+   1200px: it wraps into a tall column and stretches the whole panel. */
+@media (max-width: 1200px) {
   .control-hint {
     display: none;
   }
+}
+@media (max-width: 1000px) {
   .bottom-panel {
     justify-content: space-between;
   }
