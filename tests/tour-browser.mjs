@@ -34,20 +34,26 @@ try {
   const titleMoved = await page.evaluate(() => {
     const mufu = window.__mufu;
     const from = mufu.camera.position.clone();
-    mufu.step(60, 0.1); // six seconds of the loop
+    mufu.step(20, 0.1); // two seconds of the loop; every frame is a render
     return Math.hypot(mufu.camera.position.x - from.x, mufu.camera.position.z - from.z);
   });
 
-  await page.click("#enter");
+  await page.click("#enter", { timeout: 120000 });
   await page.evaluate(() => document.exitPointerLock());
 
   await page.evaluate(() => window.__mufu.startTour());
-  const first = await page.evaluate(() => ({
-    touring: document.body.classList.contains("touring"),
-    label: document.querySelector("#tour-label").textContent,
-    weather: window.__mufu.state.weather,
-    pos: window.__mufu.camera.position.toArray(),
-  }));
+  // Settle onto the rails first: measuring from before the tour began would
+  // just measure the jump to the start of leg one, not the glide along it.
+  const first = await page.evaluate(() => {
+    const mufu = window.__mufu;
+    mufu.step(6, 0.1);
+    return {
+      touring: document.body.classList.contains("touring"),
+      label: document.querySelector("#tour-label").textContent,
+      weather: mufu.state.weather,
+      pos: mufu.camera.position.toArray(),
+    };
+  });
 
   // Every stepped frame is a full render, and under SwiftShader that is far
   // too slow to simulate five real minutes. Step a little inside the first
@@ -123,10 +129,13 @@ try {
 
   const failures = [];
   if (errors.length) failures.push(`console errors: ${errors.join(" | ")}`);
-  if (titleMoved < 3) failures.push("the title loop is not moving");
+  if (titleMoved < 1.5) failures.push("the title loop is not moving");
   if (!first.touring) failures.push("the circuit did not start");
   if (first.weather !== "dawn") failures.push(`starts at ${first.weather}, not dawn`);
-  if (travelled < 25) failures.push(`camera only travelled ${travelled.toFixed(1)} m`);
+  // Leg one covers about 210 m in 44 s, so twelve seconds is roughly 55 m.
+  if (travelled < 25 || travelled > 200) {
+    failures.push(`leg one glided ${travelled.toFixed(1)} m in 12 s, which is not a walk`);
+  }
   const labels = new Set(visited.map((v) => v.label));
   if (labels.size !== visited.length) failures.push("two legs share a caption");
   if (visited.some((v) => !Number.isFinite(v.pos[0]) || !Number.isFinite(v.pos[1]))) {

@@ -925,9 +925,20 @@ body.focus-mode .memory-rail {
   .mode-controls {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 7px;
   }
   .mode-controls button {
-    padding: 9px 16px;
+    padding: 9px 12px;
+    font-size: 10px;
+    flex: 1 1 auto;
+  }
+  .tour-banner {
+    bottom: 214px;
+    padding: 11px 14px 12px;
+  }
+  .tour-banner strong {
+    font-size: 14px;
   }
   .resume {
     top: 58%;
