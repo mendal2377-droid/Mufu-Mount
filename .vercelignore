@@ -4,3 +4,4 @@ test-results
 *.log
 public/world/route_surfaces.json
 public/sunset.png
+tools

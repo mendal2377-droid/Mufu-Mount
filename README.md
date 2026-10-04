@@ -4,6 +4,10 @@ A browser 3D walk adapted from the photo-informed Mount Mufu / Yangtze Blender s
 
 **Play:** [mufu-mount.vercel.app](https://mufu-mount.vercel.app)
 
+**Working on it?** Start with [HANDOFF.md](HANDOFF.md) — how it is put
+together, which parts will bite you, what is actually verified, and what is
+worth doing next. [CHANGELOG.md](CHANGELOG.md) has the history.
+
 ## Run locally
 
 Requires Node.js 22.12+ or 24 LTS.
