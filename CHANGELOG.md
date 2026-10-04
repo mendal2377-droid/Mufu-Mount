@@ -1,5 +1,22 @@
 # Change log
 
+## 2026-10-04 — riverside reference refinement
+
+Inspected the user's Point Lookout reference and adapted its water/foliage
+detail with original implementations. Twelve crossing, dispersed river-wave
+bands share displaced geometry and filtered normals. Directional screen
+filtering and fine turbulence avoid a repeated stripe pattern. Sky-matched
+reflection, procedural foam lace, intermittent whitecaps, bank wash and vessel
+wakes respond to weather. The Yangtze's turbid body colour remains.
+
+Branching leaf sprays, forked twigs, veined near leaves and sun-derived
+backlighting refine the vegetation. A denser far atlas retains wooded hills
+when individual leaves become smaller than a pixel. No geometry export,
+terrain, routes, photos, walking UI or kite controls were replaced.
+
+Added four wave-math checks and deterministic multi-weather visual/browser
+checks. Existing privacy tests and shadow/render-budget safeguards remain.
+
 ## 2026-10-04 — quiet walks and a bird kite
 
 Entrance icons now remain directly on their projected world anchors. The label collision solver and long leader lines are removed; crowded names reveal on hover/focus, with a small-screen entrance list as an alternative.

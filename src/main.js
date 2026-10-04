@@ -18,7 +18,7 @@ import {
   WALK_END_MINUTES,
 } from "./sky.js";
 import { createMemories, createMemoryWalk } from "./memories.js";
-import { createUndergrowth, createMotes, createFallingLeaves, canopyTexture } from "./life.js";
+import { createUndergrowth, createMotes, createFallingLeaves, canopyTexture, leafTexture, twigGeometry } from "./life.js";
 import { createCameraFeel } from "./camera-feel.js";
 import { createCinematic, wholeCircuit } from "./tour.js";
 import { createPlan, planPose } from "./plan.js";
@@ -238,13 +238,14 @@ function material(name, color) {
     shader.uniforms.uSnow = u.snow;
     shader.uniforms.uRain = u.storm;
     shader.uniforms.windTime = u.time;
+    shader.uniforms.leafSun = u.uSunDir;
     shader.vertexShader =
       "uniform float windTime; uniform float uRain; varying vec3 vWorldPoint; varying vec3 vWorldUp;\n" +
       shader.vertexShader;
     if (sway)
       shader.vertexShader = shader.vertexShader.replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvec3 windOrigin=vec3(0.);\n#ifdef USE_INSTANCING\nwindOrigin=instanceMatrix[3].xyz;\n#endif\ntransformed.x+=sin(windTime*1.25+windOrigin.x*.07)*max(0.,position.y-2.)*.018*(1.+uRain*2.);transformed.z+=cos(windTime*.9+windOrigin.z*.1)*max(0.,position.y-2.)*.01;",
+        "#include <begin_vertex>\nvec3 windOrigin=vec3(0.);\n#ifdef USE_INSTANCING\nwindOrigin=instanceMatrix[3].xyz;\n#endif\nfloat gust=sin(windTime*1.1+windOrigin.x*.035+windOrigin.z*.021);float twig=max(0.,position.y-2.);transformed.x+=gust*twig*.024*(1.+uRain*2.);transformed.z+=cos(windTime*.8+windOrigin.z*.04)*twig*.015;transformed.x+=sin(windTime*6.+position.x*9.+position.z*7.+windOrigin.x)*twig*.003*(1.+uRain);",
       );
     shader.vertexShader = shader.vertexShader.replace(
       "#include <worldpos_vertex>",
@@ -270,9 +271,10 @@ function material(name, color) {
     if (sway)
       // A cheap stand-in for light coming through a leaf from behind.
       shader.fragmentShader = shader.fragmentShader.replace(
-        "#include <output_fragment>",
-        "float mufuBack=max(0.,dot(normalize(vWorldPoint-cameraPosition),normalize(vec3(-0.8,0.5,-0.6))));outgoingLight+=diffuseColor.rgb*pow(mufuBack,2.5)*0.55;\n#include <output_fragment>",
+        "#include <opaque_fragment>",
+        "float mufuBack=max(0.,dot(normalize(vWorldPoint-cameraPosition),normalize(leafSun)));outgoingLight+=diffuseColor.rgb*pow(mufuBack,3.)*.65*(1.-uRain*.8);\n#include <opaque_fragment>",
       );
+    if(sway) shader.fragmentShader="uniform vec3 leafSun;\n"+shader.fragmentShader;
   };
   return m;
 }
@@ -366,8 +368,10 @@ function mergeSimpleGeometries(list) {
 function buildTrees(trees, buffer) {
 
   // Shared low-poly crowns, with full-height trunks. Placements come from Blender.
-  const trunkGeo = new THREE.CylinderGeometry(0.11, 0.2, 5.7, 5);
-  trunkGeo.translate(0, 2.85, 0);
+  const mainTrunk = new THREE.CylinderGeometry(0.11, 0.2, 5.7, 5);
+  mainTrunk.translate(0, 2.85, 0);
+  const branches=twigGeometry(3.1,2.1,3.4);
+  const trunkGeo=mergeGeometries([mainTrunk,branches]);
   const lobes=Array.from({length:9},(_,i)=> {
     const g=new THREE.PlaneGeometry(3.8,4.3,1,3);
     g.rotateY(i*2.4);
@@ -376,7 +380,7 @@ function buildTrees(trees, buffer) {
   });
   const crownGeo=mergeGeometries(lobes);
   const crownMaterial=material("Leaf sprays",[.36,.47,.23]);
-  crownMaterial.map=canopyTexture(); crownMaterial.alphaTest=.5;
+  crownMaterial.map=canopyTexture(); crownMaterial.alphaTest=.45;
   const trunk = new THREE.InstancedMesh(
     trunkGeo,
     material("Bark", [0.14, 0.095, 0.055]),
@@ -408,6 +412,7 @@ function buildTrees(trees, buffer) {
   crown.receiveShadow = true;
   scene.add(trunk, crown);
   treeMeshes = [trunk, crown];
+  const leafMap=leafTexture();
   nearTrees = (world.treePrototype || []).map((rec) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute(
@@ -430,7 +435,16 @@ function buildTrees(trees, buffer) {
         1,
       ),
     );
-    const m = new THREE.InstancedMesh(g, material(rec.name, rec.color), 220);
+    const treeMaterial=material(rec.name, rec.color);
+    if(/leaf/i.test(rec.name)) {
+      // Exported leaves are independent rhombus quads (four vertices, six
+      // indices). Preserve their positions; soften the shape and add veins.
+      const uv=new Float32Array(g.attributes.position.count*2);
+      for(let i=0;i<g.attributes.position.count;i+=4) uv.set([0,0,1,0,1,1,0,1],i*2);
+      g.setAttribute("uv",new THREE.BufferAttribute(uv,2));
+      treeMaterial.map=leafMap;treeMaterial.alphaTest=.4;treeMaterial.color.multiplyScalar(1.65);
+    }
+    const m = new THREE.InstancedMesh(g, treeMaterial, 220);
     m.frustumCulled = false;
     m.count = 0;
     // The detailed crowns are far too heavy to push through the shadow map;
@@ -444,7 +458,7 @@ function buildTrees(trees, buffer) {
   // A forty-triangle stand-in for each nearby tree, drawn with no colour or
   // depth writes: invisible in the beauty pass, but it casts the shadow.
   const proxyCrown = new THREE.IcosahedronGeometry(1,0).scale(2.4,3.6,2.4).translate(0,6.9,0);
-  const proxyGeo = mergeSimpleGeometries([trunkGeo.clone(), proxyCrown]);
+  const proxyGeo = mergeSimpleGeometries([mainTrunk.clone(), proxyCrown]);
   shadowTrees = new THREE.InstancedMesh(
     proxyGeo,
     new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
@@ -475,7 +489,7 @@ function buildTrees(trees, buffer) {
         sunset: u.sunset,
         dawn: u.dawn,
         viewport: { value: innerHeight },
-        canopy: { value: canopyTexture() },
+        canopy: { value: canopyTexture(true) },
       },
       vertexShader:
         "attribute float size;uniform float viewport;varying float shade;varying float distanceToEye;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);distanceToEye=-mv.z;shade=fract(sin(position.x*.7+position.z)*43758.5);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(size*projectionMatrix[1][1]*viewport*.5/max(1.,-mv.z),1.,120.);}",

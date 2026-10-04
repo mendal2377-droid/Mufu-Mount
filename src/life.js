@@ -1,19 +1,77 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
-export function canopyTexture() {
-  const c=document.createElement("canvas"); c.width=c.height=256;
-  const g=c.getContext("2d");
-  // Many overlapping sprays create an irregular silhouette and dappled crown,
-  // with small holes that reveal sky instead of a solid circular tree sprite.
-  for(let i=0;i<1150;i++) {
-    const angle=i*2.39996, r=Math.sqrt(Math.random())*105;
-    const x=128+Math.cos(angle)*r, y=132+Math.sin(angle)*r*.91;
-    const shade=.55+Math.random()*.45;
-    g.fillStyle=`rgb(${Math.round(91*shade)},${Math.round(131*shade)},${Math.round(56*shade)})`;
-    g.beginPath(); g.ellipse(x,y,3+Math.random()*8,2+Math.random()*5,angle,0,Math.PI*2); g.fill();
+function seededRandom(seed) {
+  return ()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+}
+
+export function canopyTexture(distant = false) {
+  const c=document.createElement("canvas"); c.width=c.height=512;
+  const g=c.getContext("2d"), rand=seededRandom(7391);
+  // Leaves grow along forked sprays, separated by sky holes. A denser atlas
+  // for distant points keeps fine alpha details from dissolving the hillside.
+  for(let i=0;i<(distant?52:30);i++) {
+    const angle=i*2.39996, r=Math.sqrt(rand())*180;
+    const x=256+Math.cos(angle)*r,y=268+Math.sin(angle)*r*.88;
+    const direction=angle+(rand()-.5),length=35+rand()*51;
+    if(distant) {
+      // At one-to-three screen pixels individual leaves are below the sampling
+      // limit. Retain crown masses underneath the fine sprays at this LOD.
+      g.fillStyle=`rgba(${96+i%7*4},${131+i%5*5},${57+i%4*5},.96)`;
+      g.beginPath();g.ellipse(x,y,35+rand()*18,29+rand()*14,angle,0,Math.PI*2);g.fill();
+    }
+    g.strokeStyle="rgba(103,93,64,.8)";g.lineWidth=1.4;
+    g.beginPath();g.moveTo(x-Math.cos(direction)*length*.4,y-Math.sin(direction)*length*.4);
+    g.lineTo(x+Math.cos(direction)*length*.6,y+Math.sin(direction)*length*.6);g.stroke();
+    for(let j=0;j<24;j++) {
+      const along=(rand()-.4)*length,side=(rand()-.5)*32;
+      const lx=x+Math.cos(direction)*along-Math.sin(direction)*side;
+      const ly=y+Math.sin(direction)*along+Math.cos(direction)*side;
+      const shade=.55+rand()*.45;
+      g.fillStyle=`rgb(${Math.round(167*shade)},${Math.round(191*shade)},${Math.round(112*shade)})`;
+      g.beginPath();g.ellipse(lx,ly,3+rand()*6,1.5+rand()*3,direction+side*.05,0,Math.PI*2);g.fill();
+    }
   }
-  return new THREE.CanvasTexture(c);
+  const t=new THREE.CanvasTexture(c); t.anisotropy=4;
+  return t;
+}
+
+export function leafTexture() {
+  const c=document.createElement("canvas");c.width=c.height=128;
+  const g=c.getContext("2d");
+  const fill=g.createLinearGradient(16,112,112,16);
+  fill.addColorStop(0,"#789452");fill.addColorStop(.45,"#d1deac");fill.addColorStop(1,"#8eaf59");
+  g.fillStyle=fill;g.beginPath();g.moveTo(9,119);
+  g.bezierCurveTo(2,45,51,11,119,9);g.bezierCurveTo(111,78,75,126,9,119);g.fill();
+  g.strokeStyle="rgba(232,239,180,.55)";g.lineWidth=1.6;
+  g.beginPath();g.moveTo(12,116);g.lineTo(116,12);g.stroke();
+  for(let i=0;i<6;i++) {
+    const v=25+i*13;
+    g.beginPath();g.moveTo(v,128-v);g.lineTo(v-15,128-v-23);g.stroke();
+    g.beginPath();g.moveTo(v,128-v);g.lineTo(v+23,128-v+15);g.stroke();
+  }
+  const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+  return t;
+}
+
+export function twigGeometry(height = 1.9, spread = .85, base = 0) {
+  const segments=[],up=new THREE.Vector3(0,1,0),rand=seededRandom(582);
+  function segment(a,b,r0,r1) {
+    const delta=b.clone().sub(a);
+    const g=new THREE.CylinderGeometry(r1,r0,delta.length(),4);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up,delta.normalize()));
+    g.translate(...a.clone().add(b).multiplyScalar(.5).toArray());segments.push(g);
+  }
+  for(let i=0;i<6;i++) {
+    const angle=i*2.4;
+    const a=new THREE.Vector3(0,base,0);
+    const b=new THREE.Vector3(Math.cos(angle)*spread*.45,base+height*.55,Math.sin(angle)*spread*.45);
+    const tip=new THREE.Vector3(Math.cos(angle)*spread,base+height*(.8+rand()*.2),Math.sin(angle)*spread);
+    segment(a,b,height*.014,height*.008);segment(b,tip,height*.008,height*.002);
+    const fork=tip.clone().add(new THREE.Vector3(Math.cos(angle+1)*spread*.35,-height*.15,Math.sin(angle+1)*spread*.35));
+    segment(b,fork,height*.006,height*.001);
+  }
+  const merged=mergeGeometries(segments);segments.forEach(g=>g.dispose());return merged;
 }
 
 // Small things at eye level and below: grass at the edge of the path, pollen
@@ -166,12 +224,7 @@ export function createUndergrowth(scene, routes, shared, limit = 1400, groundHei
   const shrubs = new THREE.InstancedMesh(mergeGeometries(sprays), shrubMaterial, 100);
   shrubs.name="Wild leafy shrubs at the planted path margins";
   shrubs.frustumCulled=false; shrubs.receiveShadow=true; shrubs.count=0; scene.add(shrubs);
-  const branches=[];
-  for(let i=0;i<7;i++) {
-    const g=new THREE.CylinderGeometry(.012,.035,1.65,4);
-    g.rotateZ((i-3)*.19); g.rotateY(i*2.4); g.translate(0,.78,0); branches.push(g);
-  }
-  const stems=new THREE.InstancedMesh(mergeGeometries(branches),new THREE.MeshStandardMaterial({color:0x554a33,roughness:1}),100);
+  const stems=new THREE.InstancedMesh(twigGeometry(),new THREE.MeshStandardMaterial({color:0x665c47,roughness:1}),100);
   stems.frustumCulled=false; stems.count=0; scene.add(stems);
   const heights = new Map();
 

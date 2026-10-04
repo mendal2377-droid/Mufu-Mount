@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { riverSurfaceGLSL, riverSurfaceUniforms, foamTexture, RIVER_WAVES } from "./river-surface.js";
 
 // Ships follow a parallel lane on the river side of the exported promenade.
 export function makeRiverRoute(points) {
@@ -45,10 +46,23 @@ uniform float time,sunset,storm,snow,flash,dawn,planView;
 uniform vec3 uSunDir;
 uniform vec4 ships[4]; uniform vec3 beacon; uniform float beaconPower;
 uniform float farWater; uniform vec4 localBank;
+uniform sampler2D foamLace;
 varying vec3 p;
+${riverSurfaceGLSL}
 float hash(vec2 q){return fract(sin(dot(q,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 q){vec2 i=floor(q),f=fract(q);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
-vec3 reflectedSky(vec3 d){float h=max(d.y,0.);vec3 horizon=mix(vec3(.48,.64,.60),vec3(.80,.46,.26),sunset);vec3 zenith=mix(vec3(.14,.30,.43),vec3(.10,.24,.46),sunset);vec3 sky=mix(horizon,zenith,pow(h,.55));sky=mix(sky,mix(vec3(.25,.33,.34),vec3(.07,.12,.15),h),storm*.87);sky=mix(sky,vec3(.46,.55,.58),snow*.5);vec2 c=d.xz/(.3+abs(d.y))*2.+vec2(time*.009,0.);float cloud=smoothstep(.4,.8,noise(c)*.7+noise(c*2.1)*.3);return mix(sky,mix(vec3(.68,.74,.68),vec3(.20,.26,.27),storm),cloud*.22)*.48;}
+vec3 reflectedSky(vec3 d){
+  float h=max(d.y,0.);
+  vec3 horizon=mix(vec3(.706,.816,.827),vec3(.50,.56,.64),sunset);
+  vec3 zenith=mix(vec3(.115,.318,.556),vec3(.062,.204,.472),sunset);
+  horizon=mix(horizon,vec3(.33,.33,.42),dawn);zenith=mix(zenith,vec3(.055,.106,.254),dawn);
+  vec3 sky=mix(horizon,zenith,pow(h,.42));
+  sky=mix(sky,mix(vec3(.25,.33,.34),vec3(.07,.12,.15),h),storm*.87);
+  sky=mix(sky,vec3(.46,.55,.58),snow*.5);
+  vec2 c=d.xz/(.3+abs(d.y))*2.+vec2(time*.009,0.);
+  float cloud=smoothstep(.4,.8,noise(c)*.7+noise(c*2.1)*.3);
+  return mix(sky,mix(vec3(.78,.83,.82),vec3(.20,.26,.27),storm),cloud*.24);
+}
 void main(){
   vec3 V=normalize(cameraPosition-p);float dist=distance(cameraPosition,p);
   float patchDistance=length(p.xz-cameraPosition.xz);
@@ -62,21 +76,31 @@ void main(){
     c=mix(c,vec3(.37,.51,.53),snow*.5);
     gl_FragColor=vec4(c,1.);return;
   }
-  // Analytic wave slopes: long swells, crossing ripples and advected fine chop.
-  vec2 slope=vec2(0.);float swell=0.;
-  for(int i=0;i<6;i++){float f=float(i);vec2 d=normalize(vec2(cos(f*2.17+.4),sin(f*2.17+.4)));float k=.055*pow(1.95,f);float a=.35*pow(.62,f)*(1.+storm*1.3);float phase=dot(q,d)*k-time*(.5+f*.31);float aa=1.-smoothstep(.3,1.5,length(fwidth(p.xz))*k);slope+=d*cos(phase)*k*a*aa;swell+=sin(phase)*a;}
-  float chop=noise(q*.065+vec2(swell));slope+=vec2(sin(q.y*.9+chop*5.),cos(q.x*.7+chop*5.))*.075*(1.-smoothstep(140.,850.,dist));
+  // Screen-space filtering retains the fine crossing ripples up close without
+  // a moire carpet on the horizon. The mesh uses this same field, filtered to
+  // its coarser vertex spacing.
+  vec4 field=riverField(p.xz,dFdx(p.xz),dFdy(p.xz));
+  vec2 slope=field.yz;float swell=field.x;
+  float chop=noise(q*.065+vec2(swell));
+  // Non-periodic capillary turbulence breaks the long wave trains into small
+  // facets. Fade this band before its screen footprint becomes sub-pixel.
+  vec2 fine=q*.7+vec2(noise(q*.04),time*.03);
+  float fineNoise=noise(fine);
+  vec2 fineSlope=vec2(noise(fine+vec2(.06,0.)),noise(fine+vec2(0.,.06)))-fineNoise;
+  float fineAA=1.-smoothstep(.5,2.,max(length(dFdx(fine)),length(dFdy(fine))));
+  slope+=fineSlope*1.6*fineAA*(1.+storm*.7);
   vec3 N=normalize(vec3(-slope.x,1.,-slope.y));vec3 R=reflect(-V,N);
   float fresnel=.035+.965*pow(1.-max(0.,dot(N,V)),5.);
   // The Yangtze here carries a heavy silt load: the body colour is a turbid
   // brown-green, not the blue-green of open water.
-  vec3 sediment=mix(vec3(.150,.150,.112),vec3(.232,.222,.158),chop);sediment=mix(sediment,vec3(.105,.120,.112),storm*.55);
-  vec3 color=mix(sediment,reflectedSky(R),.28+fresnel*.68);
+  vec3 sediment=mix(vec3(.075,.133,.125),vec3(.19,.19,.12),chop);
+  sediment=mix(sediment,vec3(.105,.120,.112),storm*.55);
+  vec3 color=mix(sediment,reflectedSky(R),.12+fresnel*.86);
   vec3 L=normalize(uSunDir);vec3 H=normalize(L+V);
   float dusk=max(sunset,dawn*.8);
   vec3 sunTint=mix(vec3(1.,.88,.62),vec3(1.,.47,.15),dusk);
   float clarity=(1.-storm*.93)*(1.-snow*.65);
-  float spec=pow(max(dot(N,H),0.),mix(180.,65.,storm));
+  float spec=pow(max(dot(N,H),0.),mix(340.,90.,storm));
   color+=sunTint*spec*clarity*1.4;
   // The glitter path. A low sun over broken water does not make one highlight,
   // it makes a column of them running from the horizon back to the observer:
@@ -95,17 +119,21 @@ void main(){
   color+=vec3(.24,.28,.24)*streak*(.18+storm*.8)*(1.-smoothstep(300.,1600.,dist));
   // Wind tears intermittent foam from wave crests. Bank wash rolls in and
   // recedes over the stone margin, breaking into patches rather than a stripe.
-  float crest=smoothstep(.23,.5,length(slope))*smoothstep(.46,.75,noise(q*.23))*storm;
+  float crest=smoothstep(.16,.31,field.w)*smoothstep(.43,.69,noise(q*.11))*(.42+storm*.58);
+  float lace=texture2D(foamLace,q*.035+slope*.035).r;
+  lace=max(lace,texture2D(foamLace,q*.13+vec2(time*.007,0.)).r*.65);
+  float foamDetail=mix(.18,1.,smoothstep(.03,.65,lace));
   vec2 bankDelta=p.xz-localBank.xy;
   float bankAcross=dot(bankDelta,vec2(localBank.w,-localBank.z));
   float bankAlong=abs(dot(bankDelta,localBank.zw));
   float washWidth=2.5+sin(time*.9+dot(p.xz,localBank.zw)*.026)*1.6;
   float wash=(1.-smoothstep(washWidth,washWidth+3.,abs(bankAcross-22.)))
     *(1.-smoothstep(110.,260.,bankAlong))*smoothstep(.30,.66,noise(q*.6))*(.2+storm*.55);
-  color=mix(color,vec3(.66,.71,.62),clamp(crest*.6+wash,0.,.65));
+  float aerated=clamp((crest+wash)*foamDetail,0.,.83);
+  color=mix(color,reflectedSky(vec3(0.,.5,0.))*.6+vec3(.36),aerated);
   float wake=0.;
   for(int i=0;i<4;i++){vec2 delta=p.xz-ships[i].xy;vec2 dir=ships[i].zw;float behind=-dot(delta,dir);float side=abs(dot(delta,vec2(-dir.y,dir.x)));float width=6.+max(0.,behind)*.18;float edge=exp(-pow((side-width)/(1.3+behind*.01),2.));float propeller=exp(-side*side/45.)*(.55+.45*sin(behind*1.7-time*8.));float gate=smoothstep(3.,18.,behind)*(1.-smoothstep(80.,330.,behind));wake+=gate*(edge*.7+propeller*.6);}
-  color=mix(color,vec3(.71,.79,.74),clamp(wake,0.,.8));
+  color=mix(color,vec3(.71,.79,.74),clamp(wake*(.38+foamDetail*.9),0.,.85));
   // Lantern glitter is stretched towards the observer across the ripples.
   vec2 toLight=beacon.xz-p.xz;vec3 B=normalize(vec3(toLight.x,beacon.y,toLight.y));float bspec=pow(max(dot(N,normalize(B+V)),0.),55.);color+=vec3(1.,.48,.12)*bspec*beaconPower*4./(1.+dot(toLight,toLight)/6000.);
   // and, like the buoy in the dusk photographs, it drags a broken column of
@@ -136,6 +164,8 @@ export function createLivingRiver(scene, shared, points) {
   const beaconPlace = route.sample(2440, 27);
   const uniforms = {
     ...shared,
+    ...riverSurfaceUniforms(),
+    foamLace: { value: foamTexture() },
     ships: { value: shipUniforms },
     beacon: { value: new THREE.Vector3(beaconPlace.x, 22, beaconPlace.z) },
     beaconPower: { value: 0.2 },
@@ -160,7 +190,10 @@ export function createLivingRiver(scene, shared, points) {
   // to zero at the shared 450 m seam. Both use the same linear HDR shading.
   const nearWater = new THREE.Mesh(new THREE.PlaneGeometry(1100,1100,176,176),
     new THREE.ShaderMaterial({uniforms:{...uniforms,farWater:{value:0}},fragmentShader:waterFragment,
-      vertexShader:`uniform float time,storm;varying vec3 p;void main(){vec4 w=modelMatrix*vec4(position,1.);vec2 q=w.xz-normalize(vec2(.68,-.73))*time*.9;float h=0.;for(int i=0;i<6;i++){float f=float(i);vec2 d=vec2(cos(f*2.17+.4),sin(f*2.17+.4));float k=.055*pow(1.95,f);h+=sin(dot(q,d)*k-time*(.5+f*.31))*.35*pow(.62,f)*(1.+storm*1.3);}h*=1.-smoothstep(330.,450.,length(w.xz-cameraPosition.xz));w.y+=h;p=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+      vertexShader:`uniform float time,storm;varying vec3 p;${riverSurfaceGLSL}
+        void main(){vec4 w=modelMatrix*vec4(position,1.);float h=riverField(w.xz,6.25).x;
+        h*=1.-smoothstep(330.,450.,length(w.xz-cameraPosition.xz));w.y+=h;p=w.xyz;
+        gl_Position=projectionMatrix*viewMatrix*w;}`,
     }));
   nearWater.rotation.x=-Math.PI/2;
   nearWater.name="Nearby river swells — displaced surface and broken bank foam";
@@ -481,6 +514,8 @@ export function createLivingRiver(scene, shared, points) {
       birds: birds.count,
       riverTime: t,
       geometricWaves: true,
+      waveBands: RIVER_WAVES.length,
+      foamLace: true,
     };
     return closest;
   }

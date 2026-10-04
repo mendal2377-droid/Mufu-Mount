@@ -7,6 +7,36 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
+**4 October 2026: riverside reference refinement.** The user supplied
+[Point Lookout](https://claude-creative-xbmc.vercel.app/) as a visual reference.
+It was inspected in Chrome, including its public rendering modules. Only visual
+principles were adapted: no reference code, textures, models or location were
+imported. Terrain/routes, private photo handling and the quiet UI remain intact.
+
+`src/river-surface.js` defines twelve analytic wave trains with dispersion,
+crossing bearings, shared CPU/GLSL height/slopes and a procedural repeating foam
+texture. The near mesh filters waves to its 6.25 m vertex spacing. Fragment
+normals filter each wave by its directional screen footprint, keeping detail at
+grazing angles without horizon moire. Small noise-derived slopes break up the
+trains. Reflection palettes follow the sky; bank wash, crests and shipping wakes
+use foam lace. The circular 450 m seam, cheap overview branch and single final
+tone map remain. This is an artistic river spectrum, not an FFT or survey.
+
+Foliage uses reproducible branching sprays, a denser far canopy atlas, forked
+twig geometry and alpha-masked veined leaves on the exported near-tree quads.
+Their positions remain unchanged. The near leaf quads have consecutive groups
+of four vertices/six indices; a new exporter must preserve that or regenerate
+their UV assignment. Backlighting now patches Three's `opaque_fragment` chunk
+and uses the actual sun direction. Near crowns still never cast shadows; proxy
+geometry still uses the cheap plain trunk and crown.
+
+32 unit checks and the build pass. `tests/riverside-visual.mjs` captures plan,
+water, forest and four weather moods, checking rendering errors and vessel/
+beacon motion. Use the existing immersion check for walking/menu/map/kite/touch
+regressions. Browser captures use software-GPU Chrome; no physical phone or
+hardware GPU performance benchmark is claimed. Reports/screenshots remain in
+ignored `test-results/`.
+
 **4 October 2026: anchored markers, quiet walking and bird-kite flight.**
 The home remains an orbitable 3D entrance plan. `src/plan.js` now projects
 icons directly onto their world positions without collision-driven relocation
@@ -66,7 +96,7 @@ copy you write. Section 6 explains exactly how far the accuracy goes.
 ```sh
 npm ci
 npm run dev          # Vite dev server
-npm test             # 28 unit tests, no browser needed
+npm test             # 32 unit tests, no browser needed
 npm run build        # static site into dist/
 npm run preview      # serves dist on 127.0.0.1:4173
 ```
@@ -87,6 +117,7 @@ teach you the geography faster than reading code.
 | `src/style.css` | 1032 | Everything visual outside the canvas |
 | `src/memories.js` | 455 | The twenty photo frames: placement, reveal, texture budget, the morning walk |
 | `src/river-life.js` | 450 | Water shader, ships, wakes, beacon, birds |
+| `src/river-surface.js` | — | Dispersed wave bands, CPU/GLSL surface sampling, procedural foam lace |
 | `src/tour.js` | 348 | Camera on rails — the whole circuit and a retained legacy title preset |
 | `src/plan.js` | — | Aerial camera framing, direct world-projected entrance icons and shortcuts |
 | `src/kite.js` | — | Swallow kite, bounded free flight, ground sampling and path landing |
