@@ -21,12 +21,13 @@ Open the local URL printed by Vite. `npm run build` creates the static site in `
 
 ## Play
 
-- Click **Enter the mountain**. WASD moves; mouse looks; Shift moves faster; Esc releases the mouse.
+- The home page is an aerial 3D plan. Drag to orbit, scroll to zoom, and choose one of six entrance pins to walk in. The compact route panel also provides keyboard-accessible entrance buttons. **Map** returns to the plan.
+- After entering, WASD moves; mouse looks; Shift moves faster; Esc releases the mouse. The weather selected on the plan carries into the walk.
 - If mouse capture is unavailable, drag the scene to look and use WASD or the on-screen arrows. Touch users can drag and use the arrows.
-- **Whole circuit** (or **T**) hands the camera over and walks the entire place for you in about five minutes — up through the woods at first light, out over the ridge, along the ridge trail, onto the river terrace, down the coloured road, and then the long riverside into the evening. **Esc** or any movement key steps off wherever you are. The same loop plays quietly behind the title screen.
+- **Whole circuit** (or **T**) hands the camera over and walks the entire place for you in about five minutes — up through the woods at first light, out over the ridge, along the ridge trail, onto the river terrace, down the coloured road, and then the long riverside into the evening. **Esc** or any movement key steps off wherever you are.
 - **Walk the morning** (or **M**) follows the twenty photographs in the order they were taken and moves the light from 06:16 towards 08:26 as it goes.
 - **Guided walk** follows the selected path. **Wander somewhere** jumps to one of five starting points.
-- **Overview** switches to an orbit view of the mountain and river. Drag to orbit, scroll to zoom; return to the path to resume walking.
+- **Map** opens the aerial view of the mountain and river, where another pin starts a new walk. The lower-right weather button cycles the light and seasons without leaving the plan.
 - First light, morning, sunset, storm and snow blend gradually. Sound starts after your click and can be muted.
 - **Save this moment** adds a field note. Notes and the frames you have reached persist in local browser storage; Help includes a reset button.
 - **Photo** (or **P**) clears the interface and letterboxes the view; **Postcard** downloads the current frame as a PNG.
@@ -85,11 +86,12 @@ node tests/browser-check.mjs
 node tests/river-browser.mjs
 node tests/memory-browser.mjs
 node tests/tour-browser.mjs
+node tests/plan-browser.mjs
 ```
 
 `npm test` covers route constraint maths, shipping-lane geometry, the two camera tours (every leg names a route that exists, ground legs move at a walking pace rather than a sprint, aerial legs stay over the modelled world and look downwards, the circuit touches all five corridors and runs from dawn to sunset, and the title loop reaches the river), and the memory data: that every published frame has an image and a thumbnail, that none of them still carries an EXIF segment, that the times run in order from 06:16 to 08:26, and that each frame stands outside the walkable corridor but within reach of it.
 
-The browser checks expect the preview server on `http://127.0.0.1:4173` (or `MUFU_TEST_URL`) and installed Chrome. `browser-check` covers WASD movement, note collection, viewpoints, weather, overview, guided movement, audio initialization, postcard download and mobile layout. `river-browser` confirms four moving vessels and a rotating beacon. `memory-browser` confirms the frame strip, that a photograph loads and opens with the right time as you reach it, and that the guided morning walk advances at first light. `tour-browser` confirms the title loop is already moving before anyone clicks, and that the circuit starts at first light, actually travels, changes its caption, finishes in the evening, and hands control back the moment a movement key is pressed. Screenshots and JSON reports go into ignored `test-results/`.
+The browser checks expect the preview server on `http://127.0.0.1:4173` (or `MUFU_TEST_URL`) and installed Chrome. `plan-browser` checks all six entrances, walking movement, orbit/zoom/reset, weather carry-over, keyboard entry, tour return and mobile layout. `browser-check` covers field notes, weather, guided movement and postcards. `river-browser` checks moving vessels and a rotating beacon. `memory-browser` checks photographs and the morning walk. `tour-browser` checks plan entry and the full circuit. Screenshots and JSON reports go into ignored `test-results/`.
 
 ## Deployment
 

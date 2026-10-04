@@ -22,7 +22,7 @@ try {
   await p.waitForFunction(() => window.__mufu?.state.ready, null, {
     timeout: 120000,
   });
-  await p.click("#enter");
+  await p.click("#access-0");
   await p.evaluate(() => document.exitPointerLock());
   await p.click("#river-watch");
   await p.waitForFunction(

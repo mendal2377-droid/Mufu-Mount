@@ -18,7 +18,7 @@ await page.waitForFunction(() => window.__mufu?.state.ready, {
   timeout: 120000,
 });
 await page.screenshot({ path: "test-results/welcome.png" });
-await page.getByRole("button", { name: "Enter the mountain" }).click();
+await page.locator("#access-0").click();
 await page.waitForTimeout(2000);
 await page.keyboard.press("Escape");
 await page.evaluate(() => document.exitPointerLock());
@@ -52,7 +52,8 @@ for (const weather of ["sunset", "storm", "snow"]) {
 await page.locator("#overview").click();
 await page.waitForTimeout(500);
 await page.screenshot({ path: "test-results/overview.png" });
-await page.locator("#overview").click();
+await page.locator("#access-0").click();
+await page.evaluate(() => document.exitPointerLock());
 await page.locator("#auto").click();
 const autoBefore = await page.evaluate(() => window.__mufu.state.distance);
 await page.waitForTimeout(2000);

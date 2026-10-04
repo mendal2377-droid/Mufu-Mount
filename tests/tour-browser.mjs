@@ -29,17 +29,14 @@ try {
     timeout: 180000,
   });
 
-  // The loop behind the title should be running before anyone clicks.
-  // Stepped frames, not wall time: a software renderer manages only a couple
-  // of real frames in a couple of seconds, which would look like a stall.
-  const titleMoved = await page.evaluate(() => {
-    const mufu = window.__mufu;
-    const from = mufu.camera.position.clone();
-    mufu.step(20, 0.1); // two seconds of the loop; every frame is a render
-    return Math.hypot(mufu.camera.position.x - from.x, mufu.camera.position.z - from.z);
-  });
+  // Home is now an orbitable plan; camera tours begin after choosing a pin.
+  const homePlan = await page.evaluate(() => ({
+    overview: window.__mufu.state.overview,
+    playing: window.__mufu.state.playing,
+    entrances: document.querySelectorAll('.access-pin').length,
+  }));
 
-  await page.click("#enter", { timeout: 120000 });
+  await page.click("#access-0", { timeout: 120000 });
   await page.evaluate(() => document.exitPointerLock());
 
   await page.evaluate(() => window.__mufu.startTour());
@@ -114,7 +111,7 @@ try {
   const report = {
     url: page.url(),
     errors,
-    titleLoopMovedMetres: Number(titleMoved.toFixed(2)),
+    homePlan,
     first,
     later: { ...later, travelledMetres: Number(travelled.toFixed(1)) },
     visited,
@@ -130,7 +127,7 @@ try {
 
   const failures = [];
   if (errors.length) failures.push(`console errors: ${errors.join(" | ")}`);
-  if (titleMoved < 1.5) failures.push("the title loop is not moving");
+  if (!homePlan.overview || homePlan.playing || homePlan.entrances !== 6) failures.push("home does not open on the entrance plan");
   if (!first.touring) failures.push("the circuit did not start");
   if (first.weather !== "dawn") failures.push(`starts at ${first.weather}, not dawn`);
   // Leg one covers about 210 m in 44 s, so twelve seconds is roughly 55 m.

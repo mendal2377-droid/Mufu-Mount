@@ -14,16 +14,15 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231b3831'/%3E%3Cpath d='M8 44 25 19 36 34 44 24 57 44' fill='none' stroke='%23d9e8aa' stroke-width='4'/%3E%3C/svg%3E"
     />
   </head>
-  <body>
+  <body class="plan-mode">
     <canvas id="world" aria-label="Interactive Mount Mufu landscape"></canvas>
     <div class="vignette"></div>
     <header>
       <a class="brand" href="/" aria-label="Mufu home"
-        ><span class="mount-icon">山</span
-        ><span>MUFU <small>幕府山 · 南京</small></span></a
+        ><span>Mufu <small>Choose a place to wander.</small></span></a
       >
       <div class="header-right">
-        <span class="live-dot"></span
+        <button id="back-to-plan" hidden>↖ Map</button><span class="live-dot"></span
         ><span id="weather-label">MORNING LIGHT</span
         ><button
           id="sound"
@@ -38,23 +37,21 @@
       </div>
     </header>
     <main id="welcome" class="welcome">
-      <div class="eyebrow">26 SEPTEMBER 2026 · 06:16 — 08:26</div>
-      <h1>A little<br /><em>further.</em></h1>
-      <p>
-        One morning on 幕府山, walked again.<br />Twenty photographs are still
-        standing where they were taken.
-      </p>
-      <button id="enter" class="primary" disabled>
-        Preparing your walk… <span>↗</span>
-      </button>
       <div class="load-track"><i id="load-bar"></i></div>
       <div id="load-status" role="status">Opening the mountain</div>
-      <div class="welcome-foot">
-        NO RUSH. NO FINISH LINE.<br /><span
-          >Walk the morning, or wander off the order entirely.</span
-        >
-      </div>
+      <button id="enter" class="primary" hidden disabled>Reload the landscape</button>
     </main>
+    <section id="plan-home" aria-label="Choose a walking entrance" hidden>
+      <div id="access-points" aria-label="Walking entrance pins"></div>
+      <aside class="plan-card">
+        <div class="plan-card-head"><span><i class="plan-north" aria-hidden="true">↑</i> N</span><button id="plan-reset" aria-label="Reset aerial view" title="Reset view">⌗</button></div>
+        <canvas id="plan-map" width="256" height="170" aria-label="Mountain and river route overview"></canvas>
+        <nav id="plan-destinations" aria-label="Walking entrances"></nav>
+        <div class="plan-card-foot">幕府山 · Yangtze</div>
+      </aside>
+      <p class="plan-hint">Drag to turn · Scroll to zoom · Choose a pin to enter</p>
+      <button id="plan-weather" class="plan-weather" aria-label="Change weather: Morning">☀ Morning</button>
+    </section>
     <section id="hud" hidden>
       <aside class="trail-card glass">
         <div class="eyebrow">
@@ -174,7 +171,7 @@
       <div class="eyebrow">MAKE YOURSELF AT HOME</div>
       <h2>A quiet place to wander.</h2>
       <p>
-        Click <strong>Enter the mountain</strong>, then use
+        Choose an <strong>entrance pin on the 3D map</strong>, then use
         <strong>W A S D</strong> and the mouse. Hold <strong>Shift</strong> to
         move faster. <strong>Esc</strong> releases the mouse. You can also drag
         the scenery and use the arrows, or choose <strong>Guided walk</strong>.
@@ -187,7 +184,7 @@
         trail, onto the river terrace, down the coloured road, and then the
         long riverside into the evening. Press <strong>Esc</strong>, or any
         movement key, to step off wherever you are and carry on by yourself.
-        The same loop plays quietly behind the title screen.
+        Use <strong>Map</strong> to return to the aerial view and choose another entrance.
       </p>
       <h3>The morning</h3>
       <p>

@@ -19,7 +19,8 @@ import {
 import { createMemories, createMemoryWalk } from "./memories.js";
 import { createUndergrowth, createMotes, createFallingLeaves } from "./life.js";
 import { createCameraFeel } from "./camera-feel.js";
-import { createCinematic, titleLoop, wholeCircuit } from "./tour.js";
+import { createCinematic, wholeCircuit } from "./tour.js";
+import { createPlan, planPose } from "./plan.js";
 import "./style.css";
 
 const $ = (s) => document.querySelector(s),
@@ -97,6 +98,7 @@ let renderer,
   sky,
   water,
   riverLife,
+  plan,
   memories,
   memoryWalk,
   undergrowth,
@@ -124,6 +126,7 @@ const u = {
   storm: { value: 0 },
   snow: { value: 0 },
   flash: { value: 0 },
+  planView: { value: 0 },
   uSunDir: { value: sunDirection },
   // Elevation of the water plane's far edge for the current eye height, so
   // the far bank can be drawn where the water actually ends.
@@ -674,7 +677,7 @@ async function load() {
     orbit = new OrbitControls(camera, canvas);
     orbit.enabled = false;
     orbit.enableDamping = true;
-    orbit.maxDistance = 12000;
+    orbit.maxDistance = 40000;
     orbit.minDistance = 200;
     orbit.maxPolarAngle = Math.PI * 0.47;
 
@@ -765,7 +768,6 @@ async function load() {
     buildMemoryStrip();
 
     cinematic = createCinematic(routes);
-    cinematic.play(titleLoop(), { loop: true });
 
     postfx = createPostFX(renderer, scene, camera, pickInitialQuality());
     applyQuality(postfx.tier);
@@ -775,10 +777,20 @@ async function load() {
     setWeather("morning");
     state.ready = true;
     updateNotes();
-    $("#enter").disabled = false;
-    $("#enter").innerHTML = "Enter the mountain <span>↗</span>";
-    progress(100, "Ready · Headphones recommended");
-    memories.preloadNear(camera.position, 4);
+    progress(100, "Ready");
+    const accessPoints = places.map((p) => ({
+      name: p.name,
+      position: closestRoute(world.bookmarks[p.bookmark].position, routes).position,
+    }));
+    accessPoints.push({ name: "River & beacon", position: riverLife.watchView().position.toArray() });
+    plan = createPlan({
+      container: $("#access-points"), list: $("#plan-destinations"), points: accessPoints,
+      onEnter: (index) => {
+        start(index < places.length ? index : 3);
+        if (index === places.length) $("#river-watch").click();
+      },
+    });
+    showPlan();
     animate();
     window.__mufu = {
       state,
@@ -790,6 +802,7 @@ async function load() {
       scene,
       postfx,
       goTo,
+      showPlan,
       setWeather,
       startTour,
       endTour,
@@ -824,6 +837,7 @@ async function load() {
     $("#load-status").textContent =
       `Unable to open the 3D scene: ${e.message}. Try a browser with WebGL enabled.`;
     $("#enter").textContent = "Reload the landscape";
+    $("#enter").hidden = false;
     $("#enter").disabled = false;
     $("#enter").onclick = () => location.reload();
   }
@@ -942,6 +956,7 @@ function showMemoryCard(item) {
 
 function startMemoryWalk() {
   if (!state.ready) return;
+  if (!state.playing) start(4, false);
   if (state.overview) toggleOverview();
   state.auto = false;
   $("#auto").classList.remove("active");
@@ -983,6 +998,7 @@ function startMemoryWalk() {
 
 function startTour() {
   if (!state.ready) return;
+  if (!state.playing) start(4, false);
   if (state.tour) {
     endTour(false);
     return;
@@ -1051,6 +1067,11 @@ function setWeather(name) {
     .querySelectorAll("[data-weather]")
     .forEach((b) => b.classList.toggle("active", b.dataset.weather === name));
   $("#weather-label").textContent = WEATHER_LABEL[name];
+  const planWeather = {
+    dawn: "✦ Dawn", morning: "☀ Morning", sunset: "◒ Sunset", storm: "ϟ Storm", snow: "❄ Snow",
+  }[name];
+  $("#plan-weather").textContent = planWeather;
+  $("#plan-weather").setAttribute("aria-label", `Change weather: ${planWeather.slice(2)}`);
   if (state.playing)
     toast(
       {
@@ -1075,7 +1096,7 @@ function lock() {
   }
 }
 
-function start() {
+function start(index = 0, capture = true) {
   if (!state.ready) return;
   state.playing = true;
   cinematic.stop();
@@ -1083,9 +1104,8 @@ function start() {
   $("#welcome").hidden = true;
   $("#hud").hidden = false;
   document.body.classList.add("playing");
-  setWeather("morning");
-  goTo(0, false);
-  lock();
+  goTo(index, false);
+  if (capture) lock();
   audio
     .start()
     .then(() => {
@@ -1096,37 +1116,78 @@ function start() {
     .catch(() => toast("Sound could not load. You can still explore."));
 }
 
+function framePlan() {
+  // Clear orbit momentum before resetting, otherwise labels keep drifting
+  // while someone tries to choose an entrance on a slow device.
+  orbit.enableDamping = false;
+  orbit.update();
+  const pose = planPose(routes.flatMap((r) => r.points), camera.aspect);
+  camera.fov = pose.fov;
+  camera.far = 50000;
+  camera.position.copy(pose.position);
+  orbit.target.copy(pose.target);
+  camera.lookAt(orbit.target);
+  camera.updateProjectionMatrix();
+  orbit.update();
+  orbit.enableDamping = true;
+  plan?.update(camera);
+}
+
+function showPlan() {
+  if (!state.ready) return;
+  stopWalks();
+  clearTimeout(toastTimer);
+  $("#toast").classList.remove("show");
+  if (!state.overview) {
+    feel.unapply();
+    returnPose = { position: camera.position.clone(), quaternion: camera.quaternion.clone() };
+  }
+  state.playing = false;
+  state.overview = true;
+  state.photoMode = false;
+  cinematic.stop();
+  cinematicFade = 0;
+  keys.clear();
+  controls.unlock();
+  orbit.enabled = true;
+  camera.near = 2;
+  document.body.classList.remove("playing", "locked", "focus-mode", "photo-mode");
+  document.body.classList.add("plan-mode");
+  $("#focus-view").setAttribute("aria-pressed", "false");
+  $("#focus-view").textContent = "Focus view";
+  $("#photo-mode").setAttribute("aria-pressed", "false");
+  $("#welcome").hidden = true;
+  $("#hud").hidden = true;
+  $("#plan-home").hidden = false;
+  $("#back-to-plan").hidden = true;
+  $("#resume").hidden = true;
+  showMemoryCard(null);
+  framePlan();
+  drawMap();
+  lastTreeUpdate = lastGrowth = -10;
+}
+
 function toggleOverview() {
   if (!state.ready) return;
-  state.overview = !state.overview;
-  camera.near = state.overview ? 2 : 0.12;
-  camera.fov = state.overview ? 55 : feel.baseFov;
+  if (!state.overview) { showPlan(); return; }
+  state.overview = false;
+  state.playing = true;
+  orbit.enabled = false;
+  camera.near = 0.12;
+  camera.far = 25000;
+  camera.fov = feel.baseFov;
   camera.updateProjectionMatrix();
-  lastTreeUpdate = -10;
-  lastGrowth = -10;
-  if (state.overview) {
-    returnPose = {
-      position: camera.position.clone(),
-      quaternion: camera.quaternion.clone(),
-    };
-    controls.unlock();
-    stopWalks();
-    camera.position.set(1100, 2900, 1100);
-    orbit.target.set(2450, 90, -1600);
-    orbit.enabled = true;
-    camera.lookAt(orbit.target);
-    $("#overview").textContent = "Back to path ↙";
-    $("#resume").hidden = true;
-    showMemoryCard(null);
-    toast("Drag to orbit · Scroll to zoom · Back to path to walk");
-  } else {
-    orbit.enabled = false;
-    camera.position.copy(returnPose.position);
-    camera.quaternion.copy(returnPose.quaternion);
-    feel.reset();
-    $("#overview").textContent = "Overview ↗";
-    $("#resume").hidden = false;
-  }
+  camera.position.copy(returnPose.position);
+  camera.quaternion.copy(returnPose.quaternion);
+  feel.reset();
+  document.body.classList.remove("plan-mode");
+  document.body.classList.add("playing");
+  $("#plan-home").hidden = true;
+  $("#hud").hidden = false;
+  $("#back-to-plan").hidden = false;
+  $("#overview").textContent = "Map ↗";
+  $("#resume").hidden = false;
+  lastTreeUpdate = lastGrowth = -10;
 }
 
 function drawMap() {
@@ -1135,8 +1196,12 @@ function drawMap() {
     w = 256,
     h = 170;
   c.clearRect(0, 0, w, h);
+  if (!state.playing) {
+    c.fillStyle = "#b3bd85";
+    c.fillRect(0, 0, w, h);
+  }
   const map = (p) => [18 + (p[0] / 5700) * 220, 155 + (p[2] / 4500) * 140];
-  c.fillStyle = "#79a8a322";
+  c.fillStyle = state.playing ? "#79a8a322" : "#81baba";
   c.beginPath();
   c.moveTo(0, 0);
   c.lineTo(256, 0);
@@ -1153,7 +1218,7 @@ function drawMap() {
       const [x, y] = map(p);
       j ? c.lineTo(x, y) : c.moveTo(x, y);
     });
-    c.strokeStyle = i === state.route ? "#e2edb0" : "#8da58177";
+    c.strokeStyle = state.playing ? (i === state.route ? "#e2edb0" : "#8da58177") : "#56724b";
     c.lineWidth = i === state.route ? 1.5 : 0.8;
     c.stroke();
   });
@@ -1174,16 +1239,20 @@ function drawMap() {
     c.arc(x, y, 2.6, 0, 7);
     c.fill();
   });
-  const [x, y] = map(
-    state.overview ? returnPose.position.toArray() : camera.position.toArray(),
-  );
-  c.fillStyle = "#fffbe3";
-  c.shadowColor = "#effbbb";
-  c.shadowBlur = 7;
-  c.beginPath();
-  c.arc(x, y, 3.3, 0, 7);
-  c.fill();
-  c.shadowBlur = 0;
+  if (state.playing) {
+    const [x, y] = map(camera.position.toArray());
+    c.fillStyle = "#fffbe3";
+    c.shadowColor = "#effbbb";
+    c.shadowBlur = 7;
+    c.beginPath();
+    c.arc(x, y, 3.3, 0, 7);
+    c.fill();
+    c.shadowBlur = 0;
+  }
+  const home = $("#plan-map").getContext("2d");
+  home.fillStyle = "#b3bd85";
+  home.fillRect(0, 0, w, h);
+  home.drawImage($("#map"), 0, 0);
 }
 
 // --- frame ------------------------------------------------------------------
@@ -1360,6 +1429,7 @@ function frame(elapsed) {
     t = simTime;
   state.frames++;
   u.time.value = t;
+  u.planView.value = state.overview ? 1 : 0;
 
   feel.unapply();
 
@@ -1530,7 +1600,7 @@ function frame(elapsed) {
     }
   }
 
-  if (state.overview) orbit.update();
+  if (state.overview) { orbit.update(); plan?.update(camera); }
 
   if (!state.overview) {
     feel.update(dt, {
@@ -1588,7 +1658,9 @@ function frame(elapsed) {
   );
   fadeIn = Math.max(0, fadeIn - dt * 0.7);
   postfx.grade.uniforms.uFade.value = Math.max(fadeIn, cinematicFade);
-  postfx.grade.uniforms.uVignette.value = state.overview ? 0.5 : 1;
+  postfx.grade.uniforms.uVignette.value = state.overview ? 0.12 : 1;
+  postfx.grade.uniforms.uGrain.value = state.overview ? 0.08 : 1;
+  postfx.grade.uniforms.uAberration.value = state.overview ? 0 : 1;
 
   if (t - lastMap > 0.25) {
     lastMap = t;
@@ -1604,7 +1676,13 @@ function frame(elapsed) {
 
 // --- wiring -----------------------------------------------------------------
 
-$("#enter").addEventListener("click", start);
+$("#back-to-plan").onclick = showPlan;
+$(".brand").onclick = (e) => { e.preventDefault(); showPlan(); };
+$("#plan-reset").onclick = framePlan;
+$("#plan-weather").onclick = () => {
+  const moods = ["morning", "sunset", "storm", "snow", "dawn"];
+  setWeather(moods[(moods.indexOf(state.weather) + 1) % moods.length]);
+};
 $("#resume").onclick = lock;
 $("#destination").onchange = (e) => goTo(Number(e.target.value));
 $("#overview").onclick = toggleOverview;
@@ -1736,7 +1814,7 @@ window.addEventListener("keydown", (e) => {
     endTour(false);
   }
   if (e.target.matches("input,select,textarea") || $("#info").open) return;
-  if (e.code === "KeyP" && state.ready) {
+  if (e.code === "KeyP" && state.ready && state.playing) {
     $("#photo-mode").click();
     e.preventDefault();
     return;
@@ -1815,6 +1893,7 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   postfx?.resize();
+  if (state.overview && state.ready) framePlan();
 });
 canvas.addEventListener("webglcontextlost", (e) => {
   e.preventDefault();

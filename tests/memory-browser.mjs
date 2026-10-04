@@ -45,7 +45,7 @@ try {
     localStorage.removeItem("mufu-memories");
     window.__mufu.memories.reset();
   });
-  await page.click("#enter");
+  await page.click("#access-0");
   await page.evaluate(() => document.exitPointerLock());
 
   const strip = await page.$$eval("#memory-strip .memory-chip", (els) =>

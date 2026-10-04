@@ -41,7 +41,7 @@ export function makeRiverRoute(points) {
 }
 
 const waterFragment = `
-uniform float time,sunset,storm,snow,flash,dawn;
+uniform float time,sunset,storm,snow,flash,dawn,planView;
 uniform vec3 uSunDir;
 uniform vec4 ships[4]; uniform vec3 beacon; uniform float beaconPower;
 varying vec3 p;
@@ -95,6 +95,15 @@ void main(){
              *(1.-smoothstep(0.,1.15,length(p.xz-cameraPosition.xz)/max(60.,length(beacon.xz-cameraPosition.xz))));
   color+=vec3(1.,.55,.16)*bPath*sparkle*beaconPower*2.6;
   float fog=1.-exp(-dist*.00017);color=mix(color,reflectedSky(vec3(R.x,.04,R.z)),fog*.7);color+=flash*.2;
+  // At kilometre scale the walk's haze hides the river boundary. A graphic
+  // teal overview palette makes the plan readable; the walking shader stays
+  // sediment-coloured, with its existing reflection and wake details.
+  vec3 planColor=mix(vec3(.13,.36,.40),vec3(.22,.47,.47),noise(q*.004));
+  planColor=mix(planColor,vec3(.33,.31,.24),sunset*.3);
+  planColor=mix(planColor,vec3(.12,.20,.22),storm*.7);
+  planColor=mix(planColor,vec3(.37,.51,.53),snow*.5);
+  planColor+=sin(dot(q,vec2(.009,.045))-time*.08)*.008;
+  color=mix(color,planColor+vec3(wake*.12),planView);
   // Left in linear HDR: the post-processing chain tone maps and encodes once,
   // for the water, the sky dome and the lit scene together.
   gl_FragColor=vec4(color,1.);

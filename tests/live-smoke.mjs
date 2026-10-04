@@ -22,7 +22,7 @@ try {
     timeout: 120000,
   });
   await page.screenshot({ path: "test-results/live-welcome.png" });
-  await page.locator("#enter").click();
+  await page.locator("#access-0").click();
   await page.evaluate(() => document.exitPointerLock());
   await page.waitForFunction(() => window.__mufu.getStats().audioReady, null, {
     timeout: 60000,

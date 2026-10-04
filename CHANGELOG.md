@@ -1,5 +1,25 @@
 # Change log
 
+## 2026-10-04 — enter from the landscape
+
+Home opens on an oblique 3D plan of Mount Mufu and the Yangtze. Six anchored
+entrance pins lead to the rainbow road, ridge, lookout, promenade, forest
+stairs and river/beacon view. Labels follow orbit and zoom, spread apart for
+touch targets, and remain linked to their model positions. A compact route
+panel provides another keyboard-accessible way to enter.
+
+The large welcome headline, prose and promotional copy have been removed.
+Walking controls, photographs and field notes stay in the walking view;
+instructions and credits remain in Help. Map returns from walking or a tour
+to the entrance plan. Weather selected on the plan carries into walking.
+The aerial view uses a clearer water palette and less grain/vignette, while
+walking keeps the existing river material and lighting. Portrait screens use
+an orientation that fits the long riverfront.
+
+Added framing/label unit checks and a browser check for every entrance,
+movement, orbit/zoom/reset, weather persistence, tour exit and mobile layout.
+Existing browser checks now enter through a pin.
+
 ## 2026-09-27 (third pass) — a camera on rails
 
 `src/tour.js` adds one piece of machinery used twice: a list of legs, each

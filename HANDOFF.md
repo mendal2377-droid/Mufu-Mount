@@ -4,8 +4,32 @@ For whoever picks this up next. The README says what the thing *is* and how to
 run it; this says how it is put together, which parts will bite you, what is
 actually verified, and what is worth doing next.
 
-Current head: `7c86f06` on `main`, deployed at
-[mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
+Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
+Use `git log` for the current revision.
+
+**4 October 2026: the home page now opens as a 3D entrance plan.**
+`src/plan.js` frames the landscape and projects six entrance pins into screen
+space, spreading labels apart without changing their world anchors. A pin
+starts walking at an existing safe route bookmark; the sixth opens the
+river/beacon viewpoint. **Map** returns to the plan and ends any active tour.
+The chosen weather carries into the walk. Home has a small title, route inset,
+entrance labels and weather button; the former title copy and photo/gameplay
+panels appear only after entering or in Help.
+
+`showPlan()` owns the transition, `framePlan()` resets/framing, and the same
+perspective camera and existing post-processing pipeline render both modes.
+The overview has a graphic teal water palette, reduced grain/vignette and a
+different portrait framing. The existing sediment-coloured river shader is
+preserved for walking. The title-loop preset remains in `tour.js` but no longer
+runs on the home page. Do not restore it over the interactive plan.
+
+`tests/plan-browser.mjs` covers all six entrances, movement, weather carry-over,
+orbit/zoom/reset, return from a tour, keyboard entry and portrait layout.
+`tests/plan.test.js` checks camera framing and separated entrance targets.
+This update passed 22/22 unit tests, a production build and the plan browser
+check (six desktop/mobile-size entrances, orbit/zoom, keyboard entry, weather
+carry-over, walking and return from a tour), with no browser errors. The
+mobile check uses a portrait browser viewport, not a physical phone.
 
 ---
 
@@ -49,7 +73,8 @@ teach you the geography faster than reading code.
 | `src/style.css` | 1032 | Everything visual outside the canvas |
 | `src/memories.js` | 455 | The twenty photo frames: placement, reveal, texture budget, the morning walk |
 | `src/river-life.js` | 450 | Water shader, ships, wakes, beacon, birds |
-| `src/tour.js` | 348 | Camera on rails — the title loop and the whole circuit |
+| `src/tour.js` | 348 | Camera on rails — the whole circuit and a retained legacy title preset |
+| `src/plan.js` | — | Aerial camera framing, anchored entrance labels and route shortcuts |
 | `src/life.js` | 319 | Path-side grass, pollen, falling leaves |
 | `src/sky.js` | 260 | Sky shader, the real solar path, the far shore |
 | `src/postfx.js` | 229 | The post-processing chain and the three quality tiers |
@@ -191,8 +216,9 @@ reloading in a loop makes the browser block WebGL for the page entirely.
 
 ### Tours
 
-`tour.js` is one mechanism used twice: `titleLoop()` behind the title screen and
-`wholeCircuit()` for the hands-free circuit. A leg is a `walk` along a route
+`tour.js` drives `wholeCircuit()` for the hands-free circuit. `titleLoop()` is
+a retained legacy preset; the home now uses the interactive entrance plan.
+A leg is a `walk` along a route
 fraction, an `air` move between two points, or a `hold`. Legs carry a `mood`
 that drives the weather and a `label` for the caption, and each fades up from
 black and back down. `lookAt` overrides the look direction with an absolute
@@ -265,7 +291,8 @@ npm run build && npm run preview           # then, against 127.0.0.1:4173:
 node tests/browser-check.mjs               # movement, notes, weather, overview, postcard
 node tests/river-browser.mjs               # four moving vessels, rotating beacon
 node tests/memory-browser.mjs              # frame strip, a photo opening, the morning walk
-node tests/tour-browser.mjs                # title loop moving, circuit start→finish, stepping off
+node tests/tour-browser.mjs                # plan entry, circuit start→finish, stepping off
+node tests/plan-browser.mjs                # six entrances, plan controls, keyboard and mobile
 ```
 
 The browser checks also accept `MUFU_TEST_URL`, so they can be pointed at a

@@ -1030,3 +1030,100 @@ body.focus-mode .memory-rail {
     overflow: hidden;
   }
 }
+
+/* The home is the landscape itself. Entrance labels stay tied to world points
+   while the camera orbits; richer walk controls only appear after entry. */
+body.plan-mode { background: #dce1d1; }
+body.plan-mode .vignette { background: none; }
+header { top: 24px; left: 26px; right: 26px; pointer-events: none; }
+header > * { pointer-events: auto; }
+.brand {
+  background: rgba(39, 61, 47, .86);
+  border-radius: 15px;
+  padding: 16px 20px;
+  letter-spacing: -.8px;
+  font: 500 32px "Playfair Display", Georgia, serif;
+  backdrop-filter: blur(12px);
+}
+.brand small {
+  font: 12px "DM Sans", sans-serif;
+  letter-spacing: 0;
+  opacity: .85;
+  margin-top: 6px;
+}
+body.plan-mode .header-right { align-self: flex-start; margin-top: 6px; }
+body.plan-mode .header-right #weather-label,
+body.plan-mode .live-dot,
+body.plan-mode #photo-mode,
+body.plan-mode #focus-view { display: none; }
+body.plan-mode .header-right button { background: rgba(39, 61, 47, .88); }
+.welcome {
+  left: 50%; top: auto; bottom: 76px; transform: translateX(-50%);
+  background: #2b423bec; padding: 18px 22px; border-radius: 12px;
+  max-width: min(420px, calc(100vw - 36px));
+}
+.welcome .load-track { width: 240px; max-width: 100%; margin-top: 0; }
+.welcome .primary { min-width: 0; margin-top: 12px; padding: 10px 14px; }
+#access-points { position: fixed; inset: 0; pointer-events: none; }
+.pin-leaders { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.pin-leaders line { stroke: #fbffe4; stroke-width: 1.5; opacity: .7; }
+.pin-leaders circle { fill: #edf3c8; stroke: #466149; stroke-width: 1.2; }
+.access-pin {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  min-width: 142px; min-height: 58px; padding: 0;
+  pointer-events: auto; filter: drop-shadow(0 3px 9px #20342430);
+}
+.pin-label {
+  display: block; background: #354f3ceb; padding: 7px 13px;
+  border-radius: 22px; font-size: 12px; font-weight: 600;
+  color: #fffde9; white-space: nowrap;
+}
+.pin-icon {
+  display: grid; place-items: center; width: 34px; height: 34px;
+  background: #e6edb8; border: 2px solid #ffffedc9; border-radius: 50%;
+  color: #43644b; font-size: 20px; line-height: 1;
+  transition: transform .16s, background .16s;
+}
+#access-3 .pin-icon, #access-5 .pin-icon { background: #bbe2df; }
+#access-0 .pin-icon { background: #f4db9a; }
+.access-pin:hover .pin-icon, .access-pin:focus-visible .pin-icon { transform: scale(1.18); background: #fff5c2; }
+.access-pin:hover .pin-label, .access-pin:focus-visible .pin-label { background: #223d2d; }
+.access-pin:focus-visible { outline: 2px solid #fff9d9; border-radius: 18px; outline-offset: 7px; }
+.plan-card {
+  position: fixed; top: 92px; right: 26px; width: 228px;
+  border-radius: 14px; background: #314d40e8; backdrop-filter: blur(14px);
+  overflow: hidden; border: 1px solid #e4ecd236; box-shadow: 0 6px 25px #28382f22;
+}
+.plan-card-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; font-size: 10px; }
+.plan-card-head button { font-size: 22px; padding: 0 4px; }
+.plan-north { display: inline-block; font-style: normal; transform: rotate(-19.74deg); }
+#plan-map { display: block; width: 100%; height: 151px; border: 7px solid #e4e9d3; }
+#plan-destinations { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; padding: 7px; }
+#plan-destinations button {
+  text-align: left; display: flex; align-items: center; gap: 6px;
+  padding: 12px 5px; min-height: 44px; font-size: 10px; border-radius: 6px;
+}
+#plan-destinations button span { color: #d3dfab; font-size: 15px; }
+#plan-destinations button:hover { background: #cdddab1c; }
+.plan-card-foot { padding: 10px 13px 13px; border-top: 1px solid #e3e6c522; color: #d8e2cf; font-size: 10px; }
+.plan-hint { position: fixed; left: 28px; bottom: 23px; margin: 0; font-size: 11px; color: #fffce9; text-shadow: 0 1px 4px #26332b; pointer-events: none; }
+.plan-weather { position: fixed; right: 26px; bottom: 23px; padding: 12px 20px; border-radius: 30px; background: #304d3de8; font-size: 12px; color: #eaf0c8; }
+body.playing .brand { font-size: 22px; padding: 11px 16px; }
+body.playing .brand small { display: none; }
+@media (max-width: 999px) {
+  .plan-card { display: none; }
+}
+@media (max-width: 650px) {
+  header { left: 16px; right: 16px; top: 16px; }
+  .brand { font-size: 27px; padding: 13px 16px; }
+  .brand small { font-size: 11px; }
+  body.plan-mode .header-right { gap: 5px; }
+  body.plan-mode #sound { font-size: 10px; padding: 9px; }
+  .access-pin { min-width: 116px; min-height: 53px; gap: 5px; }
+  .pin-label { font-size: 10px; padding: 6px 10px; }
+  .pin-icon { width: 30px; height: 30px; font-size: 18px; }
+  .plan-weather { right: 16px; bottom: 20px; padding: 10px 14px; font-size: 11px; }
+  .plan-hint { left: 16px; bottom: 23px; max-width: 210px; line-height: 1.5; font-size: 10px; }
+  .welcome { top: auto; bottom: 80px; }
+}
