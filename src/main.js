@@ -19,6 +19,7 @@ import {
 import { createMemories, createMemoryWalk } from "./memories.js";
 import { createUndergrowth, createMotes, createFallingLeaves } from "./life.js";
 import { createForest } from "./forest.js";
+import { createMeadow } from "./meadow.js";
 import { createCameraFeel } from "./camera-feel.js";
 import { createCinematic, wholeCircuit } from "./tour.js";
 import { createPlan, planPose } from "./plan.js";
@@ -106,6 +107,7 @@ let renderer,
   memories,
   memoryWalk,
   undergrowth,
+  meadow,
   motes,
   leaves,
   postfx,
@@ -221,6 +223,7 @@ function material(name, color) {
   const road = /asphalt|avenue|road|promenade|lane|stripe/i.test(name);
   const noSnow = /water|blue|pink|yellow line|stripe/i.test(name);
   const sway = /leaf|foliage/i.test(name);
+  const grassy = /Woodland floor|Grass \| summer|Hike \| earth|Field \| leaf litter/i.test(name);
   const m = new THREE.MeshStandardMaterial({
     color: new THREE.Color().fromArray(color),
     roughness: metal ? 0.36 : road ? 0.82 : stone ? 0.88 : 0.91,
@@ -229,7 +232,7 @@ function material(name, color) {
   });
   const detail = stone || road ? 1 : 0;
   m.customProgramCacheKey = () =>
-    `mufu-${Number(noSnow)}-${Number(sway)}-${detail}-${Number(metal)}`;
+    `mufu-${Number(noSnow)}-${Number(sway)}-${detail}-${Number(metal)}-${Number(grassy)}`;
   m.userData.baseColor = m.color.clone();
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uSnow = u.snow;
@@ -255,6 +258,18 @@ function material(name, color) {
       "#include <color_fragment>",
       `#include <color_fragment>\nfloat grain=fract(sin(dot(floor(vWorldPoint.xz*8.0),vec2(12.9898,78.233)))*43758.5453);diffuseColor.rgb*=.92+grain*.13;\nfloat blotch=mufuNoise(vWorldPoint.xz*0.21)*0.55+mufuNoise(vWorldPoint.xz*0.83)*0.3;diffuseColor.rgb*=0.86+blotch*0.3;\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(.79,.86,.86),uSnow*${noSnow ? "0.18" : "0.92"}*smoothstep(.05,.6,vWorldUp.y));diffuseColor.rgb*=1.0-uRain*.17;`,
     );
+    if (grassy)
+      // Fine clover/grass mottling continues beyond the near plant meshes.
+      // World coordinates keep the pattern consistent across exported slabs.
+      shader.fragmentShader = shader.fragmentShader.replace("#include <color_fragment>",
+        `#include <color_fragment>
+         float meadowPatch=mufuNoise(vWorldPoint.xz*.35);
+         float meadowFine=mufuNoise(vWorldPoint.xz*5.5);
+         float meadowBlade=mufuNoise(vWorldPoint.xz*vec2(18.,2.));
+         float meadowDetail=1.-smoothstep(.12,.65,max(length(dFdx(vWorldPoint.xz)),length(dFdy(vWorldPoint.xz))));
+         diffuseColor.rgb*=mix(.92,1.2,meadowPatch);
+         diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(1.22,1.18,.85),
+           meadowDetail*smoothstep(.56,.8,meadowFine)*(.16+.22*meadowBlade));`);
     if (detail)
       // Break up the large flat exported faces with a shallow procedural bump.
       shader.fragmentShader = shader.fragmentShader.replace(
@@ -585,7 +600,8 @@ async function load() {
     progress(86, "Letting the grass back in");
     const groundHeight = createGroundSampler(scene);
     kite = createBirdKite(camera, scene, u, routes, groundHeight);
-    undergrowth = createUndergrowth(scene, routes, u, 1400, groundHeight, forest.atlas);
+    meadow = await createMeadow(scene, routes, u, renderer.capabilities.getMaxAnisotropy?.() || 4);
+    undergrowth = createUndergrowth(scene, routes, u, 1400, groundHeight, forest.atlas, meadow.atlas);
     motes = createMotes(scene, u);
     leaves = createFallingLeaves(scene, u);
 
@@ -664,6 +680,7 @@ async function load() {
         shadows: renderer.shadowMap.enabled,
         undergrowth: undergrowth.mesh.count,
         ferns: undergrowth.ferns.count,
+        meadow: meadow.getStats(),
       }),
     };
   } catch (e) {
@@ -1507,10 +1524,12 @@ function frame(elapsed) {
   if (!state.overview && t - lastGrowth > 0.35) {
     lastGrowth = t;
     undergrowth.update(camera);
+    meadow.update(camera);
   } else if (state.overview) {
     undergrowth.mesh.count = 0;
     undergrowth.shrubs.count = undergrowth.stems.count = 0;
     undergrowth.ferns.count = 0;
+    meadow.clear();
   }
 
   if (memories) {

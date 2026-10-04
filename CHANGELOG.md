@@ -1,5 +1,20 @@
 # Change log
 
+## 2026-10-04 — lower-ground wildflowers and meadow grass
+
+Added a reference-guided imagegen atlas with mixed pink/blue/white flowers,
+yellow flowering grasses, low meadow grass and taller riverbank sedges.
+Curved intersecting clumps grow in reproducible irregular patches on lower
+woodland slopes and the inland riverbank. Existing path-margin grass also
+uses the richer atlas. Ground materials gain subtle grass/clover mottling.
+
+Planting checks the visible ground surface, rejects paving, water, rock and
+steep/high terrain, and keeps every walking corridor clear. Spatial buckets,
+cached incremental surface samples and caps of 700 flowering / 2,000 grass
+clumps bound the additional cost. Plants sway more strongly in storms and
+take on snow colors; the aerial plan hides the close vegetation layer.
+Exact prompts and asset provenance are in `design/forest/MEADOW-PROMPT.md`.
+
 ## 2026-10-04 — imagegen forest volume
 
 Generated a forest concept from the user's mountain-tree reference and a

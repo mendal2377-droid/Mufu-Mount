@@ -158,9 +158,9 @@ export function scatterAlongRoutes(routes, spacingMetres = 1.15) {
   return points;
 }
 
-export function createUndergrowth(scene, routes, shared, limit = 1400, groundHeight = null, atlas = null) {
+export function createUndergrowth(scene, routes, shared, limit = 1400, groundHeight = null, atlas = null, meadowAtlas = null) {
   const spots = scatterAlongRoutes(routes);
-  const blade = new THREE.PlaneGeometry(.9, .8, 1, 4);
+  const blade = meadowAtlas ? foliagePatch(.9,.8,2,3,.12) : new THREE.PlaneGeometry(.9, .8, 1, 4);
   blade.translate(0, .4, 0);
   const crossed = [];
   for (let i = 0; i < 3; i++) {
@@ -171,11 +171,11 @@ export function createUndergrowth(scene, routes, shared, limit = 1400, groundHei
   const geometry = mergePlanes(crossed);
 
   const material = new THREE.MeshStandardMaterial({
-    map: grassTexture(),
+    map: meadowAtlas || grassTexture(),
     alphaTest: 0.4,
     side: THREE.DoubleSide,
     roughness: 0.95,
-    color: 0xd2dba9,
+    color: meadowAtlas ? 0xffffff : 0xd2dba9,
   });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.windTime = shared.time;

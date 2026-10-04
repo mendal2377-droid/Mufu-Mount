@@ -7,6 +7,35 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
+**4 October 2026: lower-ground meadow planting.** `src/meadow.js` scatters
+seeded loose patches beside low routes and across the inland riverbank,
+including its narrow grass verge. A spatial path mask excludes all route
+corridors; a downward surface check accepts only woodland/grass/earth below
+130 m with normal Y above .62. It rejects missing ground, water, paving,
+stone armour and cliffs. These are artistic planting additions.
+
+`public/vegetation/meadow-atlas-v1.png` is a generated RGBA 2×2 atlas:
+mixed pink/blue/white flowers, yellow/white seed grass, low grass, riverbank
+sedge. It preserves original alpha; supplied references are not redistributed.
+Exact built-in imagegen prompt: `design/forest/MEADOW-PROMPT.md`.
+Three curved intersecting patches give each clump depth. Grass/clover mottling
+also enriches the ground material, and path-side grass uses the same atlas.
+
+The near meadow uses 16 m spatial buckets, cached surface samples (at most
+100 new raycasts per update), a 60 m grass / 42 m flower radius, and caps of
+700 flower / 2,000 grass clumps. No meadow plants cast shadows. Growth is
+hidden in the aerial plan. Wind/storm and snow use shared weather uniforms.
+Debug stats expose `meadow`; `tests/meadow-browser.mjs` checks bank, lower
+woodland, storm, snow, portrait and plan cleanup. Unit checks cover seeded
+placement, corridor exclusion, surface rejection, 3D geometry and PNG alpha.
+
+Verification: all 40 unit checks and the production build pass. Meadow browser
+checks pass for bank/side/lower woodland, storm, snow, portrait and plan cleanup.
+The full immersion check passes for six entrances, map anchors, quiet walking,
+menu/photos, kite flight/weather/landing and touch controls, with no browser
+errors. Screenshots were reviewed. Chrome uses a software GPU; physical-phone
+and hardware-GPU performance remain unbenchmarked.
+
 **4 October 2026: imagegen-inspired forest volume.** The user's mountain-tree
 reference informed an imagegen concept and a transparent foliage atlas. The
 concept is `design/forest/forest-concept-v1.png`; exact prompts/provenance are in
@@ -127,7 +156,7 @@ copy you write. Section 6 explains exactly how far the accuracy goes.
 ```sh
 npm ci
 npm run dev          # Vite dev server
-npm test             # 36 unit tests, no browser needed
+npm test             # 40 unit tests, no browser needed
 npm run build        # static site into dist/
 npm run preview      # serves dist on 127.0.0.1:4173
 ```
@@ -150,6 +179,7 @@ teach you the geography faster than reading code.
 | `src/river-life.js` | 450 | Water shader, ships, wakes, beacon, birds |
 | `src/river-surface.js` | — | Dispersed wave bands, CPU/GLSL surface sampling, procedural foam lace |
 | `src/forest.js`, `src/forest-geometry.js` | — | Mixed tree meshes, curved foliage, atlas materials, distance budgets and shadow proxies |
+| `src/meadow.js` | — | Lower-ground flower/grass patches, planting checks, spatial buckets and weather materials |
 | `src/tour.js` | 348 | Camera on rails — the whole circuit and a retained legacy title preset |
 | `src/plan.js` | — | Aerial camera framing, direct world-projected entrance icons and shortcuts |
 | `src/kite.js` | — | Swallow kite, bounded free flight, ground sampling and path landing |

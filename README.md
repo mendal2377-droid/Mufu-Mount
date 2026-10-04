@@ -31,6 +31,7 @@ Open the local URL printed by Vite. `npm run build` creates the static site in `
 - **Guided walk** follows the selected path. **Wander somewhere** jumps to one of five starting points.
 - **Map** opens the aerial view of the mountain and river, where another pin starts a new walk. The lower-right weather button cycles the light and seasons without leaving the plan.
 - First light, morning, sunset, storm and snow blend gradually. Sound starts after your click and can be muted.
+- Lower woodland slopes and the inland riverbank have irregular wildflower and grass patches, with wind movement and snow colors. Paths stay clear.
 - **Save this moment** adds a field note. Notes and the frames you have reached persist in local browser storage; Help includes a reset button.
 - **Photo** (or **P**) clears the interface and letterboxes the view; **Postcard** downloads the current frame as a PNG.
 - **Picture quality** in the menu switches between Smooth, Balanced and Cinematic. The site picks one on first load and steps down once if the frame rate will not hold; choosing a setting fixes it.
