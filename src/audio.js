@@ -43,13 +43,13 @@ export class NatureAudio {
       this.master.gain.setTargetAtTime(on ? 0.7 : 0, this.ctx.currentTime, 0.3);
     }
   }
-  update(weather, river, moving) {
+  update(weather, river, moving, flying = false) {
     if (!this.ctx) return;
     const storm = weather.storm,
       snow = weather.snow;
     const levels = {
-      forest: 0.55 * (1 - storm) * (1 - snow * 0.85),
-      wind: 0.17 + storm * 0.65 + snow * 0.12,
+      forest: 0.55 * (1 - storm) * (1 - snow * 0.85) * (flying ? .35 : 1),
+      wind: 0.17 + storm * 0.65 + snow * 0.12 + (flying ? .25 : 0),
       water: river * 0.45,
       rain: storm * 0.62,
       snow: snow * (moving ? 0.32 : 0),

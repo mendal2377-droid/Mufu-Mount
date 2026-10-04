@@ -1,5 +1,11 @@
 import { chromium } from "@playwright/test";
 import fs from "node:fs/promises";
+
+async function menuClick(page, selector) {
+  if (!await page.locator('#info').evaluate(n => n.open)) await page.click('#walk-menu');
+  await page.click(selector);
+}
+
 const browser = await chromium.launch({
   headless: true,
   channel: "chrome",
@@ -24,7 +30,7 @@ try {
   });
   await p.click("#access-0");
   await p.evaluate(() => document.exitPointerLock());
-  await p.click("#river-watch");
+  await menuClick(p, "#river-watch");
   await p.waitForFunction(
     () => window.__mufu.getStats().river?.ships?.length === 4,
   );
@@ -48,20 +54,20 @@ try {
   if (moved.some((d) => d < 2)) throw Error("A ship did not move");
   if (after.river.beaconRotation === before.river.beaconRotation)
     throw Error("Beacon did not rotate");
-  await p.click("[data-weather=sunset]");
+  await p.locator("#walk-weather").selectOption("sunset");
   await p.waitForFunction(() => window.__mufu.weather.sunset > 0.9, null, {
     timeout: 120000,
   });
   await p.screenshot({ path: "test-results/river-sunset.png", timeout: 90000 });
-  await p.click("[data-weather=storm]");
+  await p.locator("#walk-weather").selectOption("storm");
   await p.waitForFunction(() => window.__mufu.weather.storm > 0.9, null, {
     timeout: 120000,
   });
   await p.screenshot({ path: "test-results/river-storm.png", timeout: 90000 });
   await p.setViewportSize({ width: 390, height: 844 });
-  await p.click("#river-watch");
+  await menuClick(p, "#river-watch");
   await p.screenshot({ path: "test-results/river-mobile.png", timeout: 90000 });
-  await p.click("#focus-view");
+  // Walking is already the unobstructed focus view.
   await p.screenshot({ path: "test-results/river-focus.png", timeout: 90000 });
   const report = {
     url: p.url(),

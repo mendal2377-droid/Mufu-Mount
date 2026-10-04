@@ -47,7 +47,7 @@ try {
   assert.equal(await page.evaluate(() => window.__mufu.state.weather), "sunset");
 
   for (let i=0;i<6;i++) {
-    await page.locator(`#access-${i}`).click();
+    await page.locator(`#plan-destinations button`).nth(i).click();
     await page.evaluate(() => document.exitPointerLock());
     const stats = await page.evaluate(() => window.__mufu.getStats());
     assert.equal(stats.playing,true);
@@ -64,30 +64,29 @@ try {
     assert.ok(travelled > before + .3, `Entrance ${i} did not start on a walkable path`);
     report.entrances.push({index:i, name: await page.locator("#place-title").textContent(),route:stats.route,walkingMetres:travelled-before});
     if(i===0) await page.screenshot({path:"test-results/plan-entered-walk.png",timeout:60000});
-    await page.locator("#back-to-plan").click();
+    await page.locator("#walk-menu").click(); await page.locator("#menu-map").click();
   }
   console.log("All six desktop entrances walk correctly");
   await page.locator("#access-0").focus();
   await page.keyboard.press("Enter");
   await page.evaluate(() => document.exitPointerLock());
   assert.equal(await page.evaluate(() => window.__mufu.state.playing),true);
-  await page.locator("#tour-button").click();
+  await page.locator("#walk-menu").click(); await page.locator("#tour-button").click();
   await page.evaluate(() => window.__mufu.step(8,.1));
   assert.equal(await page.evaluate(() => window.__mufu.state.tour),true);
-  await page.locator("#back-to-plan").click();
+  await page.locator("#walk-menu").click(); await page.locator("#menu-map").click();
   assert.equal(await page.evaluate(() => window.__mufu.state.tour),false);
 
   await page.setViewportSize({width:390,height:844});
   await page.evaluate(() => window.__mufu.step(3,.1));
   await page.screenshot({path:"test-results/plan-mobile.png",timeout:60000});
   for(let i=0;i<6;i++) {
-    const box=await page.locator(`#access-${i}`).boundingBox();
-    assert.ok(box.x>=0 && box.x+box.width<=390 && box.y>=0 && box.y+box.height<=844, `Mobile pin ${i} clipped`);
-    await page.locator(`#access-${i}`).click();
+    await page.locator("#plan-entrances summary").click();
+    await page.locator("#mobile-destinations button").nth(i).click();
     await page.evaluate(() => document.exitPointerLock());
     assert.equal(await page.evaluate(() => window.__mufu.state.place),i<5?i:3);
     report.mobileEntrances.push(i);
-    await page.locator("#back-to-plan").click();
+    await page.locator("#walk-menu").click(); await page.locator("#menu-map").click();
   }
   report.orbit=true; report.zoom=true; report.keyboardEntry=true; report.weatherPersists=true;
   assert.equal(errors.length,0,errors.join("\n"));

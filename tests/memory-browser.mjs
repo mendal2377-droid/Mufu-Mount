@@ -18,6 +18,12 @@ async function capture(page, path) {
   }
 }
 
+
+async function menuClick(page, selector) {
+  if (!await page.locator('#info').evaluate(n => n.open)) await page.click('#walk-menu');
+  await page.click(selector);
+}
+
 const browser = await chromium.launch({
   headless: true,
   channel: "chrome",
@@ -73,7 +79,8 @@ try {
     { timeout: 60000 },
   );
   const opened = await page.evaluate(() => ({
-    card: document.querySelector("#memory-card").classList.contains("show"),
+    frameSelected: window.__mufu.memories.getStats().active === "094",
+    cardHidden: getComputedStyle(document.querySelector("#memory-card")).display === "none",
     time: document.querySelector("#memory-time").textContent,
     zh: document.querySelector("#memory-zh").textContent,
     found: window.__mufu.memories.getStats().found,
@@ -84,7 +91,7 @@ try {
   // Driven by stepped frames rather than wall time: against a remote host a
   // software renderer manages a frame or two a second, which is not enough to
   // cover any ground inside a sensible timeout.
-  await page.click("#memory-walk");
+  await menuClick(page, "#memory-walk");
   const startWeather = await page.evaluate(() => ({ ...window.__mufu.weather }));
   const walking = await page.evaluate(() => {
     const mufu = window.__mufu;
@@ -118,7 +125,8 @@ try {
   const failures = [];
   if (errors.length) failures.push(`console errors: ${errors.join(" | ")}`);
   if (strip.length !== 20) failures.push(`strip has ${strip.length} frames`);
-  if (!opened.card) failures.push("memory card did not open");
+  if (!opened.frameSelected) failures.push("photo frame did not become active");
+  if (!opened.cardHidden) failures.push("photo card obscures the quiet walking view");
   if (opened.time !== "07:13") failures.push(`wrong time shown: ${opened.time}`);
   if (!opened.found) failures.push("opening a frame did not record it");
   if (!walking.memoryWalk) failures.push("memory walk stopped early");

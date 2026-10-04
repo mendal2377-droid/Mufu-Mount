@@ -44,17 +44,28 @@ const waterFragment = `
 uniform float time,sunset,storm,snow,flash,dawn,planView;
 uniform vec3 uSunDir;
 uniform vec4 ships[4]; uniform vec3 beacon; uniform float beaconPower;
+uniform float farWater; uniform vec4 localBank;
 varying vec3 p;
 float hash(vec2 q){return fract(sin(dot(q,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 q){vec2 i=floor(q),f=fract(q);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
 vec3 reflectedSky(vec3 d){float h=max(d.y,0.);vec3 horizon=mix(vec3(.48,.64,.60),vec3(.80,.46,.26),sunset);vec3 zenith=mix(vec3(.14,.30,.43),vec3(.10,.24,.46),sunset);vec3 sky=mix(horizon,zenith,pow(h,.55));sky=mix(sky,mix(vec3(.25,.33,.34),vec3(.07,.12,.15),h),storm*.87);sky=mix(sky,vec3(.46,.55,.58),snow*.5);vec2 c=d.xz/(.3+abs(d.y))*2.+vec2(time*.009,0.);float cloud=smoothstep(.4,.8,noise(c)*.7+noise(c*2.1)*.3);return mix(sky,mix(vec3(.68,.74,.68),vec3(.20,.26,.27),storm),cloud*.22)*.48;}
 void main(){
   vec3 V=normalize(cameraPosition-p);float dist=distance(cameraPosition,p);
+  float patchDistance=length(p.xz-cameraPosition.xz);
+  if(farWater>.5 && patchDistance<450.)discard;
+  if(farWater<.5 && patchDistance>=450.)discard;
   vec2 flow=normalize(vec2(.68,-.73));vec2 q=p.xz-flow*time*.9;
+  if(planView>.99){
+    vec3 c=mix(vec3(.13,.36,.40),vec3(.22,.47,.47),noise(q*.004));
+    c=mix(c,vec3(.33,.31,.24),sunset*.3);
+    c=mix(c,vec3(.12,.20,.22),storm*.7);
+    c=mix(c,vec3(.37,.51,.53),snow*.5);
+    gl_FragColor=vec4(c,1.);return;
+  }
   // Analytic wave slopes: long swells, crossing ripples and advected fine chop.
   vec2 slope=vec2(0.);float swell=0.;
-  for(int i=0;i<6;i++){float f=float(i);vec2 d=normalize(vec2(cos(f*2.17+.4),sin(f*2.17+.4)));float k=.055*pow(1.95,f);float a=.13*pow(.62,f)*(1.+storm*.9);float phase=dot(q,d)*k-time*(.5+f*.31);float aa=1.-smoothstep(.3,1.5,length(fwidth(p.xz))*k);slope+=d*cos(phase)*k*a*aa;swell+=sin(phase)*a;}
-  float chop=noise(q*.065+vec2(swell));slope+=vec2(sin(q.y*.9+chop*5.),cos(q.x*.7+chop*5.))*.032*(1.-smoothstep(80.,700.,dist));
+  for(int i=0;i<6;i++){float f=float(i);vec2 d=normalize(vec2(cos(f*2.17+.4),sin(f*2.17+.4)));float k=.055*pow(1.95,f);float a=.35*pow(.62,f)*(1.+storm*1.3);float phase=dot(q,d)*k-time*(.5+f*.31);float aa=1.-smoothstep(.3,1.5,length(fwidth(p.xz))*k);slope+=d*cos(phase)*k*a*aa;swell+=sin(phase)*a;}
+  float chop=noise(q*.065+vec2(swell));slope+=vec2(sin(q.y*.9+chop*5.),cos(q.x*.7+chop*5.))*.075*(1.-smoothstep(140.,850.,dist));
   vec3 N=normalize(vec3(-slope.x,1.,-slope.y));vec3 R=reflect(-V,N);
   float fresnel=.035+.965*pow(1.-max(0.,dot(N,V)),5.);
   // The Yangtze here carries a heavy silt load: the body colour is a turbid
@@ -82,6 +93,16 @@ void main(){
   // Thin foam streaks travel downstream instead of a tiled stationary pattern.
   float streak=pow(noise(vec2(dot(q,vec2(-flow.y,flow.x))*.14,dot(q,flow)*.009)),9.);
   color+=vec3(.24,.28,.24)*streak*(.18+storm*.8)*(1.-smoothstep(300.,1600.,dist));
+  // Wind tears intermittent foam from wave crests. Bank wash rolls in and
+  // recedes over the stone margin, breaking into patches rather than a stripe.
+  float crest=smoothstep(.23,.5,length(slope))*smoothstep(.46,.75,noise(q*.23))*storm;
+  vec2 bankDelta=p.xz-localBank.xy;
+  float bankAcross=dot(bankDelta,vec2(localBank.w,-localBank.z));
+  float bankAlong=abs(dot(bankDelta,localBank.zw));
+  float washWidth=2.5+sin(time*.9+dot(p.xz,localBank.zw)*.026)*1.6;
+  float wash=(1.-smoothstep(washWidth,washWidth+3.,abs(bankAcross-22.)))
+    *(1.-smoothstep(110.,260.,bankAlong))*smoothstep(.30,.66,noise(q*.6))*(.2+storm*.55);
+  color=mix(color,vec3(.66,.71,.62),clamp(crest*.6+wash,0.,.65));
   float wake=0.;
   for(int i=0;i<4;i++){vec2 delta=p.xz-ships[i].xy;vec2 dir=ships[i].zw;float behind=-dot(delta,dir);float side=abs(dot(delta,vec2(-dir.y,dir.x)));float width=6.+max(0.,behind)*.18;float edge=exp(-pow((side-width)/(1.3+behind*.01),2.));float propeller=exp(-side*side/45.)*(.55+.45*sin(behind*1.7-time*8.));float gate=smoothstep(3.,18.,behind)*(1.-smoothstep(80.,330.,behind));wake+=gate*(edge*.7+propeller*.6);}
   color=mix(color,vec3(.71,.79,.74),clamp(wake,0.,.8));
@@ -118,6 +139,8 @@ export function createLivingRiver(scene, shared, points) {
     ships: { value: shipUniforms },
     beacon: { value: new THREE.Vector3(beaconPlace.x, 22, beaconPlace.z) },
     beaconPower: { value: 0.2 },
+    localBank: { value: new THREE.Vector4() },
+    farWater: { value: 1 },
   };
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(70000, 70000),
@@ -132,6 +155,17 @@ export function createLivingRiver(scene, shared, points) {
   water.position.set(2300, 0.1, -1800);
   water.name = "Flowing Yangtze — current, sky reflection and wakes";
   scene.add(water);
+  // A camera-centred geometric wave patch supplies a changing silhouette at
+  // eye level; the huge flat plane remains cheap for the horizon. Heights fade
+  // to zero at the shared 450 m seam. Both use the same linear HDR shading.
+  const nearWater = new THREE.Mesh(new THREE.PlaneGeometry(1100,1100,176,176),
+    new THREE.ShaderMaterial({uniforms:{...uniforms,farWater:{value:0}},fragmentShader:waterFragment,
+      vertexShader:`uniform float time,storm;varying vec3 p;void main(){vec4 w=modelMatrix*vec4(position,1.);vec2 q=w.xz-normalize(vec2(.68,-.73))*time*.9;float h=0.;for(int i=0;i<6;i++){float f=float(i);vec2 d=vec2(cos(f*2.17+.4),sin(f*2.17+.4));float k=.055*pow(1.95,f);h+=sin(dot(q,d)*k-time*(.5+f*.31))*.35*pow(.62,f)*(1.+storm*1.3);}h*=1.-smoothstep(330.,450.,length(w.xz-cameraPosition.xz));w.y+=h;p=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+    }));
+  nearWater.rotation.x=-Math.PI/2;
+  nearWater.name="Nearby river swells — displaced surface and broken bank foam";
+  nearWater.frustumCulled=false;
+  scene.add(nearWater);
   const mats = {
     hull: new THREE.MeshStandardMaterial({
       color: 0x702f26,
@@ -370,6 +404,15 @@ export function createLivingRiver(scene, shared, points) {
   const dummy = new THREE.Object3D();
   let stats = {};
   function update(t, weather, camera) {
+    nearWater.position.set(Math.round(camera.position.x/8)*8,.1,Math.round(camera.position.z/8)*8);
+    let nearest=Infinity, bank;
+    for(let i=0;i<points.length;i+=8) {
+      const p=points[i], d=(p[0]-camera.position.x)**2+(p[2]-camera.position.z)**2;
+      if(d<nearest) {nearest=d;bank=i;}
+    }
+    const a=points[bank], b=points[Math.min(bank+1,points.length-1)];
+    const dx=b[0]-a[0], dz=b[2]-a[2], len=Math.hypot(dx,dz)||1;
+    uniforms.localBank.value.set(a[0],a[2],dx/len,dz/len);
     let closest = { distance: Infinity, pan: 0 };
     ships.forEach((s, i) => {
       const distance =
@@ -437,11 +480,13 @@ export function createLivingRiver(scene, shared, points) {
       beaconPulse: alignment,
       birds: birds.count,
       riverTime: t,
+      geometricWaves: true,
     };
     return closest;
   }
   return {
     water,
+    nearWater,
     update,
     getStats: () => stats,
     watchView(aspect = 1.6) {

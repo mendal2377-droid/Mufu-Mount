@@ -26,35 +26,15 @@ export function planPose(points, aspect) {
   return { target, position: target.clone().addScaledVector(back, distance), fov };
 }
 
-// Labels may need to spread out around nearby trailheads. Leader lines retain
-// the link to their actual world anchors; they never change a walking spawn.
-export function layoutPins(anchors, width, height, panelWidth = 0) {
-  const narrow = width < 650;
-  const box = { w: narrow ? 116 : 142, h: narrow ? 62 : 74 };
-  const placed = [];
-  const safe = { left: 12, right: width - panelWidth - 12, top: narrow ? 122 : 126, bottom: height - 75 };
-  for (const a of anchors) {
-    let best = null;
-    // Search in screen space, keeping labels as close as possible to a pin.
-    for (let dy = -44; dy <= 260; dy += box.h + 8)
-      for (const dx of [0, -154, 154, -308, 308]) {
-        const x = THREE.MathUtils.clamp(a.x + dx, safe.left + box.w / 2, safe.right - box.w / 2);
-        const y = THREE.MathUtils.clamp(a.y + dy, safe.top + box.h / 2, safe.bottom - box.h / 2);
-        const overlapping = placed.some((p) => Math.abs(p.x - x) < box.w + 8 && Math.abs(p.y - y) < box.h + 8);
-        const score = (x - a.x) ** 2 + (y - (a.y - 44)) ** 2 + (overlapping ? 1e8 : 0);
-        if (!best || score < best.score) best = { ...a, x, y, score, width: box.w, height: box.h };
-      }
-    placed.push(best);
-  }
-  return placed;
+// Never clamp or reflow a world marker. Nearby names can be revealed on hover
+// or in the entrance list; changing their position made the map feel detached.
+export function projectPin(position, camera, width, height) {
+  const p = new THREE.Vector3(...position).project(camera);
+  return { x: (p.x * .5 + .5) * width, y: (-p.y * .5 + .5) * height,
+    visible: p.z > -1 && p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1 };
 }
 
 export function createPlan({ container, list, points, onEnter }) {
-  const svgNS = "http://www.w3.org/2000/svg";
-  const leaders = document.createElementNS(svgNS, "svg");
-  leaders.classList.add("pin-leaders");
-  leaders.setAttribute("aria-hidden", "true");
-  container.append(leaders);
   const records = points.map((point, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -71,39 +51,24 @@ export function createPlan({ container, list, points, onEnter }) {
     shortcut.setAttribute("aria-label", `Walk in at ${point.name}`);
     shortcut.onclick = () => onEnter(index);
     list.append(shortcut);
-    const line = document.createElementNS(svgNS, "line");
-    const dot = document.createElementNS(svgNS, "circle");
-    dot.setAttribute("r", "3.5");
-    leaders.append(line, dot);
-    return { button, line, dot, position: new THREE.Vector3(...point.position) };
+    const mobileShortcut=shortcut.cloneNode(true);
+    mobileShortcut.onclick=()=>{document.querySelector("#plan-entrances").open=false;onEnter(index);};
+    document.querySelector("#mobile-destinations").append(mobileShortcut);
+    button.title = point.name;
+    return { button, position: point.position };
   });
-  const projected = new THREE.Vector3();
-  let lastLayout = "";
   return {
     update(camera) {
       const width = innerWidth, height = innerHeight;
       camera.updateMatrixWorld();
-      const anchors = records.map((rec, index) => {
-        projected.copy(rec.position).project(camera);
-        const visible = projected.z > -1 && projected.z < 1;
-        rec.button.hidden = !visible;
-        return { index, x: (projected.x * .5 + .5) * width, y: (-projected.y * .5 + .5) * height, visible };
-      });
-      const key = anchors.map(a => `${Math.round(a.x)},${Math.round(a.y)}`).join(";") + `:${width},${height}`;
-      if (key === lastLayout) return;
-      lastLayout = key;
-      const labels = layoutPins(anchors, width, height, width >= 1000 ? 252 : 0);
-      labels.forEach((p) => {
-        const rec = records[p.index], a = anchors[p.index];
+      const anchors = records.map(rec => projectPin(rec.position, camera, width, height));
+      records.forEach((rec, i) => {
+        const p = anchors[i];
+        rec.button.hidden = !p.visible;
         rec.button.style.left = `${p.x}px`;
         rec.button.style.top = `${p.y}px`;
-        rec.line.setAttribute("x1", a.x);
-        rec.line.setAttribute("y1", a.y);
-        rec.line.setAttribute("x2", p.x);
-        rec.line.setAttribute("y2", p.y + 23);
-        rec.dot.setAttribute("cx", a.x);
-        rec.dot.setAttribute("cy", a.y);
-        rec.line.style.display = rec.dot.style.display = a.visible ? "" : "none";
+        rec.button.classList.toggle("compact", anchors.some((a,j) => j < i && a.visible &&
+          Math.abs(a.x-p.x) < 150 && Math.abs(a.y-p.y) < 65));
       });
     },
   };

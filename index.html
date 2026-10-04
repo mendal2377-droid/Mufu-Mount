@@ -36,6 +36,8 @@
         ><button id="help" aria-label="Open controls and credits">?</button>
       </div>
     </header>
+    <div id="walk-environment" hidden><time id="scene-time">10:00</time><span>·</span><select id="walk-weather" aria-label="Weather"><option value="dawn">✦ Dawn</option><option value="morning" selected>☀ Morning</option><option value="sunset">◒ Sunset</option><option value="storm">ϟ Storm</option><option value="snow">❄ Snow</option></select></div>
+    <div class="quiet-actions"><button id="kite-toggle" aria-label="Launch bird kite (K)" aria-pressed="false" title="Fly the bird kite · K"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 11 3 5 9 17 16 14 23 17 29 5 16 11 18 23 16 20 14 23Z" fill="currentColor"/><path d="M16 22q-5 3-1 7" fill="none" stroke="currentColor"/></svg></button><button id="walk-menu" aria-label="Open exploration menu" title="Menu" hidden>☰</button></div>
     <main id="welcome" class="welcome">
       <div class="load-track"><i id="load-bar"></i></div>
       <div id="load-status" role="status">Opening the mountain</div>
@@ -50,6 +52,7 @@
         <div class="plan-card-foot">幕府山 · Yangtze</div>
       </aside>
       <p class="plan-hint">Drag to turn · Scroll to zoom · Choose a pin to enter</p>
+      <details id="plan-entrances"><summary>Choose a path ⌄</summary><nav id="mobile-destinations" aria-label="Walking entrances on small screens"></nav></details>
       <button id="plan-weather" class="plan-weather" aria-label="Change weather: Morning">☀ Morning</button>
     </section>
     <section id="hud" hidden>
@@ -163,6 +166,7 @@
           ><button data-move="back" aria-label="Walk backward">↓</button
           ><button data-move="right" aria-label="Walk right">→</button>
         </div>
+        <div id="flight-touch" hidden><button data-move="up" aria-label="Fly higher">＋</button><button data-move="down" aria-label="Fly lower">−</button></div>
       </div>
     </section>
     <div id="toast" role="status"></div>
@@ -170,11 +174,16 @@
       <button id="close-info" class="close" aria-label="Close help">×</button>
       <div class="eyebrow">MAKE YOURSELF AT HOME</div>
       <h2>A quiet place to wander.</h2>
+      <nav id="explore-actions" aria-label="Exploration actions"><button id="menu-map">↖ Map</button><button id="menu-sound">Sound</button><button id="menu-kite">Fly bird kite · K</button></nav>
+      <div id="menu-extra"></div>
+      <details id="photo-album"><summary>Photos from the morning</summary><div id="album-photos"></div></details>
+      <h3>Fly the bird kite</h3>
+      <p>Use the bird icon or <strong>K</strong> anywhere to take off. <strong>WASD</strong> steers, the mouse or a drag looks around, <strong>Space / E</strong> climbs, <strong>Ctrl / Q</strong> descends, and <strong>Shift</strong> flies faster. Press <strong>K</strong> again to land on the nearest path. Touch arrows and ＋ / − work on a phone.</p>
       <p>
         Choose an <strong>entrance pin on the 3D map</strong>, then use
-        <strong>W A S D</strong> and the mouse. Hold <strong>Shift</strong> to
-        move faster. <strong>Esc</strong> releases the mouse. You can also drag
-        the scenery and use the arrows, or choose <strong>Guided walk</strong>.
+        <strong>W A S D</strong> and drag the scenery to look. Hold <strong>Shift</strong> to
+        move faster. Double-click the scenery for mouse capture; <strong>Esc</strong>
+        releases it. Touch users can drag and use the arrows, or choose <strong>Guided walk</strong>.
       </p>
       <h3>The whole circuit</h3>
       <p>
@@ -193,7 +202,7 @@
         path as lit frames. Walk up to one and it opens with the time it was
         taken. <strong>Walk the morning</strong> (or <strong>M</strong>) follows
         them in order and moves the light from first light towards mid-morning
-        as you go. The strip on the right jumps straight to any of them.
+        as you go. The photos in this menu jump straight to any of them.
       </p>
       <p>
         The frames sit in the order the walk happened, along the modelled

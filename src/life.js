@@ -1,4 +1,20 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
+export function canopyTexture() {
+  const c=document.createElement("canvas"); c.width=c.height=256;
+  const g=c.getContext("2d");
+  // Many overlapping sprays create an irregular silhouette and dappled crown,
+  // with small holes that reveal sky instead of a solid circular tree sprite.
+  for(let i=0;i<1150;i++) {
+    const angle=i*2.39996, r=Math.sqrt(Math.random())*105;
+    const x=128+Math.cos(angle)*r, y=132+Math.sin(angle)*r*.91;
+    const shade=.55+Math.random()*.45;
+    g.fillStyle=`rgb(${Math.round(91*shade)},${Math.round(131*shade)},${Math.round(56*shade)})`;
+    g.beginPath(); g.ellipse(x,y,3+Math.random()*8,2+Math.random()*5,angle,0,Math.PI*2); g.fill();
+  }
+  return new THREE.CanvasTexture(c);
+}
 
 // Small things at eye level and below: grass at the edge of the path, pollen
 // hanging in the light, and leaves coming down. None of it is load-bearing for
@@ -12,9 +28,9 @@ function grassTexture() {
   g.clearRect(0, 0, 128, 128);
   for (let i = 0; i < 26; i++) {
     const x = 8 + Math.random() * 112;
-    const h = 52 + Math.random() * 68;
-    const lean = (Math.random() - 0.5) * 34;
-    const w = 2.2 + Math.random() * 2.6;
+    const h = 22 + Math.random() * 93;
+    const lean = (Math.random() - 0.5) * 64;
+    const w = .8 + Math.random() * 1.6;
     const tone = 92 + Math.random() * 74;
     g.strokeStyle = `rgba(${Math.round(tone * 0.52)},${Math.round(tone)},${Math.round(tone * 0.42)},1)`;
     g.lineWidth = w;
@@ -45,7 +61,8 @@ function softDot() {
 /** Every place a tuft of grass could stand: a band either side of each route. */
 export function scatterAlongRoutes(routes, spacingMetres = 1.15) {
   const points = [];
-  for (const route of routes) {
+  for (const [routeIndex, route] of routes.entries()) {
+    if (routeIndex === 4) continue; // The short terrace is entirely paved.
     const half = route.width * 0.5;
     const pts = route.points;
     let carried = 0;
@@ -63,8 +80,11 @@ export function scatterAlongRoutes(routes, spacingMetres = 1.15) {
         carried -= spacingMetres;
         const f = Math.random();
         for (let side = -1; side <= 1; side += 2) {
+          // Promenade's river side is stone armour, not a planted lawn.
+          // Its inland planting starts beyond the wider paving/road corridor.
+          if (routeIndex === 3 && side === -1) continue;
           if (Math.random() > 0.72) continue;
-          const out = half + 0.25 + Math.random() * 3.1;
+          const out = routeIndex === 3 ? 14 + Math.random()*9 : half + .8 + Math.random()*4;
           points.push([
             a[0] + dx * f + nx * out * side,
             a[1] + (b[1] - a[1]) * f - 0.05,
@@ -79,10 +99,10 @@ export function scatterAlongRoutes(routes, spacingMetres = 1.15) {
   return points;
 }
 
-export function createUndergrowth(scene, routes, shared, limit = 1400) {
+export function createUndergrowth(scene, routes, shared, limit = 1400, groundHeight = null) {
   const spots = scatterAlongRoutes(routes);
-  const blade = new THREE.PlaneGeometry(0.62, 0.62);
-  blade.translate(0, 0.31, 0);
+  const blade = new THREE.PlaneGeometry(.9, .8, 1, 4);
+  blade.translate(0, .4, 0);
   const crossed = [];
   for (let i = 0; i < 3; i++) {
     const g = blade.clone();
@@ -93,11 +113,10 @@ export function createUndergrowth(scene, routes, shared, limit = 1400) {
 
   const material = new THREE.MeshStandardMaterial({
     map: grassTexture(),
-    transparent: true,
-    alphaTest: 0.32,
+    alphaTest: 0.4,
     side: THREE.DoubleSide,
     roughness: 0.95,
-    color: 0xa9c27d,
+    color: 0xd2dba9,
   });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.windTime = shared.time;
@@ -133,26 +152,63 @@ export function createUndergrowth(scene, routes, shared, limit = 1400) {
   mesh.receiveShadow = true;
   scene.add(mesh);
 
+  const spray = new THREE.PlaneGeometry(2.3,1.9,1,3); spray.translate(0,1.4,0);
+  const sprays = [spray, spray.clone().rotateY(Math.PI/3), spray.clone().rotateY(2*Math.PI/3)];
+  const shrubMaterial = new THREE.MeshStandardMaterial({map:canopyTexture(), alphaTest:.5,
+    color:0xaec48b, roughness:.95, side:THREE.DoubleSide});
+  shrubMaterial.onBeforeCompile = shader => {
+    shader.uniforms.windTime=shared.time; shader.uniforms.uStorm=shared.storm; shader.uniforms.uSnow=shared.snow;
+    shader.vertexShader="uniform float windTime,uStorm;\n"+shader.vertexShader.replace("#include <begin_vertex>",
+      `#include <begin_vertex>\ntransformed.x+=sin(windTime*1.3+instanceMatrix[3].x*.12)*pow(max(0.,position.y),2.)*.025*(1.+uStorm*3.);`);
+    shader.fragmentShader="uniform float uSnow;\n"+shader.fragmentShader.replace("#include <color_fragment>",
+      "#include <color_fragment>\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(.77,.83,.81),uSnow*.65);");
+  };
+  const shrubs = new THREE.InstancedMesh(mergeGeometries(sprays), shrubMaterial, 100);
+  shrubs.name="Wild leafy shrubs at the planted path margins";
+  shrubs.frustumCulled=false; shrubs.receiveShadow=true; shrubs.count=0; scene.add(shrubs);
+  const branches=[];
+  for(let i=0;i<7;i++) {
+    const g=new THREE.CylinderGeometry(.012,.035,1.65,4);
+    g.rotateZ((i-3)*.19); g.rotateY(i*2.4); g.translate(0,.78,0); branches.push(g);
+  }
+  const stems=new THREE.InstancedMesh(mergeGeometries(branches),new THREE.MeshStandardMaterial({color:0x554a33,roughness:1}),100);
+  stems.frustumCulled=false; stems.count=0; scene.add(stems);
+  const heights = new Map();
+
   const dummy = new THREE.Object3D();
   return {
     mesh,
+    shrubs,
+    stems,
     spots,
     update(camera, range = 34) {
-      let n = 0;
+      let n = 0, shrubCount=0;
       const r2 = range * range;
       for (let i = 0; i < spots.length && n < limit; i++) {
         const s = spots[i];
         const dx = s[0] - camera.position.x;
         const dz = s[2] - camera.position.z;
         if (dx * dx + dz * dz > r2) continue;
-        dummy.position.set(s[0], s[1], s[2]);
+        // Sample only nearby plants and cache the result, keeping growth
+        // attached to the slope instead of floating at the route's height.
+        if(groundHeight && !heights.has(i)) heights.set(i, groundHeight(s[0],s[2]));
+        const y=heights.get(i) ?? s[1];
+        dummy.position.set(s[0], y+.015, s[2]);
         dummy.rotation.set(0, s[4], 0);
         dummy.scale.set(s[3], s[3] * (0.85 + (i % 7) * 0.05), s[3]);
         dummy.updateMatrix();
         mesh.setMatrixAt(n++, dummy.matrix);
+        mesh.setColorAt(n-1,new THREE.Color().setRGB(.7+(i%5)*.06,.78+(i%4)*.04,.63+(i%7)*.04));
+        if(i%13===0 && shrubCount<100) {
+          dummy.scale.setScalar(.55+s[3]*.55); dummy.updateMatrix();
+          shrubs.setMatrixAt(shrubCount,dummy.matrix); stems.setMatrixAt(shrubCount,dummy.matrix); shrubCount++;
+        }
       }
       mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
+      if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
+      shrubs.count=stems.count=shrubCount;
+      shrubs.instanceMatrix.needsUpdate=stems.instanceMatrix.needsUpdate=true;
       return n;
     },
   };

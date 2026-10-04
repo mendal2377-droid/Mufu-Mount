@@ -1,6 +1,6 @@
 # Mufu · A little further
 
-A browser 3D walk adapted from the photo-informed Mount Mufu / Yangtze Blender scene, hung with twenty photographs from a single morning — 06:16 to 08:26 on 26 September 2026. Walk the rainbow road, the ridge, the forest stairs and the riverside; find the frames where they were taken; change the weather, or let the morning carry you from first light to mid-morning.
+A browser 3D walk adapted from the photo-informed Mount Mufu / Yangtze Blender scene, hung with twenty photographs from a single morning — 06:16 to 08:26 on 26 September 2026. Walk the rainbow road, the ridge, the forest stairs and the riverside; find photo frames along the paths; change the weather, or let the morning carry you from first light to mid-morning.
 
 **Play:** [mufu-mount.vercel.app](https://mufu-mount.vercel.app)
 
@@ -22,7 +22,9 @@ Open the local URL printed by Vite. `npm run build` creates the static site in `
 ## Play
 
 - The home page is an aerial 3D plan. Drag to orbit, scroll to zoom, and choose one of six entrance pins to walk in. The compact route panel also provides keyboard-accessible entrance buttons. **Map** returns to the plan.
-- After entering, WASD moves; mouse looks; Shift moves faster; Esc releases the mouse. The weather selected on the plan carries into the walk.
+- Walking shows scene time/weather and two discreet kite/menu icons. Destinations, tours, photos, sound and postcards are in the menu. On small screens, **Choose a path** lists every entrance even when world markers overlap.
+- WASD moves; drag looks; Shift moves faster. Double-click the scenery for mouse capture; Esc releases it. Weather carries into the walk.
+- The bird icon or **K** launches a swallow kite from the plan or a path. **WASD** flies, **Space/E** climbs, **Ctrl/Q** descends, and **Shift** flies faster. **K** again lands on the nearest walking path. Touch arrows and **+ / -** also work. Flight is bounded to the model area, up to 1,000 m, with sampled terrain clearance; it is not a physics simulation.
 - If mouse capture is unavailable, drag the scene to look and use WASD or the on-screen arrows. Touch users can drag and use the arrows.
 - **Whole circuit** (or **T**) hands the camera over and walks the entire place for you in about five minutes — up through the woods at first light, out over the ridge, along the ridge trail, onto the river terrace, down the coloured road, and then the long riverside into the evening. **Esc** or any movement key steps off wherever you are.
 - **Walk the morning** (or **M**) follows the twenty photographs in the order they were taken and moves the light from 06:16 towards 08:26 as it goes.
@@ -31,18 +33,18 @@ Open the local URL printed by Vite. `npm run build` creates the static site in `
 - First light, morning, sunset, storm and snow blend gradually. Sound starts after your click and can be muted.
 - **Save this moment** adds a field note. Notes and the frames you have reached persist in local browser storage; Help includes a reset button.
 - **Photo** (or **P**) clears the interface and letterboxes the view; **Postcard** downloads the current frame as a PNG.
-- **Picture quality** under **?** switches between Smooth, Balanced and Cinematic. The site picks one on first load and steps down once if the frame rate will not hold; choosing a setting fixes it.
+- **Picture quality** in the menu switches between Smooth, Balanced and Cinematic. The site picks one on first load and steps down once if the frame rate will not hold; choosing a setting fixes it.
 
 ## The morning
 
-Twenty photographs from a single walk on **26 September 2026, 06:16 to 08:26** stand beside the path as lit frames. Far off, a memory is only a warm light between the trees; walk up to one and it resolves into the photograph and opens with its time, its Chinese place name and a line about it. The strip on the right jumps to any of them.
+Twenty photographs from a single walk on **26 September 2026, 06:16 to 08:26** stand beside the path as lit frames. Far off, a memory is only a warm light between the trees; walk up to one and it resolves into the photograph. The photo album in the menu jumps to any of them. Photo panels no longer cover the walking view.
 
 The frames sit in the order the walk happened, spaced along the modelled routes. They are **not** placed by GPS. Of the 153 original photographs only 18 carry GPS-labelled fixes; 132 are network fixes with kilometre-scale jumps and zero altitudes, and three have no position at all. Nothing in this app should be read as a surveyed route or a measured camera station.
 
 The published images are resized copies (1600 px long edge) rewritten pixel-by-pixel so that **no EXIF, GPS, camera model or timestamp survives in the files**; `tests/memories.test.js` asserts this. The full-resolution originals and the research package that holds their metadata stay private and are not part of this repository. Captions and times come from `public/memories/memories.json`, which is written by hand from the hike record.
 - **Watch river & beacon** takes you to the waterside viewing spot. Four cargo ships follow river-side lanes with animated wakes, gentle rocking and navigation lamps. A rotating beacon, circling birds, wind-driven leaves, distant engines and occasional directional ship horns bring movement to the scene.
 
-The water uses layered advected wave normals, view-dependent sky reflection, sunlight glints, current streaks and vessel wakes. The beacon includes a rotating beam, pulsing lens and water glimmer; storm conditions strengthen the waves. Ships and the beacon are artistic additions, not a live maritime data feed or surveyed landmark reconstruction. Engine and horn sounds are synthesized in the browser.
+A camera-centred geometric wave patch adds moving swells near the viewer, with intermittent bank wash and storm whitecaps. Layered leaf sprays replace solid middle-distance crowns; nearby grasses and branching shrubs follow sampled terrain and sway in the wind. Promenade planting stays beyond the paving, on the inland side. The water uses layered advected wave normals, view-dependent sky reflection, sunlight glints, current streaks and vessel wakes. The beacon includes a rotating beam, pulsing lens and water glimmer; storm conditions strengthen the waves. Ships and the beacon are artistic additions, not a live maritime data feed or surveyed landmark reconstruction. Engine and horn sounds are synthesized in the browser.
 
 ## How it is rendered
 
@@ -87,11 +89,12 @@ node tests/river-browser.mjs
 node tests/memory-browser.mjs
 node tests/tour-browser.mjs
 node tests/plan-browser.mjs
+MUFU_TEST_URL=http://127.0.0.1:4173 node tests/immersion-browser.mjs
 ```
 
-`npm test` covers route constraint maths, shipping-lane geometry, the two camera tours (every leg names a route that exists, ground legs move at a walking pace rather than a sprint, aerial legs stay over the modelled world and look downwards, the circuit touches all five corridors and runs from dawn to sunset, and the title loop reaches the river), and the memory data: that every published frame has an image and a thumbnail, that none of them still carries an EXIF segment, that the times run in order from 06:16 to 08:26, and that each frame stands outside the walkable corridor but within reach of it.
+`npm test` includes 28 checks for flight movement/bounds/ground clearance/landing, anchored pin projection, promenade planting, route constraint maths, shipping-lane geometry, the two camera tours (every leg names a route that exists, ground legs move at a walking pace rather than a sprint, aerial legs stay over the modelled world and look downwards, the circuit touches all five corridors and runs from dawn to sunset, and the title loop reaches the river), and the memory data: that every published frame has an image and a thumbnail, that none of them still carries an EXIF segment, that the times run in order from 06:16 to 08:26, and that each frame stands outside the walkable corridor but within reach of it.
 
-The browser checks expect the preview server on `http://127.0.0.1:4173` (or `MUFU_TEST_URL`) and installed Chrome. `plan-browser` checks all six entrances, walking movement, orbit/zoom/reset, weather carry-over, keyboard entry, tour return and mobile layout. `browser-check` covers field notes, weather, guided movement and postcards. `river-browser` checks moving vessels and a rotating beacon. `memory-browser` checks photographs and the morning walk. `tour-browser` checks plan entry and the full circuit. Screenshots and JSON reports go into ignored `test-results/`.
+The browser checks expect the preview server on `http://127.0.0.1:4173` (or `MUFU_TEST_URL`) and installed Chrome. `plan-browser` checks all six entrances, walking movement, orbit/zoom/reset, weather carry-over, keyboard entry, tour return and mobile layout. `browser-check` covers field notes, weather, guided movement and postcards. `river-browser` checks moving vessels and a rotating beacon. `memory-browser` checks photographs and the morning walk. `tour-browser` checks plan entry and the full circuit. `immersion-browser` verifies anchored icon centres during orbit, all six quiet walking entrances, menu photos/tours, flight and landing, weather, all six touch entrances and touch climb/landing; it defaults to preview port 4182. Browser QA may set `window.__mufu.paused = true` and drive `step()` to avoid queuing real-time frames on a software GPU. Screenshots and JSON reports go into ignored `test-results/`.
 
 ## Deployment
 

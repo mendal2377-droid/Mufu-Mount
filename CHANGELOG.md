@@ -1,5 +1,17 @@
 # Change log
 
+## 2026-10-04 — quiet walks and a bird kite
+
+Entrance icons now remain directly on their projected world anchors. The label collision solver and long leader lines are removed; crowded names reveal on hover/focus, with a small-screen entrance list as an alternative.
+
+Walking shows time/weather and discreet kite/menu icons. Photos, destinations, tours and sound move into the menu. Drag to look; desktop double-click opts into mouse capture.
+
+The swallow kite launches from the plan or any path. WASD flies, Space/E climbs, Ctrl/Q descends and Shift accelerates; K lands on the nearest route. Touch supports arrows and climb/descent buttons. Flight has bounded altitude/area and sampled terrain clearance, with wind audio and no airborne leaf/pollen clutter.
+
+Added camera-centred geometric river swells, bank wash and storm foam. Leaf sprays and canopy textures replace solid middle-distance crowns; branching shrubs and varied grasses follow the terrain outside promenade paving, with weather-driven movement.
+
+New unit and desktop/touch browser checks cover these interactions. Privacy checks remain unchanged.
+
 ## 2026-10-04 — enter from the landscape
 
 Home opens on an oblique 3D plan of Mount Mufu and the Yangtze. Six anchored

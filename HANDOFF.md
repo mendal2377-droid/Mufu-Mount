@@ -7,29 +7,43 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
-**4 October 2026: the home page now opens as a 3D entrance plan.**
-`src/plan.js` frames the landscape and projects six entrance pins into screen
-space, spreading labels apart without changing their world anchors. A pin
-starts walking at an existing safe route bookmark; the sixth opens the
-river/beacon viewpoint. **Map** returns to the plan and ends any active tour.
-The chosen weather carries into the walk. Home has a small title, route inset,
-entrance labels and weather button; the former title copy and photo/gameplay
-panels appear only after entering or in Help.
+**4 October 2026: anchored markers, quiet walking and bird-kite flight.**
+The home remains an orbitable 3D entrance plan. `src/plan.js` now projects
+icons directly onto their world positions without collision-driven relocation
+or clamping. Crowded names appear on hover/focus; the route panel and small-screen
+Choose a path menu keep every entrance accessible when icons overlap.
 
-`showPlan()` owns the transition, `framePlan()` resets/framing, and the same
-perspective camera and existing post-processing pipeline render both modes.
-The overview has a graphic teal water palette, reduced grain/vignette and a
-different portrait framing. The existing sediment-coloured river shader is
-preserved for walking. The title-loop preset remains in `tour.js` but no longer
-runs on the home page. Do not restore it over the interactive plan.
+Walking shows scene time/weather and discreet kite/menu icons. Tours, sound,
+postcards, destinations and the 20-photo album live in the menu. Drag looks;
+double-click opts into pointer lock on a desktop. Entry never captures the
+mouse, and touch users never enter pointer lock.
 
-`tests/plan-browser.mjs` covers all six entrances, movement, weather carry-over,
-orbit/zoom/reset, return from a tour, keyboard entry and portrait layout.
-`tests/plan.test.js` checks camera framing and separated entrance targets.
-This update passed 22/22 unit tests, a production build and the plan browser
-check (six desktop/mobile-size entrances, orbit/zoom, keyboard entry, weather
-carry-over, walking and return from a tour), with no browser errors. The
-mobile check uses a portrait browser viewport, not a physical phone.
+`src/kite.js` owns the swallow kite, bounded free flight, terrain sampling and
+nearest-path landing. K or the bird icon launches/lands; WASD steers, Space/E
+climbs, Ctrl/Q descends, Shift accelerates; touch has arrows and +/- buttons.
+Flight stops tours/guided walks; Map lands before returning to the plan. The
+clearance sampler raycasts only ground meshes after filtering their bounding
+boxes. It is approximate collision clearance, not a physics engine. Wind audio
+rises in flight; floating leaf/pollen layers are disabled above the canopy.
+
+The river has a 1.1 km camera-centred displaced wave mesh with a flat horizon
+plane. Both share the same wave shading; a 450 m circular seam fades height to
+zero. Nearby bank wash and storm whitecaps are procedural scenic effects.
+Raw shaders still write linear HDR. Middle-distance trees use layered textured
+leaf sprays; far forest uses canopy sprites. Detailed near crowns still do not
+cast shadows. Grass/shrubs follow cached ground samples, stay beyond promenade
+paving and sway in wind. Terrain/routes and the Blender export are unchanged.
+
+Verification: 28/28 unit tests and a production build pass. The immersion
+browser check passes for all six desktop entrances, anchor projection during
+orbit, hidden walking panels, menu photos/tours, kite flight/weather/landing,
+all six touch entrances and touch climb/landing, with no browser errors.
+Screenshots were reviewed. Touch checks emulate a phone in Chrome; no physical
+phone or hardware GPU was benchmarked. The older focused browser scripts have
+updated menu selectors but were not all rerun for this revision.
+For software-GPU browser QA set `window.__mufu.paused = true`, then call
+`step(frames, dt)`. Leave requestAnimationFrame intact: browser capture uses it.
+The previous title-loop preset remains in tour.js but does not run on home.
 
 ---
 
@@ -52,7 +66,7 @@ copy you write. Section 6 explains exactly how far the accuracy goes.
 ```sh
 npm ci
 npm run dev          # Vite dev server
-npm test             # 20 unit tests, no browser needed
+npm test             # 28 unit tests, no browser needed
 npm run build        # static site into dist/
 npm run preview      # serves dist on 127.0.0.1:4173
 ```
@@ -74,7 +88,8 @@ teach you the geography faster than reading code.
 | `src/memories.js` | 455 | The twenty photo frames: placement, reveal, texture budget, the morning walk |
 | `src/river-life.js` | 450 | Water shader, ships, wakes, beacon, birds |
 | `src/tour.js` | 348 | Camera on rails — the whole circuit and a retained legacy title preset |
-| `src/plan.js` | — | Aerial camera framing, anchored entrance labels and route shortcuts |
+| `src/plan.js` | — | Aerial camera framing, direct world-projected entrance icons and shortcuts |
+| `src/kite.js` | — | Swallow kite, bounded free flight, ground sampling and path landing |
 | `src/life.js` | 319 | Path-side grass, pollen, falling leaves |
 | `src/sky.js` | 260 | Sky shader, the real solar path, the far shore |
 | `src/postfx.js` | 229 | The post-processing chain and the three quality tiers |
@@ -286,7 +301,7 @@ npm test        # the EXIF scan runs here
 ## 7. Testing
 
 ```sh
-npm test                                   # 20 unit tests — fast, no browser
+npm test                                   # 28 unit tests — fast, no browser
 npm run build && npm run preview           # then, against 127.0.0.1:4173:
 node tests/browser-check.mjs               # movement, notes, weather, overview, postcard
 node tests/river-browser.mjs               # four moving vessels, rotating beacon

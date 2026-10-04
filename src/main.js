@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   nearestOnRoute,
   closestRoute,
@@ -17,10 +18,11 @@ import {
   WALK_END_MINUTES,
 } from "./sky.js";
 import { createMemories, createMemoryWalk } from "./memories.js";
-import { createUndergrowth, createMotes, createFallingLeaves } from "./life.js";
+import { createUndergrowth, createMotes, createFallingLeaves, canopyTexture } from "./life.js";
 import { createCameraFeel } from "./camera-feel.js";
 import { createCinematic, wholeCircuit } from "./tour.js";
 import { createPlan, planPose } from "./plan.js";
+import { createBirdKite, createGroundSampler } from "./kite.js";
 import "./style.css";
 
 const $ = (s) => document.querySelector(s),
@@ -40,6 +42,7 @@ const state = {
   distance: 0,
   moving: false,
   frames: 0,
+  flying: false,
 };
 const audio = new NatureAudio(),
   keys = new Set();
@@ -98,6 +101,7 @@ let renderer,
   sky,
   water,
   riverLife,
+  kite,
   plan,
   memories,
   memoryWalk,
@@ -364,9 +368,15 @@ function buildTrees(trees, buffer) {
   // Shared low-poly crowns, with full-height trunks. Placements come from Blender.
   const trunkGeo = new THREE.CylinderGeometry(0.11, 0.2, 5.7, 5);
   trunkGeo.translate(0, 2.85, 0);
-  const crownGeo = new THREE.IcosahedronGeometry(1, 0);
-  crownGeo.scale(2.4, 3.6, 2.4);
-  crownGeo.translate(0, 6.9, 0);
+  const lobes=Array.from({length:9},(_,i)=> {
+    const g=new THREE.PlaneGeometry(3.8,4.3,1,3);
+    g.rotateY(i*2.4);
+    g.translate(Math.cos(i*2.4)*1.2,5.6+(i%3)*1.1,Math.sin(i*2.4)*1.2);
+    return g;
+  });
+  const crownGeo=mergeGeometries(lobes);
+  const crownMaterial=material("Leaf sprays",[.36,.47,.23]);
+  crownMaterial.map=canopyTexture(); crownMaterial.alphaTest=.5;
   const trunk = new THREE.InstancedMesh(
     trunkGeo,
     material("Bark", [0.14, 0.095, 0.055]),
@@ -374,7 +384,7 @@ function buildTrees(trees, buffer) {
   );
   const crown = new THREE.InstancedMesh(
     crownGeo,
-    material("Leaves", [0.19, 0.33, 0.08]),
+    crownMaterial,
     trees.length,
   );
   trees.forEach((t, i) => {
@@ -433,7 +443,8 @@ function buildTrees(trees, buffer) {
 
   // A forty-triangle stand-in for each nearby tree, drawn with no colour or
   // depth writes: invisible in the beauty pass, but it casts the shadow.
-  const proxyGeo = mergeSimpleGeometries([trunkGeo.clone(), crownGeo.clone()]);
+  const proxyCrown = new THREE.IcosahedronGeometry(1,0).scale(2.4,3.6,2.4).translate(0,6.9,0);
+  const proxyGeo = mergeSimpleGeometries([trunkGeo.clone(), proxyCrown]);
   shadowTrees = new THREE.InstancedMesh(
     proxyGeo,
     new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
@@ -464,11 +475,12 @@ function buildTrees(trees, buffer) {
         sunset: u.sunset,
         dawn: u.dawn,
         viewport: { value: innerHeight },
+        canopy: { value: canopyTexture() },
       },
       vertexShader:
         "attribute float size;uniform float viewport;varying float shade;varying float distanceToEye;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);distanceToEye=-mv.z;shade=fract(sin(position.x*.7+position.z)*43758.5);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(size*projectionMatrix[1][1]*viewport*.5/max(1.,-mv.z),1.,120.);}",
       fragmentShader:
-        "uniform float snow,storm,sunset,dawn;varying float shade;varying float distanceToEye;void main(){vec2 p=gl_PointCoord*2.-1.;float d=dot(p,p);if(d>1.)discard;float nz=sqrt(1.-d);float light=.55+max(0.,dot(vec3(p.x,-p.y,nz),normalize(vec3(-.4,.6,.7))))*.45;vec3 green=mix(vec3(.16,.26,.07),vec3(.34,.43,.17),shade);green=mix(green,vec3(.42,.30,.13),sunset*.35);green=mix(green,vec3(.69,.77,.75),snow*max(0.,-p.y)*.8);green*=light*(1.-storm*.3);green=mix(green,green*vec3(.30,.34,.52),dawn*.85);gl_FragColor=vec4(green,1.);}",
+        "uniform sampler2D canopy;uniform float snow,storm,sunset,dawn;varying float shade;varying float distanceToEye;void main(){vec4 spray=texture2D(canopy,gl_PointCoord);if(spray.a<.5)discard;vec2 p=gl_PointCoord*2.-1.;float nz=sqrt(max(0.,1.-dot(p,p)));float light=.5+max(0.,dot(vec3(p.x,-p.y,nz),normalize(vec3(-.4,.6,.7))))*.5;vec3 green=mix(vec3(.12,.22,.055),vec3(.26,.36,.13),shade)*(.55+spray.g*.9);green=mix(green,vec3(.42,.30,.13),sunset*.35);green=mix(green,vec3(.69,.77,.75),snow*max(0.,-p.y)*.8);green*=light*(1.-storm*.3);green=mix(green,green*vec3(.30,.34,.52),dawn*.85);gl_FragColor=vec4(green,1.);}",
     }),
   );
   forestLOD.frustumCulled = false;
@@ -483,8 +495,8 @@ function updateTrees() {
     fs = forestLOD.geometry.attributes.size;
   for (let i = 0; i < world.trees.length; i++) {
     const t = world.trees[i],
-      d = Math.hypot(t[0] - camera.position.x, t[2] - camera.position.z);
-    if (!state.overview && d > 1900) continue;
+      d = Math.hypot(t[0] - camera.position.x, t[1] + 6*t[4] - camera.position.y, t[2] - camera.position.z);
+    if (!state.overview && !state.flying && d > 1900) continue;
     dummy.position.set(t[0], t[1], t[2]);
     dummy.scale.set(t[3], t[4], t[3]);
     dummy.rotation.y = i * 2.39;
@@ -493,9 +505,9 @@ function updateTrees() {
       nearTrees.forEach((m) => m.setMatrixAt(near, dummy.matrix));
       shadowTrees.setMatrixAt(near, dummy.matrix);
       near++;
-    } else if (t[5]) {
+    } else if (t[5] && (state.overview || d > 320)) {
       fp.setXYZ(forest, t[0], t[1] + 6 * t[4], t[2]);
-      fs.setX(forest, 7 * t[3]);
+      fs.setX(forest, 10 * t[3]);
       forest++;
     } else {
       treeMeshes.forEach((m) => m.setMatrixAt(far, dummy.matrix));
@@ -755,7 +767,9 @@ async function load() {
     createParticles();
 
     progress(86, "Letting the grass back in");
-    undergrowth = createUndergrowth(scene, routes, u);
+    const groundHeight = createGroundSampler(scene);
+    kite = createBirdKite(camera, scene, u, routes, groundHeight);
+    undergrowth = createUndergrowth(scene, routes, u, 1400, groundHeight);
     motes = createMotes(scene, u);
     leaves = createFallingLeaves(scene, u);
 
@@ -803,6 +817,8 @@ async function load() {
       postfx,
       goTo,
       showPlan,
+      toggleKite,
+      kite,
       setWeather,
       startTour,
       endTour,
@@ -849,6 +865,7 @@ async function checkJSON(r) {
 }
 
 function goTo(index, notify = true) {
+  if (state.flying) stopFlight(false);
   if (state.overview) toggleOverview();
   // Asking to be somewhere else ends whatever was walking you around;
   // otherwise the guided walk drags you straight back off the destination.
@@ -956,6 +973,7 @@ function showMemoryCard(item) {
 
 function startMemoryWalk() {
   if (!state.ready) return;
+  if (state.flying) stopFlight(true);
   if (!state.playing) start(4, false);
   if (state.overview) toggleOverview();
   state.auto = false;
@@ -998,6 +1016,7 @@ function startMemoryWalk() {
 
 function startTour() {
   if (!state.ready) return;
+  if (state.flying) stopFlight(true);
   if (!state.playing) start(4, false);
   if (state.tour) {
     endTour(false);
@@ -1062,7 +1081,9 @@ function stopWalks() {
 // --- weather ----------------------------------------------------------------
 
 function setWeather(name) {
+  if (!["dawn", "morning", "sunset", "storm", "snow"].includes(name)) return;
   state.weather = name;
+  $("#walk-weather").value = name;
   document
     .querySelectorAll("[data-weather]")
     .forEach((b) => b.classList.toggle("active", b.dataset.weather === name));
@@ -1085,7 +1106,7 @@ function setWeather(name) {
 }
 
 function lock() {
-  if (state.overview) return;
+  if (state.overview || matchMedia("(pointer: coarse)").matches) return;
   try {
     const promise = canvas.requestPointerLock?.();
     promise?.catch(() =>
@@ -1096,7 +1117,7 @@ function lock() {
   }
 }
 
-function start(index = 0, capture = true) {
+function start(index = 0, capture = false) {
   if (!state.ready) return;
   state.playing = true;
   cinematic.stop();
@@ -1105,6 +1126,7 @@ function start(index = 0, capture = true) {
   $("#hud").hidden = false;
   document.body.classList.add("playing");
   goTo(index, false);
+  toast("WASD to walk · Drag to look · K to fly");
   if (capture) lock();
   audio
     .start()
@@ -1133,8 +1155,45 @@ function framePlan() {
   plan?.update(camera);
 }
 
+function stopFlight(land = true) {
+  if (!state.flying) return;
+  if (land) state.route = kite.land().route;
+  else kite.stop();
+  state.flying = false;
+  document.body.classList.remove("flying");
+  $("#kite-toggle").setAttribute("aria-pressed", "false");
+  $("#kite-toggle").setAttribute("aria-label", "Launch bird kite (K)");
+  $("#kite-toggle").title = "Fly the bird kite · K";
+  $("#menu-kite").textContent = "Fly bird kite · K";
+  $("#flight-touch").hidden = true;
+  keys.clear(); feel.reset(); lastTreeUpdate = lastGrowth = -10;
+}
+
+function toggleKite() {
+  if (!state.ready) return;
+  $("#info").close();
+  if (state.flying) {
+    stopFlight(true);
+    toast("Landed on the nearest path · WASD to walk");
+    return;
+  }
+  if (state.overview) start(state.place, false);
+  stopWalks(); feel.unapply(); feel.reset(); keys.clear();
+  state.flying = true;
+  kite.launch();
+  document.body.classList.add("flying");
+  $("#kite-toggle").setAttribute("aria-pressed", "true");
+  $("#kite-toggle").setAttribute("aria-label", "Land on nearest path (K)");
+  $("#kite-toggle").title = "Land on nearest path · K";
+  $("#menu-kite").textContent = "Land on nearest path · K";
+  $("#flight-touch").hidden = false;
+  lastTreeUpdate = -10;
+  toast("Bird kite · WASD to fly · Space / E up · Q down · K to land");
+}
+
 function showPlan() {
   if (!state.ready) return;
+  if (state.flying) stopFlight(true);
   stopWalks();
   clearTimeout(toastTimer);
   $("#toast").classList.remove("show");
@@ -1158,6 +1217,8 @@ function showPlan() {
   $("#photo-mode").setAttribute("aria-pressed", "false");
   $("#welcome").hidden = true;
   $("#hud").hidden = true;
+  $("#walk-environment").hidden = true;
+  $("#walk-menu").hidden = true;
   $("#plan-home").hidden = false;
   $("#back-to-plan").hidden = true;
   $("#resume").hidden = true;
@@ -1184,6 +1245,8 @@ function toggleOverview() {
   document.body.classList.add("playing");
   $("#plan-home").hidden = true;
   $("#hud").hidden = false;
+  $("#walk-environment").hidden = false;
+  $("#walk-menu").hidden = false;
   $("#back-to-plan").hidden = false;
   $("#overview").textContent = "Map ↗";
   $("#resume").hidden = false;
@@ -1354,6 +1417,8 @@ function updateSunPosition() {
   const minutes = state.memoryWalk
     ? THREE.MathUtils.lerp(WALK_START_MINUTES, WALK_END_MINUTES, walkTimeBlend)
     : THREE.MathUtils.lerp(WALK_END_MINUTES + 94, WALK_START_MINUTES, weather.dawn);
+  const displayMinutes = Math.round(THREE.MathUtils.lerp(minutes, 18 * 60 + 15, weather.sunset));
+  $("#scene-time").textContent = `${String(Math.floor(displayMinutes / 60)).padStart(2,"0")}:${String(displayMinutes % 60).padStart(2,"0")}`;
   sunDirectionForMinutes(minutes, sunDirection);
   sunDirection.lerp(sunsetDirection, weather.sunset).normalize();
 
@@ -1417,6 +1482,9 @@ function trackQuality(dt) {
 
 function animate() {
   requestAnimationFrame(animate);
+  // Browser QA can hold real-time rendering while it advances the simulation
+  // explicitly. Do not replace requestAnimationFrame: browser capture needs it.
+  if (window.__mufu?.paused) return;
   frame(clock.getDelta());
 }
 
@@ -1474,10 +1542,10 @@ function frame(elapsed) {
   // eye is so it can fade out anything that would only be a speck on the sky.
   motes.position.set(camera.position.x, camera.position.y - 4.6, camera.position.z);
   motes.material.uniforms.uEyeHeight.value = camera.position.y - motes.position.y;
-  motes.visible = !state.overview && weather.storm < 0.7;
+  motes.visible = !state.overview && !state.flying && weather.storm < 0.7;
   leaves.position.set(camera.position.x, camera.position.y - 8.5, camera.position.z);
   leaves.material.uniforms.uEyeHeight.value = camera.position.y - leaves.position.y;
-  leaves.visible = !state.overview;
+  leaves.visible = !state.overview && !state.flying;
 
   if (weather.storm > 0.8 && t - lastLightning > 17) {
     lastLightning = t;
@@ -1494,7 +1562,9 @@ function frame(elapsed) {
   let strafe = 0,
     sprinting = false;
 
-  if ((!state.playing || state.tour) && !state.overview && cinematic?.running) {
+  if (state.flying && !$("#info").open) {
+    kite.update(dt, t, keys);
+  } else if ((!state.playing || state.tour) && !state.overview && cinematic?.running) {
     // The loop behind the title, and the hands-free circuit, are the same
     // machinery: a camera on rails through the road, the ridge and the river.
     const shot = cinematic.update(dt, camera, t);
@@ -1511,7 +1581,7 @@ function frame(elapsed) {
         if (shot.finished) endTour(true);
       }
     }
-  } else if (state.playing && !state.overview && !$("#info").open) {
+  } else if (state.playing && !state.flying && !state.overview && !$("#info").open) {
     const f =
         (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) -
         (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0),
@@ -1602,7 +1672,7 @@ function frame(elapsed) {
 
   if (state.overview) { orbit.update(); plan?.update(camera); }
 
-  if (!state.overview) {
+  if (!state.overview && !state.flying) {
     feel.update(dt, {
       moving: state.moving,
       running: sprinting,
@@ -1621,6 +1691,7 @@ function frame(elapsed) {
     undergrowth.update(camera);
   } else if (state.overview) {
     undergrowth.mesh.count = 0;
+    undergrowth.shrubs.count = undergrowth.stems.count = 0;
   }
 
   if (memories) {
@@ -1643,7 +1714,7 @@ function frame(elapsed) {
     }
   }
 
-  audio.update(weather, state.route === 3 ? 1 : 0.03, state.moving);
+  audio.update(weather, state.route === 3 ? 1 : 0.03, state.moving, state.flying);
   const traffic = riverLife.update(t, weather, camera);
   audio.riverTraffic(traffic, t, state.playing && !state.overview);
 
@@ -1677,6 +1748,22 @@ function frame(elapsed) {
 // --- wiring -----------------------------------------------------------------
 
 $("#back-to-plan").onclick = showPlan;
+$("#kite-toggle").onclick = toggleKite;
+$("#menu-kite").onclick = toggleKite;
+$("#menu-map").onclick = () => { $("#info").close(); showPlan(); };
+$("#menu-sound").onclick = () => $("#sound").click();
+$("#walk-weather").onchange = e => { setWeather(e.target.value); e.target.blur(); };
+$("#walk-menu").onclick = () => $("#help").click();
+$("#album-photos").append($("#memory-strip"));
+// Keep tours, photos and destinations available without covering the view.
+for (const id of ["destination", "memory-walk", "tour-button", "auto", "postcard", "photo-mode", "collect", "river-watch"]) {
+  $("#menu-extra").append($("#" + id));
+}
+$("#destination").setAttribute("aria-label", "Walking destination");
+for (const id of ["destination", "memory-walk", "tour-button", "auto", "river-watch"]) {
+  $("#" + id).addEventListener("click", () => { if(id !== "destination") $("#info").close(); });
+}
+$("#destination").addEventListener("change", () => $("#info").close());
 $(".brand").onclick = (e) => { e.preventDefault(); showPlan(); };
 $("#plan-reset").onclick = framePlan;
 $("#plan-weather").onclick = () => {
@@ -1736,6 +1823,7 @@ $("#sound").onclick = async () => {
   }
 };
 $("#auto").onclick = () => {
+  if (state.flying) stopFlight(true);
   if (state.overview) toggleOverview();
   if (state.memoryWalk) startMemoryWalk();
   state.auto = !state.auto;
@@ -1814,6 +1902,7 @@ window.addEventListener("keydown", (e) => {
     endTour(false);
   }
   if (e.target.matches("input,select,textarea") || $("#info").open) return;
+  if (e.code === "KeyK" && !e.repeat && state.ready) { toggleKite(); e.preventDefault(); return; }
   if (e.code === "KeyP" && state.ready && state.playing) {
     $("#photo-mode").click();
     e.preventDefault();
@@ -1841,6 +1930,7 @@ window.addEventListener("keydown", (e) => {
       "ArrowRight",
       "ShiftLeft",
       "ShiftRight",
+      "Space", "KeyE", "KeyQ", "ControlLeft", "ControlRight",
     ].includes(e.code)
   ) {
     keys.add(e.code);
@@ -1856,6 +1946,7 @@ document.addEventListener("visibilitychange", () => {
   } else if (audio.enabled) audio.ctx?.resume();
 });
 let drag = null;
+canvas.addEventListener("dblclick", () => { if(state.playing && !state.overview) lock(); });
 canvas.addEventListener("pointerdown", (e) => {
   if (!state.playing || state.overview || controls.isLocked) return;
   drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
@@ -1874,7 +1965,7 @@ canvas.addEventListener("pointermove", (e) => {
 });
 canvas.addEventListener("pointerup", () => (drag = null));
 canvas.addEventListener("pointercancel", () => (drag = null));
-const moveKeys = { forward: "KeyW", back: "KeyS", left: "KeyA", right: "KeyD" };
+const moveKeys = { forward: "KeyW", back: "KeyS", left: "KeyA", right: "KeyD", up: "KeyE", down: "KeyQ" };
 document.querySelectorAll("[data-move]").forEach((b) => {
   b.onpointerdown = (e) => {
     e.preventDefault();

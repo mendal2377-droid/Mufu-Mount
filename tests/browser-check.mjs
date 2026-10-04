@@ -1,5 +1,11 @@
 import { chromium } from "@playwright/test";
 import fs from "node:fs/promises";
+
+async function menuClick(page, selector) {
+  if (!await page.locator('#info').evaluate(n => n.open)) await page.click('#walk-menu');
+  await page.click(selector);
+}
+
 const browser = await chromium.launch({
   headless: true,
   channel: "chrome",
@@ -34,36 +40,38 @@ const after = await page.evaluate(() => window.__mufu.getStats());
 if (after.distance <= before.distance + 0.3)
   throw Error("WASD did not move the player");
 await page.screenshot({ path: "test-results/walking.png" });
-await page.locator("#collect").click();
+await menuClick(page, "#collect");
 for (let i = 1; i < 5; i++) {
+  if (!await page.locator("#info").evaluate(n => n.open)) await page.click("#walk-menu");
   await page.locator("#destination").selectOption(String(i));
-  await page.locator("#collect").click();
+  await menuClick(page, "#collect");
 }
 if ((await page.locator("#found").textContent()) !== "5 / 5")
   throw Error("Notes collection failed");
-await page.locator("#destination").selectOption("3");
+if (!await page.locator("#info").evaluate(n => n.open)) await page.click("#walk-menu");
+  await page.locator("#destination").selectOption("3");
 for (const weather of ["sunset", "storm", "snow"]) {
-  await page.locator(`[data-weather=${weather}]`).click();
+  await page.locator("#walk-weather").selectOption(weather);
   await page.waitForFunction((w) => window.__mufu.weather[w] > 0.8, weather, {
     timeout: 120000,
   });
   await page.screenshot({ path: `test-results/${weather}.png` });
 }
-await page.locator("#overview").click();
+await menuClick(page, "#menu-map");
 await page.waitForTimeout(500);
 await page.screenshot({ path: "test-results/overview.png" });
 await page.locator("#access-0").click();
 await page.evaluate(() => document.exitPointerLock());
-await page.locator("#auto").click();
+await menuClick(page, "#auto");
 const autoBefore = await page.evaluate(() => window.__mufu.state.distance);
 await page.waitForTimeout(2000);
 const autoAfter = await page.evaluate(() => window.__mufu.state.distance);
 if (autoAfter <= autoBefore) throw Error("Guided walk failed");
-await page.locator("#auto").click();
+await menuClick(page, "#auto");
 const download = page.waitForEvent("download");
-await page.locator("#postcard").click();
+await menuClick(page, "#postcard");
 await (await download).saveAs("test-results/postcard.png");
-await page.locator("#help").click();
+if (!await page.locator("#info").evaluate(n => n.open)) await page.click("#walk-menu");
 await page.screenshot({ path: "test-results/help.png" });
 await page.locator("#close-info").click();
 const report = {

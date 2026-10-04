@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import fs from "node:fs";
-import { planPose, layoutPins } from "../src/plan.js";
+import { planPose, projectPin } from "../src/plan.js";
 
 const routes = JSON.parse(fs.readFileSync(new URL("../public/world/routes.json", import.meta.url)));
 test("The aerial camera fits the walking landscape on desktop and portrait screens", () => {
@@ -21,17 +21,14 @@ test("The aerial camera fits the walking landscape on desktop and portrait scree
   }
 });
 
-test("Nearby entrance labels have separate touch targets within the screen", () => {
-  for (const [width, height] of [[1440, 900], [390, 844]]) {
-    const labels = layoutPins(Array.from({ length: 6 }, (_, index) => ({ index, x: width / 2, y: height / 2 })), width, height);
-    for (let i = 0; i < labels.length; i++) {
-      const a = labels[i];
-      assert.ok(a.x - a.width / 2 >= 0 && a.x + a.width / 2 <= width);
-      assert.ok(a.y - a.height / 2 >= 0 && a.y + a.height / 2 <= height);
-      for (const b of labels.slice(i + 1)) {
-        assert.ok(Math.abs(a.x - b.x) >= a.width || Math.abs(a.y - b.y) >= a.height,
-          `Overlapping entrance targets ${a.index}, ${b.index}`);
-      }
-    }
+test("Markers follow world projection without screen-space clamping or relocation", () => {
+  const camera = new THREE.PerspectiveCamera(40, 1.6, 2, 50000);
+  const anchor=[100,30,0];
+  for(const x of [-800,-100,200,600]) {
+    camera.position.set(x,250,500); camera.lookAt(0,0,0); camera.updateMatrixWorld();
+    const expected=new THREE.Vector3(...anchor).project(camera);
+    const pin=projectPin(anchor,camera,1440,900);
+    assert.equal(pin.x,(expected.x*.5+.5)*1440);
+    assert.equal(pin.y,(-expected.y*.5+.5)*900);
   }
 });

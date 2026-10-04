@@ -1127,3 +1127,56 @@ body.playing .brand small { display: none; }
   .plan-hint { left: 16px; bottom: 23px; max-width: 210px; line-height: 1.5; font-size: 10px; }
   .welcome { top: auto; bottom: 80px; }
 }
+
+/* The icon's centre is the projected ground anchor, in every camera pose.
+   Only label visibility changes when names are close; markers never reflow. */
+.access-pin { transform: translate(-50%, calc(-100% + 17px)); transition: none; }
+.access-pin.compact .pin-label { visibility: hidden; }
+.access-pin.compact { pointer-events: none; }
+.access-pin.compact .pin-icon, .access-pin.compact:hover .pin-label,
+.access-pin.compact:focus-visible .pin-label { pointer-events: auto; }
+.access-pin:hover .pin-label, .access-pin:focus-visible .pin-label { visibility: visible; }
+.access-pin:hover, .access-pin:focus-visible { z-index: 4; }
+body.playing header, body.playing .trail-card, body.playing .map-card,
+body.playing .bottom-panel, body.playing .memory-rail, body.playing .memory-card,
+body.playing .tour-banner, body.playing #resume, body.playing .crosshair { display: none !important; }
+#walk-environment { position: fixed; top: 22px; left: 24px; z-index: 6; display: flex;
+  align-items: center; gap: 12px; border-radius: 28px; padding: 10px 16px;
+  background: #203a35c9; backdrop-filter: blur(14px); font-size: 12px;
+  box-shadow: 0 2px 15px #0e272218; color: #fffbea; }
+#scene-time { font-variant-numeric: tabular-nums; }
+#walk-weather { border: none; background: transparent; color: inherit; cursor: pointer; font-size: 12px; padding: 0; width: auto; }
+#walk-weather option { background: #203a35; }
+.quiet-actions { position: fixed; bottom: 24px; right: 24px; display: flex; gap: 9px; z-index: 6; }
+.quiet-actions button { border-radius: 50%; width: 46px; height: 46px; background: #203a35c9;
+  backdrop-filter: blur(12px); box-shadow: 0 2px 15px #0e272218; font-size: 17px; }
+.quiet-actions svg { width: 28px; height: 28px; color: #ecdfaa; vertical-align: middle; }
+#kite-toggle[aria-pressed="true"] { background: #ead49b; color: #233f50; }
+#kite-toggle[aria-pressed="true"] svg { color: #233f50; }
+body.plan-mode .quiet-actions { bottom: 82px; }
+#explore-actions, #menu-extra { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+#explore-actions button, #menu-extra button, #menu-extra select { padding: 11px 14px; min-height: 42px;
+  background: #d6e6b515; border: 1px solid #d6e6b52e; border-radius: 9px; color: #f5f5df; width: auto; }
+#menu-extra select { max-width: 100%; background: #263f36; }
+body.playing #touch-controls { bottom: 22px; left: 24px; transform: none; z-index: 6; }
+#touch-controls button { background: #203a358c; border-radius: 50%; width: 40px; height: 40px; padding: 0; backdrop-filter: blur(8px); }
+#flight-touch { gap: 6px; margin-top: 6px; }
+@media (pointer: fine) { body.playing #touch-controls { display: none; } }
+#plan-entrances { display: none; position: fixed; left: 16px; bottom: 75px; padding: 12px;
+  width: 180px; background: #29473deb; border-radius: 12px; z-index: 5; font-size: 11px; }
+#plan-entrances summary, #photo-album summary { cursor: pointer; padding: 4px; }
+#mobile-destinations { display: grid; margin-top: 8px; }
+#mobile-destinations button { text-align: left; padding: 10px 3px; }
+#mobile-destinations button span { display: inline-block; width: 22px; }
+#photo-album { margin: 20px 0; }
+#album-photos #memory-strip { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; max-height: 320px; overflow-y: auto; margin-top: 15px; }
+#album-photos .memory-chip { width: 100%; }
+@media (max-width: 999px) { #plan-entrances { display: block; } }
+#toast { max-width: calc(100vw - 36px); pointer-events: none; }
+@media (max-width: 650px) {
+  .access-pin { transform: translate(-50%, calc(-100% + 15px)); }
+  #walk-environment { top: 16px; left: 16px; padding: 10px 13px; }
+  .quiet-actions { right: 16px; bottom: 20px; }
+  body.playing #touch-controls { left: 16px; bottom: 20px; }
+  #toast { top: 74px; width: max-content; font-size: 11px; }
+}
