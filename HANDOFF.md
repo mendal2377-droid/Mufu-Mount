@@ -7,6 +7,37 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
+**4 October 2026: imagegen-inspired forest volume.** The user's mountain-tree
+reference informed an imagegen concept and a transparent foliage atlas. The
+concept is `design/forest/forest-concept-v1.png`; exact prompts/provenance are in
+`design/forest/PROMPTS.md`. The concept is design art, not an implemented-game
+screenshot. `public/vegetation/forest-atlas-v1.png` is the runtime RGBA atlas:
+broadleaf / open broadleaf / pine / fern in a 2×2 grid. The original generated
+alpha is preserved. The user's reference screenshot is not redistributed.
+
+`src/forest-geometry.js` makes curved foliage patches, branching broadleaf/pine
+trees, fern fronds and the forty-triangle shadow proxy. `src/forest.js` owns the
+shared atlas, instancing and distance budgets: at most 160 detailed trees and
+900 middle trees, selected nearest first; the rest are cheap distant sprites.
+Detailed crowns never cast shadows. Each detailed tree stays below 2,000
+triangles and middle trees below 300. Curved normals and clustered positions
+give depth from different viewing directions. The near/middle instance colours
+are repacked with their transforms, avoiding the old colour/placement mismatch.
+
+Tree placements still come from Blender; their rendered shapes now use these
+procedural meshes instead of the exported prototype. Pine variation is an
+artistic subset of wooded placements, not a species survey; planted promenade
+trees remain broadleaf with painted bases. Hills, paths, original Blender file
+and geometry export are not changed. Atlas-mapped ferns and fuller shrubs use
+existing sampled path-margin placements outside the paving. Wind/snow continue
+through the shared weather materials.
+
+36 unit checks and a production build pass. The forest browser check covers
+rainbow road, a woodland stair section, side view, sunset and portrait layout;
+it clears the grade's entry fade for capture before judging lighting. Riverside weather checks and
+the immersion checks cover rendering and walking/kite regressions. Tests use
+software-GPU Chrome; physical-phone/hardware-GPU performance is unbenchmarked.
+
 **4 October 2026: riverside reference refinement.** The user supplied
 [Point Lookout](https://claude-creative-xbmc.vercel.app/) as a visual reference.
 It was inspected in Chrome, including its public rendering modules. Only visual
@@ -96,7 +127,7 @@ copy you write. Section 6 explains exactly how far the accuracy goes.
 ```sh
 npm ci
 npm run dev          # Vite dev server
-npm test             # 32 unit tests, no browser needed
+npm test             # 36 unit tests, no browser needed
 npm run build        # static site into dist/
 npm run preview      # serves dist on 127.0.0.1:4173
 ```
@@ -118,6 +149,7 @@ teach you the geography faster than reading code.
 | `src/memories.js` | 455 | The twenty photo frames: placement, reveal, texture budget, the morning walk |
 | `src/river-life.js` | 450 | Water shader, ships, wakes, beacon, birds |
 | `src/river-surface.js` | — | Dispersed wave bands, CPU/GLSL surface sampling, procedural foam lace |
+| `src/forest.js`, `src/forest-geometry.js` | — | Mixed tree meshes, curved foliage, atlas materials, distance budgets and shadow proxies |
 | `src/tour.js` | 348 | Camera on rails — the whole circuit and a retained legacy title preset |
 | `src/plan.js` | — | Aerial camera framing, direct world-projected entrance icons and shortcuts |
 | `src/kite.js` | — | Swallow kite, bounded free flight, ground sampling and path landing |

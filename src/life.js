@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { fernGeometry, foliagePatch } from "./forest-geometry.js";
 
 function seededRandom(seed) {
   return ()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
@@ -157,7 +158,7 @@ export function scatterAlongRoutes(routes, spacingMetres = 1.15) {
   return points;
 }
 
-export function createUndergrowth(scene, routes, shared, limit = 1400, groundHeight = null) {
+export function createUndergrowth(scene, routes, shared, limit = 1400, groundHeight = null, atlas = null) {
   const spots = scatterAlongRoutes(routes);
   const blade = new THREE.PlaneGeometry(.9, .8, 1, 4);
   blade.translate(0, .4, 0);
@@ -210,9 +211,9 @@ export function createUndergrowth(scene, routes, shared, limit = 1400, groundHei
   mesh.receiveShadow = true;
   scene.add(mesh);
 
-  const spray = new THREE.PlaneGeometry(2.3,1.9,1,3); spray.translate(0,1.4,0);
-  const sprays = [spray, spray.clone().rotateY(Math.PI/3), spray.clone().rotateY(2*Math.PI/3)];
-  const shrubMaterial = new THREE.MeshStandardMaterial({map:canopyTexture(), alphaTest:.5,
+  const spray = atlas ? foliagePatch(2.3,1.9,0,3,.4) : new THREE.PlaneGeometry(2.3,1.9,1,3); spray.translate(0,1.4,0);
+  const sprays = Array.from({length:5},(_,i)=>spray.clone().rotateY(i*2.39996).translate(Math.cos(i)*.25,(i%2)*.2,Math.sin(i)*.25));
+  const shrubMaterial = new THREE.MeshStandardMaterial({map:atlas||canopyTexture(), alphaTest:.4,
     color:0xaec48b, roughness:.95, side:THREE.DoubleSide});
   shrubMaterial.onBeforeCompile = shader => {
     shader.uniforms.windTime=shared.time; shader.uniforms.uStorm=shared.storm; shader.uniforms.uSnow=shared.snow;
@@ -226,6 +227,10 @@ export function createUndergrowth(scene, routes, shared, limit = 1400, groundHei
   shrubs.frustumCulled=false; shrubs.receiveShadow=true; shrubs.count=0; scene.add(shrubs);
   const stems=new THREE.InstancedMesh(twigGeometry(),new THREE.MeshStandardMaterial({color:0x665c47,roughness:1}),100);
   stems.frustumCulled=false; stems.count=0; scene.add(stems);
+  const fernMaterial=shrubMaterial.clone();fernMaterial.onBeforeCompile=shrubMaterial.onBeforeCompile;
+  fernMaterial.customProgramCacheKey=()=>"mufu-fern-wind";
+  const ferns=new THREE.InstancedMesh(fernGeometry(),fernMaterial,280);
+  ferns.name="Layered woodland ferns";ferns.frustumCulled=false;ferns.receiveShadow=true;ferns.count=0;scene.add(ferns);
   const heights = new Map();
 
   const dummy = new THREE.Object3D();
@@ -233,9 +238,10 @@ export function createUndergrowth(scene, routes, shared, limit = 1400, groundHei
     mesh,
     shrubs,
     stems,
+    ferns,
     spots,
     update(camera, range = 34) {
-      let n = 0, shrubCount=0;
+      let n = 0, shrubCount=0, fernCount=0;
       const r2 = range * range;
       for (let i = 0; i < spots.length && n < limit; i++) {
         const s = spots[i];
@@ -252,6 +258,9 @@ export function createUndergrowth(scene, routes, shared, limit = 1400, groundHei
         dummy.updateMatrix();
         mesh.setMatrixAt(n++, dummy.matrix);
         mesh.setColorAt(n-1,new THREE.Color().setRGB(.7+(i%5)*.06,.78+(i%4)*.04,.63+(i%7)*.04));
+        if(i%3===0 && fernCount<280 && atlas) {
+          dummy.scale.setScalar(.45+s[3]*.55);dummy.updateMatrix();ferns.setMatrixAt(fernCount++,dummy.matrix);
+        }
         if(i%13===0 && shrubCount<100) {
           dummy.scale.setScalar(.55+s[3]*.55); dummy.updateMatrix();
           shrubs.setMatrixAt(shrubCount,dummy.matrix); stems.setMatrixAt(shrubCount,dummy.matrix); shrubCount++;
@@ -261,6 +270,7 @@ export function createUndergrowth(scene, routes, shared, limit = 1400, groundHei
       mesh.instanceMatrix.needsUpdate = true;
       if(mesh.instanceColor) mesh.instanceColor.needsUpdate=true;
       shrubs.count=stems.count=shrubCount;
+      ferns.count=fernCount;ferns.instanceMatrix.needsUpdate=true;
       shrubs.instanceMatrix.needsUpdate=stems.instanceMatrix.needsUpdate=true;
       return n;
     },

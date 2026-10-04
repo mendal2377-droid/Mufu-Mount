@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   nearestOnRoute,
   closestRoute,
@@ -18,7 +17,8 @@ import {
   WALK_END_MINUTES,
 } from "./sky.js";
 import { createMemories, createMemoryWalk } from "./memories.js";
-import { createUndergrowth, createMotes, createFallingLeaves, canopyTexture, leafTexture, twigGeometry } from "./life.js";
+import { createUndergrowth, createMotes, createFallingLeaves } from "./life.js";
+import { createForest } from "./forest.js";
 import { createCameraFeel } from "./camera-feel.js";
 import { createCinematic, wholeCircuit } from "./tour.js";
 import { createPlan, planPose } from "./plan.js";
@@ -113,10 +113,7 @@ let renderer,
   cinematic,
   particles,
   rainLines,
-  forestLOD,
-  shadowTrees,
-  treeMeshes = [],
-  nearTrees = [],
+  forest,
   returnPose,
   geometryBytes = 0;
 const weather = { dawn: 0, sunset: 0, storm: 0, snow: 0 };
@@ -342,207 +339,12 @@ function carveOpenings(mesh) {
 }
 
 /** Concatenate a few small geometries, indexed or not, into one. */
-function mergeSimpleGeometries(list) {
-  const position = [],
-    normal = [],
-    index = [];
-  let offset = 0;
-  for (const g of list) {
-    const p = g.attributes.position;
-    position.push(...p.array);
-    normal.push(...g.attributes.normal.array);
-    if (g.index) {
-      for (const i of g.index.array) index.push(i + offset);
-    } else {
-      for (let i = 0; i < p.count; i++) index.push(i + offset);
-    }
-    offset += p.count;
-  }
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
-  merged.setAttribute("normal", new THREE.Float32BufferAttribute(normal, 3));
-  merged.setIndex(index);
-  return merged;
-}
-
-function buildTrees(trees, buffer) {
-
-  // Shared low-poly crowns, with full-height trunks. Placements come from Blender.
-  const mainTrunk = new THREE.CylinderGeometry(0.11, 0.2, 5.7, 5);
-  mainTrunk.translate(0, 2.85, 0);
-  const branches=twigGeometry(3.1,2.1,3.4);
-  const trunkGeo=mergeGeometries([mainTrunk,branches]);
-  const lobes=Array.from({length:9},(_,i)=> {
-    const g=new THREE.PlaneGeometry(3.8,4.3,1,3);
-    g.rotateY(i*2.4);
-    g.translate(Math.cos(i*2.4)*1.2,5.6+(i%3)*1.1,Math.sin(i*2.4)*1.2);
-    return g;
-  });
-  const crownGeo=mergeGeometries(lobes);
-  const crownMaterial=material("Leaf sprays",[.36,.47,.23]);
-  crownMaterial.map=canopyTexture(); crownMaterial.alphaTest=.45;
-  const trunk = new THREE.InstancedMesh(
-    trunkGeo,
-    material("Bark", [0.14, 0.095, 0.055]),
-    trees.length,
-  );
-  const crown = new THREE.InstancedMesh(
-    crownGeo,
-    crownMaterial,
-    trees.length,
-  );
-  trees.forEach((t, i) => {
-    dummy.position.set(t[0], t[1], t[2]);
-    dummy.scale.set(t[3], t[4], t[3]);
-    dummy.rotation.y = i * 2.39;
-    dummy.updateMatrix();
-    trunk.setMatrixAt(i, dummy.matrix);
-    crown.setMatrixAt(i, dummy.matrix);
-    crown.setColorAt(
-      i,
-      new THREE.Color().setRGB(
-        0.7 + (i % 5) * 0.07,
-        0.8 + (i % 3) * 0.06,
-        0.65 + (i % 7) * 0.045,
-      ),
-    );
-  });
-  trunk.frustumCulled = false;
-  crown.frustumCulled = false;
-  crown.receiveShadow = true;
-  scene.add(trunk, crown);
-  treeMeshes = [trunk, crown];
-  const leafMap=leafTexture();
-  nearTrees = (world.treePrototype || []).map((rec) => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute(
-      "position",
-      new THREE.BufferAttribute(
-        new Float32Array(buffer, rec.positions.offset, rec.positions.count),
-        3,
-      ),
-    );
-    g.setAttribute(
-      "normal",
-      new THREE.BufferAttribute(
-        new Float32Array(buffer, rec.normals.offset, rec.normals.count),
-        3,
-      ),
-    );
-    g.setIndex(
-      new THREE.BufferAttribute(
-        new Uint32Array(buffer, rec.indices.offset, rec.indices.count),
-        1,
-      ),
-    );
-    const treeMaterial=material(rec.name, rec.color);
-    if(/leaf/i.test(rec.name)) {
-      // Exported leaves are independent rhombus quads (four vertices, six
-      // indices). Preserve their positions; soften the shape and add veins.
-      const uv=new Float32Array(g.attributes.position.count*2);
-      for(let i=0;i<g.attributes.position.count;i+=4) uv.set([0,0,1,0,1,1,0,1],i*2);
-      g.setAttribute("uv",new THREE.BufferAttribute(uv,2));
-      treeMaterial.map=leafMap;treeMaterial.alphaTest=.4;treeMaterial.color.multiplyScalar(1.65);
-    }
-    const m = new THREE.InstancedMesh(g, treeMaterial, 220);
-    m.frustumCulled = false;
-    m.count = 0;
-    // The detailed crowns are far too heavy to push through the shadow map;
-    // shadowTrees below stands in for them.
-    m.castShadow = false;
-    m.receiveShadow = true;
-    scene.add(m);
-    return m;
-  });
-
-  // A forty-triangle stand-in for each nearby tree, drawn with no colour or
-  // depth writes: invisible in the beauty pass, but it casts the shadow.
-  const proxyCrown = new THREE.IcosahedronGeometry(1,0).scale(2.4,3.6,2.4).translate(0,6.9,0);
-  const proxyGeo = mergeSimpleGeometries([mainTrunk.clone(), proxyCrown]);
-  shadowTrees = new THREE.InstancedMesh(
-    proxyGeo,
-    new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
-    220,
-  );
-  shadowTrees.name = "Near-tree shadow proxies";
-  shadowTrees.frustumCulled = false;
-  shadowTrees.castShadow = true;
-  shadowTrees.receiveShadow = false;
-  shadowTrees.count = 0;
-  scene.add(shadowTrees);
-  const fg = new THREE.BufferGeometry();
-  fg.setAttribute(
-    "position",
-    new THREE.BufferAttribute(new Float32Array(trees.length * 3), 3),
-  );
-  fg.setAttribute(
-    "size",
-    new THREE.BufferAttribute(new Float32Array(trees.length), 1),
-  );
-  fg.setDrawRange(0, 0);
-  forestLOD = new THREE.Points(
-    fg,
-    new THREE.ShaderMaterial({
-      uniforms: {
-        snow: u.snow,
-        storm: u.storm,
-        sunset: u.sunset,
-        dawn: u.dawn,
-        viewport: { value: innerHeight },
-        canopy: { value: canopyTexture(true) },
-      },
-      vertexShader:
-        "attribute float size;uniform float viewport;varying float shade;varying float distanceToEye;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);distanceToEye=-mv.z;shade=fract(sin(position.x*.7+position.z)*43758.5);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(size*projectionMatrix[1][1]*viewport*.5/max(1.,-mv.z),1.,120.);}",
-      fragmentShader:
-        "uniform sampler2D canopy;uniform float snow,storm,sunset,dawn;varying float shade;varying float distanceToEye;void main(){vec4 spray=texture2D(canopy,gl_PointCoord);if(spray.a<.5)discard;vec2 p=gl_PointCoord*2.-1.;float nz=sqrt(max(0.,1.-dot(p,p)));float light=.5+max(0.,dot(vec3(p.x,-p.y,nz),normalize(vec3(-.4,.6,.7))))*.5;vec3 green=mix(vec3(.12,.22,.055),vec3(.26,.36,.13),shade)*(.55+spray.g*.9);green=mix(green,vec3(.42,.30,.13),sunset*.35);green=mix(green,vec3(.69,.77,.75),snow*max(0.,-p.y)*.8);green*=light*(1.-storm*.3);green=mix(green,green*vec3(.30,.34,.52),dawn*.85);gl_FragColor=vec4(green,1.);}",
-    }),
-  );
-  forestLOD.frustumCulled = false;
-  scene.add(forestLOD);
+async function buildTrees(trees) {
+  forest = await createForest(scene, u, trees, material);
 }
 
 function updateTrees() {
-  let far = 0,
-    near = 0,
-    forest = 0;
-  const fp = forestLOD.geometry.attributes.position,
-    fs = forestLOD.geometry.attributes.size;
-  for (let i = 0; i < world.trees.length; i++) {
-    const t = world.trees[i],
-      d = Math.hypot(t[0] - camera.position.x, t[1] + 6*t[4] - camera.position.y, t[2] - camera.position.z);
-    if (!state.overview && !state.flying && d > 1900) continue;
-    dummy.position.set(t[0], t[1], t[2]);
-    dummy.scale.set(t[3], t[4], t[3]);
-    dummy.rotation.y = i * 2.39;
-    dummy.updateMatrix();
-    if (!state.overview && d < 115 && near < 160 && nearTrees.length) {
-      nearTrees.forEach((m) => m.setMatrixAt(near, dummy.matrix));
-      shadowTrees.setMatrixAt(near, dummy.matrix);
-      near++;
-    } else if (t[5] && (state.overview || d > 320)) {
-      fp.setXYZ(forest, t[0], t[1] + 6 * t[4], t[2]);
-      fs.setX(forest, 10 * t[3]);
-      forest++;
-    } else {
-      treeMeshes.forEach((m) => m.setMatrixAt(far, dummy.matrix));
-      far++;
-    }
-  }
-  treeMeshes.forEach((m) => {
-    m.count = far;
-    m.instanceMatrix.needsUpdate = true;
-  });
-  nearTrees.forEach((m) => {
-    m.count = near;
-    m.instanceMatrix.needsUpdate = true;
-  });
-  shadowTrees.count = near;
-  shadowTrees.instanceMatrix.needsUpdate = true;
-  fp.needsUpdate = true;
-  fs.needsUpdate = true;
-  forestLOD.geometry.setDrawRange(0, forest);
-  forestLOD.material.uniforms.viewport.value =
-    innerHeight * renderer.getPixelRatio();
+  forest.update(camera, state, renderer);
 }
 
 function createParticles() {
@@ -776,14 +578,14 @@ async function load() {
       scene.add(mesh);
     }
     if (railsRemoved) console.info(`Mufu: opened ${railsRemoved} rail triangles`);
-    buildTrees(world.trees, buffer);
+    await buildTrees(world.trees);
     createSky();
     createParticles();
 
     progress(86, "Letting the grass back in");
     const groundHeight = createGroundSampler(scene);
     kite = createBirdKite(camera, scene, u, routes, groundHeight);
-    undergrowth = createUndergrowth(scene, routes, u, 1400, groundHeight);
+    undergrowth = createUndergrowth(scene, routes, u, 1400, groundHeight, forest.atlas);
     motes = createMotes(scene, u);
     leaves = createFallingLeaves(scene, u);
 
@@ -851,6 +653,7 @@ async function load() {
         triangles: renderer.info.render.triangles,
         geometryBytes,
         treeCount: world.trees.length,
+        vegetation: forest.getStats(),
         audioReady: audio.started,
         audioEnabled: audio.enabled,
         audioState: audio.ctx?.state,
@@ -860,6 +663,7 @@ async function load() {
         quality: state.quality,
         shadows: renderer.shadowMap.enabled,
         undergrowth: undergrowth.mesh.count,
+        ferns: undergrowth.ferns.count,
       }),
     };
   } catch (e) {
@@ -1706,6 +1510,7 @@ function frame(elapsed) {
   } else if (state.overview) {
     undergrowth.mesh.count = 0;
     undergrowth.shrubs.count = undergrowth.stems.count = 0;
+    undergrowth.ferns.count = 0;
   }
 
   if (memories) {

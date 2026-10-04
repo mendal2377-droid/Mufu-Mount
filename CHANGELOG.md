@@ -1,5 +1,24 @@
 # Change log
 
+## 2026-10-04 — imagegen forest volume
+
+Generated a forest concept from the user's mountain-tree reference and a
+transparent runtime foliage atlas. Curved clusters, branching broadleaf trees
+and tiered pines replace the previous rendered prototypes and crossed mid-tree
+crowns. Fuller shrubs and arching ferns add layered undergrowth. Pine variations
+stay in wooded placements; planted promenade trees keep broadleaf shapes and
+painted trunk bases. Wind and seasonal materials remain interactive.
+
+The forest renderer selects the nearest trees first, caps detailed/middle
+trees at 160/900, and packs instance colours with their transforms. Distant
+trees retain inexpensive sprites; detailed foliage never casts shadows. The
+forty-triangle shadow proxy is preserved. Model placements, trail geometry,
+Blender export and private photographs are unchanged.
+
+Saved the concept, runtime atlas, exact imagegen prompts and provenance. Added
+geometry depth/budget/UV/alpha tests and a forest browser check for multiple
+camera directions, sunset and portrait layout.
+
 ## 2026-10-04 — riverside reference refinement
 
 Inspected the user's Point Lookout reference and adapted its water/foliage

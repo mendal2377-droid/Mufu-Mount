@@ -48,6 +48,15 @@ A camera-centred geometric wave patch adds moving swells near the viewer. Twelve
 
 The [Point Lookout reference supplied by the user](https://claude-creative-xbmc.vercel.app/) informed this pass's broken foam, water detail and fine foliage. Mufu uses its own shaders, procedural textures and existing geometry. The reference's Australian coastline, source code and assets were not imported. This is a lightweight analytic river surface, not an FFT ocean or a measured river simulation.
 
+The mountain vegetation now uses an imagegen foliage atlas on curved clusters,
+with branching broadleaf trees, a smaller proportion of tiered pines, fuller
+shrubs and layered ferns. Cluster positions and curved normals give crowns
+depth as you walk or fly around them. Species variation is artistic. The
+[generated forest concept and exact prompts](design/forest/PROMPTS.md) document
+the design direction; the concept is not a screenshot of the game. Near detail
+is capped at 160 trees, middle detail at 900, and detailed crowns never cast
+shadows. Existing placements and paths remain the model's source.
+
 ## How it is rendered
 
 Everything is drawn into one linear HDR buffer and tone mapped exactly once, at the end, so the sky dome, the water and the lit scene agree with each other:
@@ -93,11 +102,17 @@ node tests/tour-browser.mjs
 node tests/plan-browser.mjs
 MUFU_TEST_URL=http://127.0.0.1:4173 node tests/immersion-browser.mjs
 MUFU_TEST_URL=http://127.0.0.1:4173 node tests/riverside-visual.mjs
+MUFU_TEST_URL=http://127.0.0.1:4173 node tests/forest-browser.mjs
 ```
 
-`npm test` includes 32 checks: wave gradients/filtering/bounds/time evolution, flight movement/bounds/ground clearance/landing, anchored pin projection, promenade planting, route constraint maths, shipping-lane geometry, the two camera tours (every leg names a route that exists, ground legs move at a walking pace rather than a sprint, aerial legs stay over the modelled world and look downwards, the circuit touches all five corridors and runs from dawn to sunset, and the title loop reaches the river), and the memory data: that every published frame has an image and a thumbnail, that none of them still carries an EXIF segment, that the times run in order from 06:16 to 08:26, and that each frame stands outside the walkable corridor but within reach of it.
+`npm test` includes 36 checks: forest geometry depth/budgets/atlas cells/alpha, wave gradients/filtering/bounds/time evolution, flight movement/bounds/ground clearance/landing, anchored pin projection, promenade planting, route constraint maths, shipping-lane geometry, the two camera tours (every leg names a route that exists, ground legs move at a walking pace rather than a sprint, aerial legs stay over the modelled world and look downwards, the circuit touches all five corridors and runs from dawn to sunset, and the title loop reaches the river), and the memory data: that every published frame has an image and a thumbnail, that none of them still carries an EXIF segment, that the times run in order from 06:16 to 08:26, and that each frame stands outside the walkable corridor but within reach of it.
 
 `riverside-visual` captures the plan, near water, forest and all four weather moods using deterministic scene time, checks shader/browser errors, and verifies shipping and beacon motion. It defaults to port 4182 and can target production with `MUFU_PUBLIC=1` and `MUFU_TEST_URL`. These are software-GPU Chrome checks; physical-phone and hardware-GPU performance have not been benchmarked.
+
+`forest-browser` captures the rainbow road, a woodland stair section, a side
+view, sunset and portrait layout, verifies detail budgets and atlas loading,
+and checks rendering errors. It uses the same URL/proxy options as the riverside
+check. Entry fades are cleared for screenshots while real-time rendering is paused.
 
 The browser checks expect the preview server on `http://127.0.0.1:4173` (or `MUFU_TEST_URL`) and installed Chrome. `plan-browser` checks all six entrances, walking movement, orbit/zoom/reset, weather carry-over, keyboard entry, tour return and mobile layout. `browser-check` covers field notes, weather, guided movement and postcards. `river-browser` checks moving vessels and a rotating beacon. `memory-browser` checks photographs and the morning walk. `tour-browser` checks plan entry and the full circuit. `immersion-browser` verifies anchored icon centres during orbit, all six quiet walking entrances, menu photos/tours, flight and landing, weather, all six touch entrances and touch climb/landing; it defaults to preview port 4182. Browser QA may set `window.__mufu.paused = true` and drive `step()` to avoid queuing real-time frames on a software GPU. Screenshots and JSON reports go into ignored `test-results/`.
 
