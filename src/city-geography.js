@@ -43,3 +43,22 @@ export function cityHills(places) {
 export function cityHeight(x,z,hills) {
   return 1.2+hills.reduce((h,p)=>h+p.height*Math.exp(-((x-p.x)**2+(z-p.z)**2)/(p.radius*p.radius*.42)),0);
 }
+
+// Keep centreline rivers for shipping; mapped banks take priority for rendering
+// and ground carving, including dry river islands inside the multipolygon.
+export function cityRiverSurfaces(data){
+ const mapped=data.lakes.filter(l=>l.water==='river').flatMap(l=>l.outer.map(r=>r.map(c=>cityPoint(c,data))));
+ const output=[];
+ for(const r of data.rivers){const points=r.points.map(c=>cityPoint(c,data)),width=r.name==='长江'?110:5;let run=[];
+  const flush=()=>{if(run.length>1)output.push({...r,points:run,width});run=[];};
+  for(let i=1;i<points.length;i++){
+   const a=points[i-1],b=points[i],count=Math.max(1,Math.ceil(Math.hypot(b[0]-a[0],b[2]-a[2])/8));
+   for(let j=0;j<count;j++){
+    const at=t=>[a[0]+(b[0]-a[0])*t,0,a[2]+(b[2]-a[2])*t];
+    const mid=at((j+.5)/count);
+    if(mapped.some(ring=>inRing(mid[0],mid[2],ring))){flush();continue;}
+    if(!run.length)run.push(at(j/count));run.push(at((j+1)/count));
+   }
+  }flush();
+ }return output;
+}

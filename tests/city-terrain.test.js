@@ -1,17 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {cityPoint} from '../src/city-geography.js';
+import {cityPoint,cityRiverSurfaces} from '../src/city-geography.js';
 import {createCityTerrain} from '../src/city-terrain.js';
 
 const data=JSON.parse(fs.readFileSync(new URL('../public/city/nanjing.json',import.meta.url)));
 const places=data.landmarks.map(p=>({...p,position:cityPoint(p.coord,data)}));
-const rivers=data.rivers.map(r=>({...r,points:r.points.map(p=>cityPoint(p,data)),width:r.name==='长江'?110:5}));
+const rivers=cityRiverSurfaces(data);
 const lakes=data.lakes.map(l=>({...l,outer:l.outer.map(r=>r.map(p=>cityPoint(p,data))),inner:l.inner.map(r=>r.map(p=>cityPoint(p,data)))}));
 const terrain=createCityTerrain(places,rivers,lakes,data.boundary.map(r=>r.map(p=>cityPoint(p,data))));
 
 test('Atlas relief gives mountain walks substantial elevation without changing geographic anchors',()=>{
-  for(const id of ['zijin','niushou','qixia','tangshan']){
+  for(const id of ['zijin','niushou','qixia']){
     const p=places.find(p=>p.id===id),[x,,z]=p.position;
     assert.ok(terrain.ground(x,z)>90,id);
     assert.deepEqual(p.position,cityPoint(p.coord,data));
@@ -24,7 +24,7 @@ test('Atlas relief gives mountain walks substantial elevation without changing g
 test('A single finite terrain mesh stays bounded and walking samples match rendered triangles',()=>{
   const g=terrain.geometry,p=g.attributes.position,ids=g.index.array;
   assert.equal(terrain.stats.singleSurface,true);
-  assert.ok(terrain.stats.terrainTriangles>100000&&terrain.stats.terrainTriangles<400000);
+  assert.ok(terrain.stats.terrainTriangles>20000&&terrain.stats.terrainTriangles<400000);
   assert.ok(Array.from(p.array).every(Number.isFinite));
   assert.ok(Array.from(g.attributes.normal.array).every(Number.isFinite));
   for(let i=0;i<ids.length;i+=Math.ceil(ids.length/900/3)*3){
@@ -58,4 +58,11 @@ test('lowland landmark forecourts keep their architecture above the approach gro
     const [x,,z]=places.find(p=>p.id===id).position,base=terrain.ground(x,z);
     for(const dz of [20,35,50])assert.ok(terrain.ground(x,z+dz)<base+1.2,id+' approach rise');
   }
+});
+
+test('Nanjing Eye stands above mapped Jiajiang water while Jiangxinzhou remains dry',()=>{
+ const point=coord=>cityPoint(coord,data);
+ const [x,,z]=point(data.landmarks.find(p=>p.id==='eye').coord);
+ assert.equal(terrain.wet(x,z),true);assert.ok(terrain.ground(x,z)<1.31);
+ const [ix,,iz]=point([118.686,32.012]);assert.equal(terrain.wet(ix,iz),false);
 });

@@ -13,9 +13,11 @@ Raw `osm-*.json` snapshots and derived `public/city/nanjing.json` are ©
 - Municipal outline: [OSM relation 2131524](https://www.openstreetmap.org/relation/2131524).
 - Yangtze / Qinhuai centerlines: recorded Overpass query. Centerlines do not establish river widths.
 - Shijiu, Gucheng, Mochou lake rings: relations 14305804, 18018554, 18231223.
-- Landmarks: approximate centers of mapped buildings, parks and historic sites. Matching stations were rejected when landmark features existed. Gaochun and Tangshan instead use the vicinity of named transit stops and are explicitly approximate neighborhood entries.
+- Landmarks: approximate centers of mapped buildings, parks and historic sites. Matching stations were rejected when landmark features existed. Gaochun and Tangshan are excluded from the published central-city window. Original source snapshots are retained.
 - Third Yangtze bridge: [Wikidata Q3540210](https://www.wikidata.org/wiki/Q3540210), CC0.
-- Xuanwu Lake: [public map coordinate](https://mapcarta.com/16226832). Its hand-sketched outline and islands are marked `inferred: true`; full OSM requests were rate-limited.
+- Xuanwu Lake: [OSM relation 2138994](https://www.openstreetmap.org/relation/2138994), full shoreline and seven island rings downloaded 2026-10-05. The published outline is simplified from these nodes and is marked `inferred: false`.
+- Jiajiang / western Yangtze water surface: [OSM relation 2538928](https://www.openstreetmap.org/relation/2538928), clipped to the central viewing window, with river islands preserved.
+- Nanjing Eye alignment: [OSM way 321392362](https://www.openstreetmap.org/way/321392362), using its mapped straight crossing; public node 3281370485 remains the landmark anchor. Ring foundations and cable geometry follow the [architect interview](https://www.chinaasc.org.cn/news/104499.html); structural dimensions remain exaggerated for the atlas.
 - Laomendong: anchor inferred within official district bounds, from the [Nanjing local-history office](https://dfz.nanjing.gov.cn/gzdt/202411/t20241101_4998828.html).
 
 Reproduce retained snapshots: `node tools/research/fetch-nanjing.mjs`, then

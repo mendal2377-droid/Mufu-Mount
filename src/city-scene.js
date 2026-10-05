@@ -1,17 +1,17 @@
 import * as THREE from "three";
 import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
-import {cityPoint,inRing,ribbon,distanceToLine} from "./city-geography.js";
+import {cityPoint,inRing,ribbon,distanceToLine,cityRiverSurfaces} from "./city-geography.js";
 import {createCityTerrain} from './city-terrain.js';
 import {createCityLandscape} from './city-landscape.js';
 import {paintCityWater} from './city-art.js';
-import {landmarkDetails,bridgeDetails} from './city-landmarks.js';
+import {landmarkDetails,bridgeDetails,archWall} from './city-landmarks.js';
 import {randomSeed} from "./forest-geometry.js";
 
 export function buildCityScene(data, shared, makeMaterial) {
   const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xc4d5c4,.00003);
   const places=data.landmarks.map(p=>({...p,position:cityPoint(p.coord,data)}));
   const rings=data.boundary.map(r=>r.map(p=>cityPoint(p,data)));
-  const riverLines=data.rivers.map(r=>({...r,points:r.points.map(p=>cityPoint(p,data)),width:r.name==='长江'?110:5}));
+  const riverLines=cityRiverSurfaces(data);
   const lakes=data.lakes.map(l=>({...l,outer:l.outer.map(r=>r.map(p=>cityPoint(p,data))),inner:l.inner.map(r=>r.map(p=>cityPoint(p,data)))}));
   const terrain=createCityTerrain(places,riverLines,lakes,rings),{hills,ground,wet}=terrain;
   const materials={
@@ -60,9 +60,9 @@ export function buildCityScene(data, shared, makeMaterial) {
   }
   const roof=primitive('roof',()=>{
     const g=new THREE.BufferGeometry(),vertices=[];
-    const xs=[-.62,-.34,.34,.62],zs=[-.58,-.28,0,.28,.58];
-    const height=(x,z)=>.42*(1-Math.abs(z)/.58)*(Math.abs(x)>.34?(.62-Math.abs(x))/.28:1)
-      +.065*(Math.abs(x)/.62)**4*(Math.abs(z)/.58)**4;
+    const xs=[-.62,-.50,-.34,0,.34,.50,.62],zs=[-.58,-.46,-.30,-.14,0,.14,.30,.46,.58];
+    const height=(x,z)=>.48*(1-Math.abs(z)/.58)**1.55*(Math.abs(x)>.34?(.62-Math.abs(x))/.28:1)
+      +.13*(Math.abs(x)/.62)**6*(Math.abs(z)/.58)**4;
     for(let i=0;i<xs.length-1;i++)for(let j=0;j<zs.length-1;j++){
       const a=[xs[i],height(xs[i],zs[j]),zs[j]],b=[xs[i+1],height(xs[i+1],zs[j]),zs[j]],
         c=[xs[i],height(xs[i],zs[j+1]),zs[j+1]],d=[xs[i+1],height(xs[i+1],zs[j+1]),zs[j+1]];
@@ -189,13 +189,14 @@ export function buildCityScene(data, shared, makeMaterial) {
         a=cityPoint([118.73127,32.12030],data);b=cityPoint([118.74579,32.11090],data);
         void e;void near;
       }else if(p.kind==='cable'){a=[x-95,0,z-50];b=[x+95,0,z+50];}
+      else if(p.bridgePath){a=cityPoint(p.bridgePath[9],data);b=cityPoint(p.bridgePath.at(-1),data);}
       const length=Math.hypot(b[0]-a[0],b[2]-a[2]),yaw=Math.atan2(b[0]-a[0],b[2]-a[2]);
       const deck=Math.max(p.kind==='eye'?10:14,...Array.from({length:21},(_,i)=>ground(a[0]+(b[0]-a[0])*i/20,b[2]+(a[2]-b[2])*(1-i/20))+3));
-      block(x,deck-1,z,10,1,length,'stone',yaw);
+      block((a[0]+b[0])/2,deck-1,(a[2]+b[2])/2,10,1,length,'stone',yaw);
       function bp(t,side=0,h=deck){const px=a[0]+(b[0]-a[0])*t,pz=a[2]+(b[2]-a[2])*t;
         return [px+Math.cos(yaw)*side,h,pz-Math.sin(yaw)*side];}
       for(let i=0;i<=10;i++){
-        const t=i/10,pos=bp(t);block(pos[0],1.2,pos[2],4,deck-1.2,5,'stone',yaw);
+        const t=i/10,pos=bp(t);if(p.kind!=='eye')block(pos[0],1.2,pos[2],4,deck-1.2,5,'stone',yaw);
         for(const side of [-1,1]){
           beam(bp(t,side*5,deck+1),bp(Math.min(1,t+.1),side*5,deck+1),.18,'white');
           if(p.kind==='truss'&&i<10){beam(bp(t,side*4,deck-1),bp(t+.1,side*4,deck-6),.45,'glass');
@@ -215,7 +216,16 @@ export function buildCityScene(data, shared, makeMaterial) {
         for(const side of [-1,1]){block(x+side*8.4,yy,zz,.4,1.8,.4,'white');
           add(sphere,'white',[x+side*8.4,yy+1.9,zz],[.35,.35,.35]);
           if(i)beam([x+side*8.4,yy+1.6,zz],[x+side*8.4,yy+1.15,zz+2.1],.16,'white');}}
-      hall(x,base+10.8,z+7,22,16,9,'blue');
+      // White memorial hall with three portals and blue hip roofs.
+      const hallY=base+10.8;
+      block(x,hallY,z+3,27,10,14,'white');
+      const facade=archWall(27,10,2,[-8,0,8].map(v=>({x:v,r:2.3,spring:4.2})));
+      add(facade,'white',[x,hallY,z+11.5]);facade.dispose();
+      for(const dx of [-8,0,8])block(x+dx,hallY,z+10.1,3.8,6.4,.25,'roof');
+      add(roof,'blue',[x,hallY+10,z+3],[32,8,21]);
+      block(x,hallY+6,z-8,16,9,9,'white');add(roof,'blue',[x,hallY+15,z-8],[22,7,14]);
+      block(x,hallY+8,z+12.6,8,1.4,.3,'blue');
+      for(const dx of [-12,12])block(x+dx,hallY,z+12.3,1,10,1,'white');
       block(x,base,z+61,16,.12,8,'white');
       // Stop outside the main hall; keep the steps visible rather than paving over them.
       walk=Array.from({length:50},(_,i)=>[x,base+Math.max(0,Math.ceil((i-7)/2.1))*.45+.18,z+65-i]);
@@ -248,7 +258,7 @@ export function buildCityScene(data, shared, makeMaterial) {
       // Sample the same relief as the bank, so this walk stays above the water.
       const r=lakes.find(l=>l.id===p.id)?.outer[0];
       if(r?.length){
-        const start=Math.floor(r.length*.18),end=Math.max(start+2,Math.floor(r.length*.40));
+        const start=Math.floor(r.length*.48),end=Math.max(start+2,Math.floor(r.length*.65));
         const shore=[];
         for(let i=start;i<=end;i++){
           const a=r[i%r.length],b=r[(i+1)%r.length],length=Math.hypot(b[0]-a[0],b[2]-a[2])||1;
@@ -260,7 +270,7 @@ export function buildCityScene(data, shared, makeMaterial) {
         }
         if(shore.length>1)walk=shore;
         const centre=walk[Math.floor(walk.length*.55)];p.position=centre.slice();
-        const [sx,,sz]=centre;hall(sx+25,Math.max(1.7,ground(sx+25,sz+20)),sz+20,13,10,7);
+        // Keep the lake approach open; an invented pavilion previously enclosed the arrival.
         // A scenic balustrade follows the public shoreline's dry side. Its
         // shape is artistic; the paving remains a clear six-unit corridor.
         for(let i=1;i<walk.length;i++){
@@ -285,13 +295,14 @@ export function buildCityScene(data, shared, makeMaterial) {
     walk.forEach(pt=>{if(!Number.isFinite(pt[1]))pt[1]=1.5;});
     p.route=routes.length;routes.push({...route(walk),name:p.name});
     const frontEntry=['palace','zifeng','niushou','qixia'].includes(p.id);
-    const spawnIndex=p.id==='qixia'?20:frontEntry?0:p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
-    p.spawn=walk[spawnIndex].slice();p.spawn[1]+=1.7;
+    const spawnIndex=p.kind==='eye'?40:['zhongshan','xiaoling'].includes(p.id)?0:p.id==='qixia'?20:frontEntry?0:p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
+    p.spawn=walk[spawnIndex].slice();p.spawn[1]=Math.max(p.spawn[1]+1.7,ground(p.spawn[0],p.spawn[2])+2.05);
     const headingIndex=spawnIndex>walk.length-7?spawnIndex-6:spawnIndex+6;
     p.look=p.kind==='mount'?walk[headingIndex].slice():p.position.slice();
     // A downhill bend can be far below the eye. Enter looking along its heading
     // with a level horizon, rather than staring into the immediate ground.
-    if(p.kind==='mount')p.look[1]=p.spawn[1]-.3;else p.look[1]+=p.kind==='skyline'?48:5;
+    if(['truss','cable','eye'].includes(p.kind)){p.look=walk[Math.min(spawnIndex+12,walk.length-1)].slice();p.look[1]=p.spawn[1]+(p.kind==='eye'?6:.4);}
+    else if(p.kind==='mount')p.look[1]=p.spawn[1]-.3;else p.look[1]+=p.kind==='skyline'?48:5;
     if(p.kind!=='mausoleum'){const path=ribbon(walk,6,.04),vertices=path.attributes.position;
       if(!['wall','truss','cable','eye'].includes(p.kind))for(let i=0;i<vertices.count;i++)vertices.setY(i,Math.max(vertices.getY(i),ground(vertices.getX(i),vertices.getZ(i))+.16));
       path.computeVertexNormals();add(path,'stone');path.dispose();}
@@ -319,7 +330,7 @@ export function buildCityScene(data, shared, makeMaterial) {
   for(let i=0;i<1800;i++){
     const gx=Math.floor((random()-.5)*15)*100,gz=Math.floor((random()-.5)*13)*100;
     const x=gx+18+random()*65,z=gz+18+random()*65;
-    if(wet(x,z)||terrain.relief(x,z)>8||places.some(p=>Math.hypot(x-p.position[0],z-p.position[2])<95))continue;
+    if(wet(x,z)||terrain.relief(x,z)>8||routes.some(r=>distanceToLine(x,z,r.points)<30)||places.some(p=>Math.hypot(x-p.position[0],z-p.position[2])<95))continue;
     const old=places.find(p=>p.id==='qinhuai').position,modern=places.find(p=>p.id==='zifeng').position;
     const historic=Math.hypot(x-old[0],z-old[2])<280,cbd=Math.hypot(x-modern[0],z-modern[2])<180;
     const h=historic?4+random()*5:cbd?18+random()**2*43:5+random()**2*22,w=8+random()*9,d=8+random()*9,base=ground(x,z);

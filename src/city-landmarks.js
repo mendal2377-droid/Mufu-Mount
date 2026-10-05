@@ -185,10 +185,12 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree})
 export function bridgeDetails(kind,bp,deck,{beam,block,add}){
   if(kind==='eye'){
     // bp accepts absolute height; shift the closed oval into the deck's frame.
-    const local=(t,side,h)=>bp(t,side,deck+h);
-    for(const t of [.32,.68]){
-      const ring=bridgeRing(local,t);for(let i=1;i<ring.length;i++)beam(ring[i-1],ring[i],.7,'white');
-      for(let j=1;j<=9;j++)for(const side of [-1,1])beam(local(t-.045,side*4,28),bp(Math.max(0,Math.min(1,t+(j-5)*.05)),side*4.8),.07,'glass');
+    // Ellipse foundations descend beneath the water; no row of main-span piers.
+    const local=(t,side,h)=>bp(t,side,h+2);
+    for(const t of [.45,.75]){
+      const tilt=t<.6?1:-1;
+      const ring=bridgeRing((u,side,h)=>local(t+(u-t)*tilt,side,h),t,8,12);for(let i=1;i<ring.length;i++)beam(ring[i-1],ring[i],.7,'white');
+      for(let j=1;j<=9;j++)for(const side of [-1,1])beam(local(t+tilt*.062,side*2.5,20.4),bp(Math.max(0,Math.min(1,t+(j-5)*.05)),side*4.8),.07,'glass');
     }
   }else if(kind==='cable'){
     for(const t of [.23,.77]){

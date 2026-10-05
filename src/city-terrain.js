@@ -27,8 +27,8 @@ export function createCityTerrain(places,riverLines,lakes,rings){
   const ridges=[...hills,...outlying.map(([x,z,height,rx,rz,yaw])=>({x,z,height,rx,rz,yaw,radius:Math.max(rx,rz),secondary:true}))];
   const buckets=new Map(),lakeBounds=[];
   const cell=96;
-  function index(a,b,width){
-    const rec={a,b,width,dx:b[0]-a[0],dz:b[2]-a[2]};rec.den=rec.dx*rec.dx+rec.dz*rec.dz;
+  function index(a,b,width,lake=false){
+    const rec={a,b,width,lake,dx:b[0]-a[0],dz:b[2]-a[2]};rec.den=rec.dx*rec.dx+rec.dz*rec.dz;
     const margin=width?100:280;
     for(let x=Math.floor((Math.min(a[0],b[0])-width-margin)/cell);x<=Math.floor((Math.max(a[0],b[0])+width+margin)/cell);x++)
       for(let z=Math.floor((Math.min(a[2],b[2])-width-margin)/cell);z<=Math.floor((Math.max(a[2],b[2])+width+margin)/cell);z++){
@@ -37,19 +37,19 @@ export function createCityTerrain(places,riverLines,lakes,rings){
   }
   riverLines.forEach(r=>{for(let i=1;i<r.points.length;i++)index(r.points[i-1],r.points[i],r.width*.5);});
   lakes.forEach(l=>l.outer.forEach(r=>{
-    lakeBounds.push({ring:r,holes:l.inner.filter(h=>inRing(h[0][0],h[0][2],r)),
+    lakeBounds.push({lake:l.water!=='river',ring:r,holes:l.inner.filter(h=>inRing(h[0][0],h[0][2],r)),
       xmin:Math.min(...r.map(p=>p[0])),xmax:Math.max(...r.map(p=>p[0])),zmin:Math.min(...r.map(p=>p[2])),zmax:Math.max(...r.map(p=>p[2]))});
-    for(let i=1;i<r.length;i++)index(r[i-1],r[i],0);
-    l.inner.forEach(h=>{for(let i=1;i<h.length;i++)index(h[i-1],h[i],0);});
+    for(let i=1;i<r.length;i++)index(r[i-1],r[i],0,l.water!=='river');
+    l.inner.forEach(h=>{for(let i=1;i<h.length;i++)index(h[i-1],h[i],0,l.water!=='river');});
   }));
   function shore(x,z,lakeOnly=false){
     let bank=Infinity,river=Infinity;
     for(const r of buckets.get(`${Math.floor(x/cell)},${Math.floor(z/cell)}`)||[]){
       const t=r.den?clamp(((x-r.a[0])*r.dx+(z-r.a[2])*r.dz)/r.den):0;
       const d=Math.hypot(x-r.a[0]-t*r.dx,z-r.a[2]-t*r.dz);
-      if(r.width)river=Math.min(river,d-r.width);else bank=Math.min(bank,d);
+      if(r.width)river=Math.min(river,d-r.width);else if(!lakeOnly||r.lake)bank=Math.min(bank,d);
     }
-    const inside=lakeBounds.some(b=>x>=b.xmin&&x<=b.xmax&&z>=b.zmin&&z<=b.zmax&&inRing(x,z,b.ring)&&!b.holes.some(h=>inRing(x,z,h)));
+    const inside=lakeBounds.some(b=>(!lakeOnly||b.lake)&&x>=b.xmin&&x<=b.xmax&&z>=b.zmin&&z<=b.zmax&&inRing(x,z,b.ring)&&!b.holes.some(h=>inRing(x,z,h)));
     return Math.min(lakeOnly?Infinity:river,inside?-Math.min(bank,100):bank);
   }
   function relief(x,z){
@@ -103,6 +103,7 @@ export function createCityTerrain(places,riverLines,lakes,rings){
   // heights would produce a ridge where their softened edges overlap.
   const forecourtGrade=Math.min(...forecourts.map(p=>p.y));
   forecourts.forEach(p=>p.y=forecourtGrade);
+  const stairCourts=places.filter(p=>p.id==='zhongshan');
   function ground(x,z){
     let y=landform(x,z);const bank=shore(x,z);
     if(bank<0)return y;
@@ -110,6 +111,12 @@ export function createCityTerrain(places,riverLines,lakes,rings){
       const d=Math.max(Math.abs(x-p.x)-p.rx,Math.abs(z-p.z)-p.rz);
       const weight=(1-smooth(0,40,d))*smooth(0,24,bank);
       if(weight)y=THREE.MathUtils.lerp(y,p.y,weight);
+    }
+    for(const p of stairCourts){
+      const [px,,pz]=p.position,along=pz+58-z;
+      if(along>=-12&&along<=54){const base=landform(px,pz+58),grade=base+Math.max(0,along)*.45/2.1-.25;
+        const weight=(1-smooth(8.5,22,Math.abs(x-px)))*(1-smooth(48,54,along));
+        y=THREE.MathUtils.lerp(y,Math.min(y,grade),weight);}
     }
     return y;
   }

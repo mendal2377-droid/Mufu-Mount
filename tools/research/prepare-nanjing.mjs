@@ -1,16 +1,17 @@
+import {centralCity} from './central-scope.mjs';
 import fs from 'node:fs';
 const base='research/nanjing/';
 const source=JSON.parse(fs.readFileSync(base+'osm-source.json'));
 const elements=new Map(source.elements.map(e=>[`${e.type}/${e.id}`,e]));
 const rings={};
 const tolerance=.0006;
-function simplify(points){
+function simplify(points,tol=tolerance){
   if(points.length<4)return points;
   const out=[points[0]];for(let i=1;i<points.length-1;i++){
-    if(Math.hypot(points[i][0]-out.at(-1)[0],points[i][1]-out.at(-1)[1])>tolerance)out.push(points[i]);
+    if(Math.hypot(points[i][0]-out.at(-1)[0],points[i][1]-out.at(-1)[1])>tol)out.push(points[i]);
   }out.push(points.at(-1));return out;
 }
-function assemble(segments){
+function assemble(segments,tol=tolerance){
   const pending=segments.filter(p=>p.length>1).map(p=>p.slice()),result=[];
   const same=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])<1e-7;
   while(pending.length){let line=pending.pop(),changed=true;
@@ -21,16 +22,16 @@ function assemble(segments){
         if(same(line[0],p[0]))p=p.slice().reverse();
         if(same(line[0],p.at(-1))){line.unshift(...p.slice(0,-1));pending.splice(i,1);changed=true;break;}
       }
-    }if(same(line[0],line.at(-1)))result.push(simplify(line));
+    }if(same(line[0],line.at(-1)))result.push(simplify(line,tol));
   }return result;
 }
-for(const id of [4293790,11308636,14305804,18018554,18231223,18303735,2131524]){
+for(const id of [4293790,11308636,14305804,18018554,18231223,18303735,2131524,2138994,2538928]){
   const j=JSON.parse(fs.readFileSync(base+`osm-relation-${id}.json`));
   const nodes=new Map(j.elements.filter(e=>e.type==='node').map(e=>[e.id,[e.lon,e.lat]]));
   const ways=new Map(j.elements.filter(e=>e.type==='way').map(e=>[e.id,e.nodes.map(n=>nodes.get(n)).filter(Boolean)]));
   const rel=j.elements.find(e=>e.type==='relation'&&e.id===id);
-  rings[id]={outer:assemble(rel.members.filter(m=>m.role==='outer').map(m=>ways.get(m.ref)||[])),
-    inner:assemble(rel.members.filter(m=>m.role==='inner').map(m=>ways.get(m.ref)||[]))};
+  rings[id]={outer:assemble(rel.members.filter(m=>m.role==='outer').map(m=>ways.get(m.ref)||[]),[2138994,18231223].includes(id)?.00007:id===2538928?.00012:tolerance),
+    inner:assemble(rel.members.filter(m=>m.role==='inner').map(m=>ways.get(m.ref)||[]),[2138994,18231223].includes(id)?.00007:id===2538928?.00012:tolerance)};
   const coords=rings[id].outer.flat();
   elements.set(`relation/${id}`,{...rel,coords});
 }
@@ -69,16 +70,18 @@ const landmarks=specs.map(([id,zh,name,kind,key,coord])=>({id,zh,name,kind,coord
 const rivers=source.elements.filter(e=>e.type==='way'&&e.tags.waterway==='river'&&!e.tags.tunnel)
   .map(e=>({name:e.tags.name,osm:e.id,points:simplify(e.geometry.filter(Boolean).map(p=>[p.lon,p.lat]))}));
 const lakes=[['mochou',18231223],['shijiu',14305804],['gucheng',18018554]].map(([id,ref])=>({id,source:`https://www.openstreetmap.org/relation/${ref}`,...rings[ref]}));
-// The Xuanwu API refuses its full geometry. Keep this shape explicitly inferred,
-// rather than claiming the hand-sketched shoreline is downloaded map geometry.
-lakes.push({id:'xuanwu',source:'https://mapcarta.com/16226832',inferred:true,
-  outer:[[[118.775,32.070],[118.777,32.084],[118.790,32.096],[118.809,32.090],[118.813,32.077],[118.801,32.066],[118.782,32.064],[118.775,32.070]]],
-  inner:[[[118.784,32.075],[118.789,32.082],[118.795,32.080],[118.792,32.073],[118.784,32.075]],
-    [[118.800,32.078],[118.805,32.082],[118.807,32.078],[118.804,32.073],[118.800,32.078]]]});
+lakes.push({id:'xuanwu',source:'https://www.openstreetmap.org/relation/2138994',inferred:false,...rings[2138994]});
+lakes.push({id:'jiajiang-water',water:'river',source:'https://www.openstreetmap.org/relation/2538928',inferred:false,...rings[2538928]});
+const eyeMap=JSON.parse(fs.readFileSync(base+'osm-eye-map.json'));
+const eyeNodes=new Map(eyeMap.elements.filter(e=>e.type==='node').map(e=>[e.id,[e.lon,e.lat]]));
+const bridge=eyeMap.elements.find(e=>e.type==='way'&&e.id===321392362);
+const eye=landmarks.find(p=>p.id==='eye');
+eye.bridgePath=bridge.nodes.map(id=>eyeNodes.get(id));eye.alignmentSource='https://www.openstreetmap.org/way/321392362';
 const data={version:1,retrieved:'2026-10-05',license:'ODbL-1.0',licenseUrl:'https://opendatacommons.org/licenses/odbl/1-0/',
   attribution:'© OpenStreetMap contributors; supplementary coordinates: Wikidata (CC0) and referenced public map',
   origin:[118.78,32.04],scale:.065,landmarks,rivers,lakes,boundary:rings[2131524].outer,
   note:'Simplified scenic atlas. Geographic anchors are public-map positions; terrain, buildings, roads, routes and some shorelines are artistic approximations. Mufu detail scene remains a separate non-surveyed model.'};
-fs.writeFileSync('public/city/nanjing.json',JSON.stringify(data));
-console.log({landmarks:landmarks.length,rivers:rivers.length,lakes:lakes.length,boundaryRings:data.boundary.length,bytes:fs.statSync('public/city/nanjing.json').size});
+const published=centralCity(data);
+fs.writeFileSync('public/city/nanjing.json',JSON.stringify(published));
+console.log({landmarks:published.landmarks.length,rivers:published.rivers.length,lakes:published.lakes.length,boundaryRings:published.boundary.length,bytes:fs.statSync('public/city/nanjing.json').size});
 console.log(landmarks.map(p=>({id:p.id,coord:p.coord})));

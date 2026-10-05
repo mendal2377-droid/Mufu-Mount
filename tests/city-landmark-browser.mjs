@@ -15,7 +15,12 @@ try{
   await page.evaluate(()=>{window.__mufu.paused=true;window.__mufu.step(2,.1);});
   report.art=await page.evaluate(()=>window.__mufu.city.stats().art);assert.ok(report.art.architectureReady);
   await page.screenshot({path:'test-results/landmarks-overview.png',timeout:120000});
-  report.entries=[];
+  report.arrivalStable=await page.evaluate(()=>{
+ const m=window.__mufu;m.city.enter('palace');const start=m.camera.position.clone(),q=m.camera.quaternion.clone();
+ m.camera.rotation.set(1,2,1);m.city.showPlan();m.step(3,.1);m.city.enter('palace');m.step(8,.1);
+ return start.distanceTo(m.camera.position)<.001&&q.angleTo(m.camera.quaternion)<.001;
+ });assert.ok(report.arrivalStable,'arrival pose must not inherit orbit rotation or drift');
+ report.entries=[];
   const entries=process.env.MUFU_LANDMARK_ENTRIES?.split(',')||['palace','jiming','qixia','yuejiang','zhonghua','zifeng','eye','third','niushou','xiaoling','qinhuai','mendong','zhongshan'];
   for(const id of entries){
     await page.evaluate(id=>{const m=window.__mufu;m.city.enter(id);m.step(4,.5);},id);

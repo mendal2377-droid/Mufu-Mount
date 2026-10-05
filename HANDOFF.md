@@ -642,3 +642,6 @@ deployment; preview URLs sit behind Vercel's login.
 There is no staging environment and no rollback automation beyond Vercel's own
 deployment history. Given that, build and run at least `npm test` before you
 push to `main`.
+
+## Local correction pass (2026-10-05)
+See research/nanjing/CORRECTION-STATUS.md for the central-city scope, verified Xuanwu/Jiajiang shorelines, Nanjing Eye alignment, camera fixes, landmark refinements and validation. Source snapshots and the preparation pipeline reproduce the published geometry.

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {buildCityScene} from './city-scene.js';
 import {planPose,projectPin} from './plan.js';
 import {constrainToRoute} from './navigation.js';
+import {setArrivalCamera,clearOrbitMotion} from './city-camera.js';
 import {flightStep,landingPoint} from './kite.js';
 import {createSkyDome} from './sky.js';
 
@@ -90,10 +91,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   function frameMap(){
     if(!active||!state.overview)return;
     orbit.enableDamping=false;orbit.update();
-    const points=scope==='all'?built.rings.flat():places.filter(p=>p.region!=='south'&&p.region!=='east'&&!['niushou','third','eye'].includes(p.id)).map(p=>p.position);
+    const points=places.map(p=>p.position);
     const pose=planPose(points,camera.aspect);camera.position.copy(pose.position);orbit.target.copy(pose.target);
     camera.fov=40;camera.near=30;camera.far=100000;camera.lookAt(orbit.target);camera.updateProjectionMatrix();
-    orbit.minDistance=180;orbit.maxDistance=40000;orbit.update();orbit.enableDamping=true;updatePins();
+    orbit.minDistance=180;orbit.maxDistance=7000;orbit.update();orbit.enableDamping=true;updatePins();
   }
   function updatePins(){camera.updateMatrixWorld();let prior=[];
     records.forEach(({p,pin})=>{const a=projectPin(p.position,camera,innerWidth,innerHeight);
@@ -107,15 +108,14 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     scene.add(boat);boats.push({boat,line:new THREE.CatmullRomCurve3(r.points.map(p=>new THREE.Vector3(p[0],2.1,p[2]))),offset:i*.13});});
   const api={...built,data,
     get active(){return active;},get scope(){return scope;},get selected(){return selected;},
-    showPlan(next=scope){useScene();scope=next;flying(false);state.playing=false;state.overview=true;state.moving=false;state.photoMode=false;
+    showPlan(){useScene();scope='central';flying(false);state.playing=false;state.overview=true;state.moving=false;state.photoMode=false;
       orbit.enabled=true;document.body.classList.remove('playing','photo-mode','locked');document.body.classList.add('plan-mode');
       $('#nanjing-home').hidden=false;$('#walk-environment').hidden=true;$('#walk-menu').hidden=true;$('#back-to-plan').hidden=true;
       $('#city-scope').value=scope;frameMap();},
     enter(id){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');
       if(id==='mufu'){api.leave();onMufu();return;}
-      useScene();selected=p;flying(false);state.playing=true;state.overview=false;state.photoMode=false;state.moving=false;
-      orbit.enabled=false;camera.near=.12;camera.far=50000;camera.fov=68;camera.position.fromArray(p.spawn);
-      camera.lookAt(new THREE.Vector3(...p.look));camera.rotation.order='YXZ';camera.updateProjectionMatrix();
+      useScene();reset();clearOrbitMotion(orbit);selected=p;flying(false);state.playing=true;state.overview=false;state.photoMode=false;state.moving=false;
+      setArrivalCamera(camera,p.spawn,p.look);
       document.body.classList.remove('plan-mode','photo-mode');document.body.classList.add('playing');$('#nanjing-home').hidden=true;
       $('#walk-environment').hidden=false;$('#walk-menu').hidden=false;$('#back-to-plan').hidden=false;
       toast(`${p.zh} · WASD to walk · Drag to look · K to fly`);},

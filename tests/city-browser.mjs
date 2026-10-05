@@ -12,7 +12,7 @@ try{
   await page.goto(process.env.MUFU_TEST_URL||'http://127.0.0.1:4184',{waitUntil:'domcontentloaded',timeout:120000});
   await page.waitForFunction(()=>window.__mufu?.city?.active,null,{timeout:120000});
   await page.evaluate(()=>{window.__mufu.paused=true;window.__mufu.step(2,.1);});
-  assert.equal(await page.locator('.city-pin').count(),20);
+  assert.equal(await page.locator('.city-pin').count(),18);
   report.geometry=await page.evaluate(()=>window.__mufu.city.stats());console.log('City loaded',report.geometry);
   assert.ok(report.geometry.triangles<2000000);
   assert.equal(report.geometry.terrain.singleSurface,true);
@@ -33,7 +33,7 @@ try{
   const anchors=await page.evaluate(()=>Array.from(document.querySelectorAll('.city-pin:not([hidden])')).map(b=>{
     const r=b.querySelector('.city-dot').getBoundingClientRect();return Math.hypot(r.x+r.width/2-parseFloat(b.style.left),r.y+r.height/2-parseFloat(b.style.top));}));
   assert.ok(anchors.every(d=>d<1));
-  for(const id of ['qinhuai','bridge','niushou','zhongshan','gaochun','zijin','qixia','xuanwu']){
+  for(const id of ['qinhuai','bridge','niushou','zhongshan','eye','zijin','qixia','xuanwu']){
     await page.evaluate(id=>{window.__mufu.city.enter(id);window.__mufu.step(2,.1);},id);
     assert.equal(await page.locator('#walk-environment').isVisible(),true);
     assert.equal(await page.locator('#hud').isVisible(),false);
@@ -68,7 +68,7 @@ try{
   assert.equal(await page.evaluate(()=>window.__mufu.getStats().audioEnabled),true);
   await page.evaluate(()=>{window.__mufu.setWeather('morning');window.__mufu.step(14,.5);});
   await page.locator('#walk-menu').click();await page.locator('#city-map-return').click();
-  await page.locator('#city-scope').selectOption('all');await page.evaluate(()=>window.__mufu.step(2,.1));
+  await page.locator('#city-scope').selectOption('central');await page.evaluate(()=>window.__mufu.step(2,.1));
   await page.screenshot({path:'test-results/nanjing-municipal.png',timeout:60000});
   await page.evaluate(()=>window.__mufu.city.enter('mufu'));assert.equal(await page.evaluate(()=>window.__mufu.city.active),false);
   assert.equal(await page.locator('.plan-card').isVisible(),true);assert.equal(await page.locator('.access-pin').count(),6);

@@ -640,7 +640,7 @@ async function load() {
     });
     showPlan();
     city = await createNanjing({camera,orbit,controls,postfx,state,shared:u,baseScene:scene,kite,keys,
-      reset:()=>{stopWalks();feel.unapply();feel.reset();},onMufu:showPlan,onWeather:setWeather,toast,
+      reset:()=>{stopWalks();feel.unapply();feel.reset();drag=null;keys.clear();},onMufu:showPlan,onWeather:setWeather,toast,
       rain:rainLines,snow:particles});
     city.showPlan();
     animate();
