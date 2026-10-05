@@ -13,7 +13,7 @@ try {
   page.on("console",m=>{if(m.type()==="error"&&!/fonts.googleapis|ERR_CERT|pointer lock|PointerLock/i.test(m.text())) report.errors.push(m.text());});
   await page.goto(process.env.MUFU_TEST_URL||"http://127.0.0.1:4182",{waitUntil:"domcontentloaded"});
   await page.waitForFunction(()=>window.__mufu?.state.ready,null,{timeout:120000,polling:100});
-  await page.evaluate(()=>window.__mufu.paused=true);
+  await page.evaluate(()=>{window.__mufu.paused=true;window.__mufu.showPlan();});
   console.log("Loaded");
   await page.evaluate(()=>window.__mufu.step(16,.1));
   console.log("Plan render",await page.evaluate(()=>({triangles:window.__mufu.getStats().triangles,drawCalls:window.__mufu.getStats().drawCalls})));
@@ -97,7 +97,7 @@ try {
   phone.on("pageerror",e=>report.errors.push(e.message));
   await phone.goto(process.env.MUFU_TEST_URL||"http://127.0.0.1:4182",{waitUntil:"domcontentloaded"});
   await phone.waitForFunction(()=>window.__mufu?.state.ready,null,{timeout:120000,polling:100});
-  await phone.evaluate(()=>window.__mufu.paused=true);
+  await phone.evaluate(()=>{window.__mufu.paused=true;window.__mufu.showPlan();});
   for(let i=0;i<6;i++) {
     await phone.locator("#plan-entrances summary").tap();
     await phone.locator("#mobile-destinations button").nth(i).tap();

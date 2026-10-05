@@ -1173,6 +1173,55 @@ body.playing #touch-controls { bottom: 22px; left: 24px; transform: none; z-inde
 #album-photos .memory-chip { width: 100%; }
 @media (max-width: 999px) { #plan-entrances { display: block; } }
 #toast { max-width: calc(100vw - 36px); pointer-events: none; }
+#nanjing-home { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+.city-card { position: absolute; top: 130px; right: 26px; width: 260px; padding: 16px;
+  background: #f3eddcde; color: #304e42; border: 1px solid #ffffffe0; border-radius: 18px;
+  backdrop-filter: blur(14px); box-shadow: 0 8px 30px #35574418; pointer-events: auto; }
+.city-card-top { display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 12px; }
+.city-card button { color: #304e42; }
+#city-scope { background: #dfdfc8; color: #304e42; border: 0; padding: 10px; border-radius: 8px; width: 100%; font-size: 12px; }
+#city-list { margin-top: 12px; font-size: 12px; }
+#city-list summary { cursor: pointer; padding: 8px 0; }
+#city-destinations { max-height: min(48vh,450px); overflow-y: auto; display: grid; }
+#city-destinations button { display: flex; gap: 12px; align-items: center; text-align: left; padding: 9px 5px; border-radius: 6px; }
+#city-destinations button:hover { background: #bacdad70; }
+#city-destinations button>span:first-child { width: 20px; text-align: center; }
+#city-destinations small, .city-label small { display: block; font-size: 9px; opacity: .7; margin-top: 3px; }
+.city-caption { font-size: 10px; line-height: 1.5; opacity: .7; margin: 12px 0 0; }
+.city-pin { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  transform: translate(-50%,calc(-100% + 15px)); padding: 0; border: 0; background: none; pointer-events: auto; min-width: 36px; }
+.city-label { padding: 7px 12px; background: #345446ed; color: #fff6dd; border-radius: 12px; white-space: nowrap;
+  font-size: 12px; font-weight: 500; box-shadow: 0 3px 10px #28443315; }
+.city-dot { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #f2e6af;
+  color: #345446; border: 2px solid #fff8d9; box-shadow: 0 2px 8px #34544625; font-size: 17px; }
+.city-pin.compact .city-label { visibility: hidden; }
+.city-pin.compact { pointer-events: none; }
+.city-pin.compact .city-dot { pointer-events: auto; }
+.city-pin:hover, .city-pin:focus-visible { z-index: 4; }
+.city-pin:hover .city-label,.city-pin:focus-visible .city-label { visibility: visible; }
+.city-pin:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 12px; }
+.city-hint { position: absolute; bottom: 44px; left: 26px; font-size: 11px; color: #294b3d; }
+.city-credit { position: absolute; left: 26px; bottom: 20px; font-size: 9px; color: #294b3d; pointer-events: auto; }
+.city-credit a { color: inherit; text-decoration: underline; }
+body.city-mode .brand { background: #345446db; }
+body.city-mode .quiet-actions { z-index: 6; }
+#city-menu { max-width: min(430px,90vw); border: 1px solid #77917f; border-radius: 18px; background: #243e33; color: #fff5db; padding: 28px; }
+#city-menu::backdrop { background: #152e2860; backdrop-filter: blur(8px); }
+#city-menu p { line-height: 1.8; font-size: 12px; }
+#city-menu button { border-radius: 9px; background: #546b4c66; padding: 12px; margin: 5px; }
+#city-menu-close { float: right; }
+#nanjing-return { position: fixed; left: 28px; top: 136px; z-index: 7; padding: 10px 16px; border-radius: 24px; background: #345446de; font-size: 12px; }
+body.plan-mode:not(.city-mode) #nanjing-return { display: block !important; }
+@media(max-width: 999px) {
+  .city-card { top: auto; bottom: 94px; left: 16px; right: auto; width: 200px; padding: 12px; }
+  .city-card-top,.city-caption { display: none; }
+  #city-destinations { max-height: 37vh; }
+  .city-label { font-size: 10px; padding: 6px 9px; }
+  .city-label small { display: none; }
+  .city-hint { display: none; }
+  .city-credit { left: 16px; bottom: 16px; width: 220px; line-height: 1.5; }
+  #nanjing-home .plan-weather { bottom: 25px; right: 16px; font-size: 10px; }
+}
 @media (max-width: 650px) {
   .access-pin { transform: translate(-50%, calc(-100% + 15px)); }
   #walk-environment { top: 16px; left: 16px; padding: 10px 13px; }

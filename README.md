@@ -1,4 +1,16 @@
-# Mufu · A little further
+# Nanjing · Mountains and rivers
+
+An illustrated, navigable Nanjing atlas with twenty selected destinations:
+Yangtze bridges, Qinhuai / Fuzimiao, Laomendong, Zhonghua gate, Xuanwu and
+Mochou lakes, Zijin, Mufu, Niushou, Qixia, Tangshan and Gaochun. Public map
+anchors establish relative geography; enlarged landmarks, soft hills, painted
+trees, buildings and walking paths are scenic interpretations. Switch between
+central Nanjing and the whole municipal outline, walk into a destination or fly
+the bird kite across the atlas. It is not a surveyed digital twin.
+
+Map database: © OpenStreetMap contributors, ODbL 1.0. Sources and explicit
+approximations: [research/nanjing/SOURCES.md](research/nanjing/SOURCES.md).
+The original detailed Mufu experience remains accessible through its map pin.
 
 A browser 3D walk adapted from the photo-informed Mount Mufu / Yangtze Blender scene, hung with twenty photographs from a single morning — 06:16 to 08:26 on 26 September 2026. Walk the rainbow road, the ridge, the forest stairs and the riverside; find photo frames along the paths; change the weather, or let the morning carry you from first light to mid-morning.
 
@@ -21,7 +33,8 @@ Open the local URL printed by Vite. `npm run build` creates the static site in `
 
 ## Play
 
-- The home page is an aerial 3D plan. Drag to orbit, scroll to zoom, and choose one of six entrance pins to walk in. The compact route panel also provides keyboard-accessible entrance buttons. **Map** returns to the plan.
+- The home page is the Nanjing aerial atlas. Drag to orbit, scroll to zoom, choose a landmark pin or expand **Choose a place to wander**. **Whole Nanjing · Gaochun** frames the municipal outline. **Map** / M returns from a city walk.
+- **Mufu mountain** opens the detailed Mufu plan with six walking entrances. **Nanjing atlas** returns to the city.
 - Walking shows scene time/weather and two discreet kite/menu icons. Destinations, tours, photos, sound and postcards are in the menu. On small screens, **Choose a path** lists every entrance even when world markers overlap.
 - WASD moves; drag looks; Shift moves faster. Double-click the scenery for mouse capture; Esc releases it. Weather carries into the walk.
 - The bird icon or **K** launches a swallow kite from the plan or a path. **WASD** flies, **Space/E** climbs, **Ctrl/Q** descends, and **Shift** flies faster. **K** again lands on the nearest walking path. Touch arrows and **+ / -** also work. Flight is bounded to the model area, up to 1,000 m, with sampled terrain clearance; it is not a physics simulation.

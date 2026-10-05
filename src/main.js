@@ -24,6 +24,7 @@ import { createCameraFeel } from "./camera-feel.js";
 import { createCinematic, wholeCircuit } from "./tour.js";
 import { createPlan, planPose } from "./plan.js";
 import { createBirdKite, createGroundSampler } from "./kite.js";
+import { createNanjing } from "./nanjing.js";
 import "./style.css";
 
 const $ = (s) => document.querySelector(s),
@@ -104,6 +105,7 @@ let renderer,
   riverLife,
   kite,
   plan,
+  city,
   memories,
   memoryWalk,
   undergrowth,
@@ -637,6 +639,10 @@ async function load() {
       },
     });
     showPlan();
+    city = await createNanjing({camera,orbit,controls,postfx,state,shared:u,baseScene:scene,kite,keys,
+      reset:()=>{stopWalks();feel.unapply();feel.reset();},onMufu:showPlan,onWeather:setWeather,toast,
+      rain:rainLines,snow:particles});
+    city.showPlan();
     animate();
     window.__mufu = {
       state,
@@ -646,6 +652,7 @@ async function load() {
       camera,
       renderer,
       scene,
+      city,
       postfx,
       goTo,
       showPlan,
@@ -700,6 +707,7 @@ async function checkJSON(r) {
 }
 
 function goTo(index, notify = true) {
+  if (city?.active) { city.leave(); showPlan(); }
   if (state.flying) stopFlight(false);
   if (state.overview) toggleOverview();
   // Asking to be somewhere else ends whatever was walking you around;
@@ -927,6 +935,7 @@ function setWeather(name) {
     dawn: "✦ Dawn", morning: "☀ Morning", sunset: "◒ Sunset", storm: "ϟ Storm", snow: "❄ Snow",
   }[name];
   $("#plan-weather").textContent = planWeather;
+  $("#city-weather").textContent = planWeather;
   $("#plan-weather").setAttribute("aria-label", `Change weather: ${planWeather.slice(2)}`);
   if (state.playing)
     toast(
@@ -1005,6 +1014,7 @@ function stopFlight(land = true) {
 }
 
 function toggleKite() {
+  if (city?.active) { city.toggleFlight(); return; }
   if (!state.ready) return;
   $("#info").close();
   if (state.flying) {
@@ -1027,6 +1037,7 @@ function toggleKite() {
 }
 
 function showPlan() {
+  if (city?.active) city.leave();
   if (!state.ready) return;
   if (state.flying) stopFlight(true);
   stopWalks();
@@ -1346,6 +1357,20 @@ function frame(elapsed) {
     u[key].value = weather[key];
   }
 
+  if (city?.active) {
+    updateGrade(dt);updateSunPosition();
+    const footstep=city.frame(dt,t,weather,sunDirection);
+    if(footstep) audio.footstep(weather);
+    audio.update(weather,.35,state.moving,state.flying);
+    const grade=postfx.grade.uniforms;
+    grade.uTime.value=t;grade.uFade.value=0;grade.uLetterbox.value=0;
+    grade.uVignette.value=.18;grade.uGrain.value=.15;grade.uAberration.value=0;
+    postfx.atmosphere.uniforms.uShafts.value=0;
+    postfx.atmosphere.uniforms.uAO.value=0;
+    postfx.render();return;
+  }
+  postfx.atmosphere.uniforms.uShafts.value=TIERS[state.quality].shafts?1:0;
+  postfx.atmosphere.uniforms.uAO.value=TIERS[state.quality].ao?1:0;
   const daylight = 1 - weather.dawn * 0.72;
   hemi.intensity = (1.25 - weather.storm * 0.45) * daylight;
   hemi.color.setRGB(0.85 - weather.dawn * 0.35, 0.92 - weather.dawn * 0.3, 1.0);
@@ -1585,13 +1610,13 @@ function frame(elapsed) {
 
 // --- wiring -----------------------------------------------------------------
 
-$("#back-to-plan").onclick = showPlan;
+$("#back-to-plan").onclick = () => city?.active ? city.showPlan() : showPlan();
 $("#kite-toggle").onclick = toggleKite;
 $("#menu-kite").onclick = toggleKite;
 $("#menu-map").onclick = () => { $("#info").close(); showPlan(); };
 $("#menu-sound").onclick = () => $("#sound").click();
 $("#walk-weather").onchange = e => { setWeather(e.target.value); e.target.blur(); };
-$("#walk-menu").onclick = () => $("#help").click();
+$("#walk-menu").onclick = () => city?.active ? city.menu() : $("#help").click();
 $("#album-photos").append($("#memory-strip"));
 // Keep tours, photos and destinations available without covering the view.
 for (const id of ["destination", "memory-walk", "tour-button", "auto", "postcard", "photo-mode", "collect", "river-watch"]) {
@@ -1602,7 +1627,7 @@ for (const id of ["destination", "memory-walk", "tour-button", "auto", "river-wa
   $("#" + id).addEventListener("click", () => { if(id !== "destination") $("#info").close(); });
 }
 $("#destination").addEventListener("change", () => $("#info").close());
-$(".brand").onclick = (e) => { e.preventDefault(); showPlan(); };
+$(".brand").onclick = (e) => { e.preventDefault(); city?.active ? city.showPlan() : showPlan(); };
 $("#plan-reset").onclick = framePlan;
 $("#plan-weather").onclick = () => {
   const moods = ["morning", "sunset", "storm", "snow", "dawn"];
@@ -1704,7 +1729,7 @@ $("#postcard").onclick = () => {
 $("#help").onclick = () => {
   controls?.unlock();
   keys.clear();
-  $("#info").showModal();
+  if(city?.active) city.menu(); else $("#info").showModal();
 };
 $("#close-info").onclick = () => $("#info").close();
 $("#reset-notes").onclick = () => {
@@ -1739,7 +1764,11 @@ window.addEventListener("keydown", (e) => {
   ) {
     endTour(false);
   }
-  if (e.target.matches("input,select,textarea") || $("#info").open) return;
+  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open) return;
+  if(city?.active && ["KeyM","KeyT","KeyP"].includes(e.code)) {
+    if(e.code==="KeyM" && !e.repeat) city.showPlan();
+    e.preventDefault();return;
+  }
   if (e.code === "KeyK" && !e.repeat && state.ready) { toggleKite(); e.preventDefault(); return; }
   if (e.code === "KeyP" && state.ready && state.playing) {
     $("#photo-mode").click();
@@ -1822,7 +1851,7 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   postfx?.resize();
-  if (state.overview && state.ready) framePlan();
+  if (state.overview && state.ready) city?.active ? city.resize() : framePlan();
 });
 canvas.addEventListener("webglcontextlost", (e) => {
   e.preventDefault();

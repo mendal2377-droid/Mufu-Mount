@@ -1,5 +1,21 @@
 # Change log
 
+## 2026-10-05 — illustrated Nanjing atlas
+
+Added a separate illustrated city scene based on public OpenStreetMap anchors,
+river centerlines, lake polygons and the municipal outline. Twenty destination
+pins include Qinhuai, Laomendong, historic gates, temples, lakes, mountains and
+Yangtze bridges, with central / whole-Nanjing views. Landmark silhouettes,
+generic blocks and roads, hills and walking routes are explicitly artistic.
+Rounded trees and pines, paper grain, toon lighting and fine contours follow the
+user's illustration references. Boats animate on sampled Yangtze centerlines.
+
+City destinations support walking, shared weather / sound, and bird-kite travel
+with route landing. Walking retains the quiet time/weather display and menu.
+The Mufu pin opens the preserved detailed scene, with a return to the city.
+Public map attribution, ODbL database, retained research snapshots, reproduction
+tools and reference / limitation notes accompany the implementation.
+
 ## 2026-10-04 — lower-ground wildflowers and meadow grass
 
 Added a reference-guided imagegen atlas with mixed pink/blue/white flowers,

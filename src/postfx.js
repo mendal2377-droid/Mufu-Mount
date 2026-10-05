@@ -207,6 +207,7 @@ export function createPostFX(renderer, scene, camera, tierName = "cinematic") {
       api.resize();
       return tier;
     },
+    setScene(nextScene) { renderPass.scene = nextScene; },
     resize() {
       composer.setSize(innerWidth, innerHeight);
       renderer.getDrawingBufferSize(size);

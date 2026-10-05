@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#0f221f" />
     <meta
       name="description"
-      content="A quiet 3D walk on Mount Mufu and the Yangtze, hung with twenty photographs from one morning between 06:16 and 08:26."
+      content="An illustrated 3D journey through Nanjing: Yangtze bridges, Qinhuai old town, lakes and mountains. Walk, fly a bird kite, or explore the detailed Mufu trail."
     />
-    <title>Mufu · A little further</title>
+    <title>Nanjing · Mountains and rivers</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231b3831'/%3E%3Cpath d='M8 44 25 19 36 34 44 24 57 44' fill='none' stroke='%23d9e8aa' stroke-width='4'/%3E%3C/svg%3E"
@@ -55,6 +55,24 @@
       <details id="plan-entrances"><summary>Choose a path ⌄</summary><nav id="mobile-destinations" aria-label="Walking entrances on small screens"></nav></details>
       <button id="plan-weather" class="plan-weather" aria-label="Change weather: Morning">☀ Morning</button>
     </section>
+    <section id="nanjing-home" hidden aria-label="Illustrated Nanjing atlas">
+      <div id="city-pins"></div>
+      <aside class="city-card">
+        <div class="city-card-top"><span>金陵山水 · Nanjing</span><button id="city-reset" title="Reset map view" aria-label="Reset map view">⌗</button></div>
+        <select id="city-scope" aria-label="Map area"><option value="central">Central Nanjing</option><option value="all">Whole Nanjing · Gaochun</option></select>
+        <details id="city-list"><summary>Choose a place to wander ⌄</summary><nav id="city-destinations" aria-label="Nanjing destinations"></nav></details>
+        <p class="city-caption">An illustrated atlas. Landmarks enlarged; streets and terrain imagined.</p>
+      </aside>
+      <p class="city-hint">Drag to turn · Scroll to zoom · Choose a pin to enter</p>
+      <div class="city-credit">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · <a href="/city/nanjing.json" target="_blank">ODbL / sources</a></div>
+      <button id="city-weather" class="plan-weather">☀ Change weather</button>
+    </section>
+    <button id="nanjing-return" hidden>↖ Nanjing atlas</button>
+    <dialog id="city-menu"><button id="city-menu-close" aria-label="Close menu">×</button><h2 id="city-menu-title">Nanjing</h2>
+      <p>WASD move · Drag to look · Shift faster<br>K bird kite · E up · Q down · M map</p>
+      <button id="city-map-return">Nanjing map</button><button id="city-mufu">Detailed Mufu walk</button><button id="city-sound">Enable nature sound</button>
+      <p class="city-caption">A scenic interpretation based on public map anchors and landmark photo references. Not a surveyed city model.</p>
+    </dialog>
     <section id="hud" hidden>
       <aside class="trail-card glass">
         <div class="eyebrow">

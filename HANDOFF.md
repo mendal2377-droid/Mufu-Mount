@@ -7,6 +7,46 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
+**5 October 2026: illustrated Nanjing atlas.** Home now opens a separate city
+scene with twenty map anchors and a central / whole-municipality selector.
+`src/city-geography.js` projects public lon/lat into a compressed east/north map;
+`src/city-scene.js` builds merged landmark silhouettes, lakes, river ribbons,
+generic urban blocks, meadow plots, hills and trees. `src/nanjing.js` controls
+map pins, destination walks, weather, ships and bird-kite travel. Toon bands,
+paper grain, restrained contour lines and mixed rounded/pine trees follow the
+user's illustration references. No illustration screenshot assets are copied.
+
+The map database (`public/city/nanjing.json`) and raw OSM snapshots are ODbL 1.0.
+Visible map attribution links to OSM and the public dataset. Sources, fetch /
+preparation commands, inferred shores and neighborhood entries are documented in
+[research/nanjing/SOURCES.md](research/nanjing/SOURCES.md). Buildings, streets,
+river widths, bridge geometry, vegetation and terrain remain artistic.
+
+Mufu is a portal to the original detailed scene, retaining its own coordinate
+system, six entrances, photo frames and meadow/forest assets. Never stitch its
+raw coordinates into the public city projection. `postfx.setScene` swaps only
+the RenderPass scene; pinned composer buffers and depth rules are unchanged.
+The camera and kite visual transfer between scenes. City walking uses its own
+routes; city flight / landing never use the Mufu ground sampler or bounds.
+
+Debug: `window.__mufu.city` exposes `showPlan('central'|'all')`, `enter(id)`,
+`toggleFlight()`, `stats()`, scene / places / routes / ground. Existing
+`__mufu.showPlan()` and `goTo()` deliberately enter the original Mufu experience.
+City weather shares time uniforms; sun direction converts into atlas east/north.
+The city sky shrinks for walking to stay inside the camera far plane. Map near
+clip follows orbit distance to prevent river/ground depth fighting at atlas scales.
+
+`tests/city.test.js` checks projection, source provenance and finite geometry.
+`tests/city-browser.mjs` checks map anchors, five representative walking entries,
+kite climb/landing, snow, whole-city view, mobile list and the Mufu portal.
+The original immersion regression explicitly opens Mufu before its assertions.
+Verification: 43 unit checks and production build pass. City browser checks
+pass for projected anchors, terrain clearance on all routes, five walking
+destinations, kite altitude / landing, snow, sound, municipal view and mobile
+list navigation. Mufu regression passes for six entrances, quiet UI, photos,
+weather, flight / landing and touch controls, with no browser errors.
+Hardware / physical-phone performance remains unbenchmarked.
+
 **4 October 2026: lower-ground meadow planting.** `src/meadow.js` scatters
 seeded loose patches beside low routes and across the inland riverbank,
 including its narrow grass verge. A spatial path mask excludes all route
