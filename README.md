@@ -3,7 +3,7 @@
 An illustrated, navigable Nanjing atlas with twenty selected destinations:
 Yangtze bridges, Qinhuai / Fuzimiao, Laomendong, Zhonghua gate, Xuanwu and
 Mochou lakes, Zijin, Mufu, Niushou, Qixia, Tangshan and Gaochun. Public map
-anchors establish relative geography; enlarged landmarks, soft hills, painted
+anchors establish relative geography; enlarged landmarks, linked ridges and valleys, painted
 trees, buildings and walking paths are scenic interpretations. Switch between
 central Nanjing and the whole municipal outline, walk into a destination or fly
 the bird kite across the atlas. It is not a surveyed digital twin.
@@ -11,6 +11,10 @@ the bird kite across the atlas. It is not a surveyed digital twin.
 Map database: © OpenStreetMap contributors, ODbL 1.0. Sources and explicit
 approximations: [research/nanjing/SOURCES.md](research/nanjing/SOURCES.md).
 The original detailed Mufu experience remains accessible through its map pin.
+The atlas now has continuous shaped terrain, woodland groves, riverbanks,
+illustrated farmland, grass and wildflowers, winding mountain paths, timber
+facades and detailed roofs. About 7,300 trees use instanced aerial / close models;
+near planting stays bounded and the plan hides the close ground-cover layer.
 
 A browser 3D walk adapted from the photo-informed Mount Mufu / Yangtze Blender scene, hung with twenty photographs from a single morning — 06:16 to 08:26 on 26 September 2026. Walk the rainbow road, the ridge, the forest stairs and the riverside; find photo frames along the paths; change the weather, or let the morning carry you from first light to mid-morning.
 
@@ -119,7 +123,7 @@ MUFU_TEST_URL=http://127.0.0.1:4173 node tests/riverside-visual.mjs
 MUFU_TEST_URL=http://127.0.0.1:4173 node tests/forest-browser.mjs
 ```
 
-`npm test` includes 36 checks: forest geometry depth/budgets/atlas cells/alpha, wave gradients/filtering/bounds/time evolution, flight movement/bounds/ground clearance/landing, anchored pin projection, promenade planting, route constraint maths, shipping-lane geometry, the two camera tours (every leg names a route that exists, ground legs move at a walking pace rather than a sprint, aerial legs stay over the modelled world and look downwards, the circuit touches all five corridors and runs from dawn to sunset, and the title loop reaches the river), and the memory data: that every published frame has an image and a thumbnail, that none of them still carries an EXIF segment, that the times run in order from 06:16 to 08:26, and that each frame stands outside the walkable corridor but within reach of it.
+`npm test` includes 47 checks: city projection/provenance, ridge relief, river beds/islands, finite terrain and rendered-surface sampling, meadow placement/budgets, forest geometry depth/budgets/atlas cells/alpha, wave gradients/filtering/bounds/time evolution, flight movement/bounds/ground clearance/landing, anchored pin projection, promenade planting, route constraint maths, shipping-lane geometry, the two camera tours (every leg names a route that exists, ground legs move at a walking pace rather than a sprint, aerial legs stay over the modelled world and look downwards, the circuit touches all five corridors and runs from dawn to sunset, and the title loop reaches the river), and the memory data: that every published frame has an image and a thumbnail, that none of them still carries an EXIF segment, that the times run in order from 06:16 to 08:26, and that each frame stands outside the walkable corridor but within reach of it.
 
 `riverside-visual` captures the plan, near water, forest and all four weather moods using deterministic scene time, checks shader/browser errors, and verifies shipping and beacon motion. It defaults to port 4182 and can target production with `MUFU_PUBLIC=1` and `MUFU_TEST_URL`. These are software-GPU Chrome checks; physical-phone and hardware-GPU performance have not been benchmarked.
 

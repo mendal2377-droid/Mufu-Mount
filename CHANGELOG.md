@@ -1,5 +1,29 @@
 # Change log
 
+## 2026-10-05 — terrain and city detail
+
+Replaced the overlapping flat lawn / hill layers with a single colored relief
+mesh: linked ridges, gullies, rolling countryside and carved river/lake beds.
+Adaptive tiles share subdivided edges; walking and planting sample the actual
+rendered triangles. Public anchors are unchanged; elevations remain artistic.
+Farm-field washes, fine ground strokes and subdued elevation contours add
+illustrated surface detail without overlapping slabs or striped flight views.
+
+Added roughly 7,300 instanced woodland trees with layered close crowns and
+branching trunks, grouped rural groves, riverside planting, curved grass,
+scattered pink/blue/cream flowers and bank stones. Detailed planting hides in
+the plan and stays capped near the walker. Hip roofs, timber lattice windows,
+foundations, pagoda openings, stair balustrades, benches, lamps and neighborhood
+roof/window bands enrich the destinations. Mountain walks wind up the slopes;
+paths drape across the surface and walking height accounts for lateral slope.
+
+Terrain stays below 400,000 triangles; the atlas and representative walks stay
+below a two-million-triangle budget. Close trees are capped at 220 per species,
+grass at 1,100, flowers at 650, rocks at 220, with no new shadow casters.
+47 unit checks and the production build pass. Browser checks cover eight city
+walks, hillside clearance, flight, weather, planting caps, map pins and mobile
+navigation. Physical-phone and hardware-GPU performance remain unbenchmarked.
+
 ## 2026-10-05 — illustrated Nanjing atlas
 
 Added a separate illustrated city scene based on public OpenStreetMap anchors,

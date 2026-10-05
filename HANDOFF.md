@@ -7,6 +7,40 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
+**5 October 2026: richer terrain and destinations.**
+`src/city-terrain.js` owns the single adaptive relief mesh, water-bed / island
+masks, scenic ridges, plateau transitions and the triangle-interpolated ground
+sampler. Coarse tile edges split to meet their finer neighbours. Do not restore
+flat lawn overlays or tiny-height field/tree-shade plates: those caused the
+striped ground in the user's aerial screenshots. All elevations are artistic;
+public map anchors and the original detailed Mufu scene remain separate.
+
+`src/city-landscape.js` uses seeded grouped groves and instanced tree prototypes:
+7,358 trees in the current dataset, with cheap aerial crowns and branching,
+layered close trees. Close detail caps are 220 trees per species (three species),
+1,100 grass clumps, 650 flower clumps, 220 stones. Plants avoid mapped water,
+landmark interiors and walking corridors; they sample the rendered surface.
+Grass/flowers sway in the shared weather. No close or far city crowns cast
+shadows. `city.stats()` exposes terrain and planting counts plus the active
+geometry budget; these totals exclude the unchanged Mufu scene.
+
+`src/city-scene.js` adds hip roofs, timber windows, stepped foundations, pagoda
+openings, staircase rails, benches, lamps and better neighborhood facades.
+Mount routes climb in curves; path edges drape over terrain. `src/nanjing.js`
+keeps the walker's eye above the terrain at lateral offsets and enters mountain
+walks with a level horizon. Terrain has 241,468 triangles; the aerial city has
+about 1.13 million. Browser checks enforce a two-million-triangle total and
+close-detail caps. Hardware / physical-phone performance is not benchmarked.
+
+Verification: 47 unit checks and the production build pass. Updated city browser
+checks cover eight walks, route and player clearance, projected pins, kite
+climb/landing, snow, sound, municipal/mobile views and the Mufu portal. Terrain
+unit checks cover unchanged anchors, meaningful relief, rendered interpolation,
+finite geometry, water-bed depth and dry islands. Screenshot review includes
+mountain flight, Purple/Qixia mountain walks, old-town facades and Niushou domes.
+The original Mufu immersion regression also passes: six entrances, photos,
+weather, flight / landing and touch controls, with no browser errors.
+
 **5 October 2026: illustrated Nanjing atlas.** Home now opens a separate city
 scene with twenty map anchors and a central / whole-municipality selector.
 `src/city-geography.js` projects public lon/lat into a compressed east/north map;

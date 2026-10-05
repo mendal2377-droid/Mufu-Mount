@@ -102,13 +102,14 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     frame(dt,t,weather,direction){
       cityDirection.set(direction.x*.9412-direction.z*.3377,direction.y,direction.x*.3377+direction.z*.9412).normalize();
       sun.position.copy(camera.position).addScaledVector(cityDirection,900);sun.target.position.copy(camera.position);
-      sun.intensity=(2.0-weather.storm*1.8-weather.snow*.8)*(1-weather.dawn*.6);
-      sun.color.setRGB(1,1-weather.sunset*.3,1-weather.sunset*.55);hemi.intensity=2.0-weather.storm*.8-weather.dawn*1.1;
+      sun.intensity=(2.4-weather.storm*1.8-weather.snow*.8)*(1-weather.dawn*.6);
+      sun.color.setRGB(1,1-weather.sunset*.3,1-weather.sunset*.55);hemi.intensity=1.35-weather.storm*.45-weather.dawn*.65;
       scene.fog.color.setRGB(.73+weather.sunset*.1-weather.storm*.4,.79-weather.sunset*.14-weather.storm*.38,.71-weather.sunset*.18-weather.storm*.28);
       scene.fog.density=state.overview?.000014:.0005+weather.storm*.0015+weather.snow*.001;
       sky.scale.setScalar(state.overview?5:1);sky.position.copy(camera.position);cityRain.position.copy(camera.position);citySnow.position.copy(camera.position);
       cityRain.visible=!state.overview&&weather.storm>.02;citySnow.visible=!state.overview&&weather.snow>.02;
       boats.forEach(({boat,line,offset})=>{const f=(t*.0008+offset)%1;boat.position.copy(line.getPointAt(f));const d=line.getTangentAt(f);boat.rotation.y=Math.atan2(-d.z,d.x);});
+      built.landscape.update(camera,state.overview);
       if(state.overview){orbit.update();
         // Depth precision follows atlas zoom: lakes and land are close layers,
         // even when the whole municipality is thousands of units from the eye.
@@ -124,12 +125,15 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
         kite.bird.rotation.z=-side*.14+Math.sin(t*1.3)*.04;}
       else if(state.moving){directionMove.y=0;directionMove.normalize();const right=new THREE.Vector3().crossVectors(directionMove,new THREE.Vector3(0,1,0));
         directionMove.multiplyScalar(forward).addScaledVector(right,side).normalize();const intended=camera.position.clone().addScaledVector(directionMove,(fast?5.2:2.1)*dt);
-        camera.position.fromArray(constrainToRoute(intended.toArray(),routes[selected.route]).position);}
+        const next=constrainToRoute(intended.toArray(),routes[selected.route]).position;
+        // Route interpolation gives deck height. On a hillside, the rendered
+        // surface at the player's lateral offset can be higher than its centre.
+        next[1]=Math.max(next[1],ground(next[0],next[2])+2.05);camera.position.fromArray(next);}
       const footstep=state.moving&&!state.flying&&t-lastFootstep>.52;if(footstep)lastFootstep=t;return footstep;
     },resize:frameMap,
     menu(){controls.unlock();keys.clear();$('#city-menu-title').textContent=selected.zh;
       $('#city-sound').textContent=$('#sound').textContent==='Sound on'?'Mute nature sound':'Enable nature sound';$('#city-menu').showModal();},
-    stats(){return {active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount,ships:boats.length,illustrated:true};},
+    stats(){return {active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,terrain:built.terrain.stats,landscape:{...built.landscape.stats}};},
   };
   $('#city-scope').onchange=e=>api.showPlan(e.target.value);$('#city-reset').onclick=frameMap;
   $('#city-map-return').onclick=()=>api.showPlan();$('#city-menu-close').onclick=()=>$('#city-menu').close();
