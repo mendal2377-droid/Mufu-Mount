@@ -46,3 +46,7 @@ Walking routes are compact destination vignettes; kite flight traverses the
 atlas. The detailed Mufu model opens through a portal and retains its separate,
 photo-informed, non-surveyed coordinate system. Raw private photos / GPS are
 not added to this public repository.
+
+## 5 October 2026: landmark photography and illustration
+
+See [LANDMARKS.md](LANDMARKS.md) for the place-by-place visual evidence, implementation mapping, access limits and research corrections. [PHOTO-REFERENCES.json](PHOTO-REFERENCES.json) records public photo URLs and which image pixels were actually inspected. Generated design/artifact provenance and exact prompts are in `design/city/LANDMARK-PROMPTS.md`.

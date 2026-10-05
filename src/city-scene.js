@@ -4,6 +4,7 @@ import {cityPoint,inRing,ribbon,distanceToLine} from "./city-geography.js";
 import {createCityTerrain} from './city-terrain.js';
 import {createCityLandscape} from './city-landscape.js';
 import {paintCityWater} from './city-art.js';
+import {landmarkDetails,bridgeDetails} from './city-landmarks.js';
 import {randomSeed} from "./forest-geometry.js";
 
 export function buildCityScene(data, shared, makeMaterial) {
@@ -20,7 +21,8 @@ export function buildCityScene(data, shared, makeMaterial) {
     roof:makeMaterial('City dark tiled roof',[.29,.38,.40]),
     red:makeMaterial('City red timber',[.56,.25,.16]),
     blue:makeMaterial('City blue glazed roof',[.24,.39,.51]),
-    bronze:makeMaterial('City bronze fixture',[.55,.43,.23]),
+    ochre:makeMaterial('City ochre plaster',[.86,.65,.30]),
+    bronze:makeMaterial('City bronze fixture',[.69,.55,.32]),
     glass:makeMaterial('City blue glass',[.32,.47,.49]),
     bark:makeMaterial('City bark',[.34,.27,.19]),
     leaf:makeMaterial('City foliage',[1,1,1]),
@@ -34,12 +36,12 @@ export function buildCityScene(data, shared, makeMaterial) {
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw),new THREE.Vector3(...scale));
     g.applyMatrix4(m);const ready=g.index?g.toNonIndexed():g;
     if(ready!==g)g.dispose();
-    const pos=ready.attributes.position,norm=ready.attributes.normal,uv=[];
+    const pos=ready.attributes.position,norm=ready.attributes.normal,uv=[],density=mat==='stone'?.32:mat==='roof'||mat==='blue'?.18:.08;
     for(let i=0;i<pos.count;i++){
       const nx=Math.abs(norm.getX(i)),ny=Math.abs(norm.getY(i)),nz=Math.abs(norm.getZ(i));
-      if(ny>=nx&&ny>=nz)uv.push(pos.getX(i)*.08,pos.getZ(i)*.08);
-      else if(nx>=nz)uv.push(pos.getZ(i)*.08,pos.getY(i)*.08);
-      else uv.push(pos.getX(i)*.08,pos.getY(i)*.08);
+      if(ny>=nx&&ny>=nz)uv.push(pos.getX(i)*density,pos.getZ(i)*density);
+      else if(nx>=nz)uv.push(pos.getZ(i)*density,pos.getY(i)*density);
+      else uv.push(pos.getX(i)*density,pos.getY(i)*density);
     }
     ready.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
     if(!batches.has(mat))batches.set(mat,[]);batches.get(mat).push(ready);
@@ -103,7 +105,7 @@ export function buildCityScene(data, shared, makeMaterial) {
     }beam([x,y+levels*4,z],[x,y+levels*4+5,z],.25,'bronze');
   }
   const planting=[];
-  function tree(x,z,scale=1){planting.push({x,z,scale});}
+  function tree(x,z,scale=1,species=null){planting.push({x,z,scale,species});}
   function flatPolygon(ring,mat,y=1.2,holes=[]){
     const shape=new THREE.Shape(ring.map(p=>new THREE.Vector2(p[0],-p[2])));
     holes.forEach(r=>shape.holes.push(new THREE.Path(r.map(p=>new THREE.Vector2(p[0],-p[2])))));
@@ -157,6 +159,7 @@ export function buildCityScene(data, shared, makeMaterial) {
   places.forEach(p=>{
     const [x,,z]=p.position,y=ground(x,z);p.position[1]=y;
     let walk=loop(x,z,p.kind==='mount'?70:p.kind==='oldtown'?43:36);
+    const bespoke=landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree});
     if(p.kind==='oldtown'){
       // A compact district vignette exaggerates alleys and waterfront space.
       // It evokes the photo references; these are not individual surveyed homes.
@@ -199,63 +202,42 @@ export function buildCityScene(data, shared, makeMaterial) {
             beam(bp(t,side*4,deck-6),bp(t+.1,side*4,deck-1),.45,'glass');}
         }
       }
-      for(const t of [.13,.87]){
-        if(p.kind==='truss')for(const side of [-1,1]){
-          const pos=bp(t,side*7);block(pos[0],deck-6,pos[2],4,22,5,'white',yaw);
-          for(let k=0;k<3;k++)block(pos[0]+k*.7,deck+16+k*.4,pos[2],.5,3.2,3,'red',yaw);
-        }else if(p.kind==='cable'){
-          const pos=bp(t);block(pos[0],deck,pos[2],3,24,3,'bronze');
-          for(let i=1;i<10;i++)for(const side of [-1,1])beam(bp(t,0,deck+24),bp(i/10,side*4,deck),.12,'white');
-        }
+      if(p.kind==='truss')for(const t of [.13,.87])for(const side of [-1,1]){
+        const pos=bp(t,side*7);block(pos[0],deck-6,pos[2],4,22,5,'white',yaw);
       }
-      if(p.kind==='eye')for(const side of [-1,1]){
-        const pts=Array.from({length:49},(_,i)=>{const t=i/48;return bp(t,side*6,deck+Math.sin(t*Math.PI)*24);});
-        for(let i=1;i<pts.length;i++)beam(pts[i-1],pts[i],.55,'white');
-      }
+      bridgeDetails(p.kind,bp,deck,{beam,block,add});
       walk=Array.from({length:81},(_,i)=>bp(i/80,3.6,deck+.03));p.position=[x,deck,z];
     }else if(p.kind==='wall'){
-      for(const side of [-1,1])block(x+side*31,y,z,46,12,13,'stone');
-      block(x,y+9,z,16,3,13,'stone');
-      for(let i=-12;i<=12;i++)block(x+i*4,y+12,z-6,1.6,1.8,1.6,'stone');
-      for(const xx of [-34,34])hall(x+xx,y+12,z,18,13,7);
-      walk=Array.from({length:61},(_,i)=>[x-60+i*2,y+12.1,z]);
+      walk=Array.from({length:61},(_,i)=>[x-36+i*1.2,y+12.1,z+55]);
     }else if(p.kind==='mausoleum'){
       const base=ground(x,z+58);
       for(let i=0;i<24;i++){const yy=base+i*.45,zz=z+58-i*2.1;block(x,yy,zz,16,.5,2.2,'white');
         for(const side of [-1,1]){block(x+side*8.4,yy,zz,.4,1.8,.4,'white');
           add(sphere,'white',[x+side*8.4,yy+1.9,zz],[.35,.35,.35]);
           if(i)beam([x+side*8.4,yy+1.6,zz],[x+side*8.4,yy+1.15,zz+2.1],.16,'white');}}
-      hall(x,base+10.8,z+7,22,16,9,'blue');hall(x,base,z+65,21,8,6,'blue');
+      hall(x,base+10.8,z+7,22,16,9,'blue');
       block(x,base,z+61,16,.12,8,'white');
       // Stop outside the main hall; keep the steps visible rather than paving over them.
       walk=Array.from({length:50},(_,i)=>[x,base+Math.max(0,Math.ceil((i-7)/2.1))*.45+.18,z+65-i]);
     }else if(p.kind==='domes'){
-      const dome=primitive('dome',()=>new THREE.SphereGeometry(1,28,16,0,Math.PI*2,0,Math.PI*.5));
-      add(dome,'bronze',[x-15,y,z],[20,14,20]);add(dome,'stone',[x+18,y,z-8],[24,16,24]);
-      for(let i=0;i<12;i++){
-        const angle=i*Math.PI/6;
-        const pts=Array.from({length:15},(_,j)=>{const t=j/14*Math.PI*.5;return [x+18+Math.sin(t)*24*Math.cos(angle),y+Math.cos(t)*16+.1,z-8+Math.sin(t)*24*Math.sin(angle)];});
-        for(let j=1;j<pts.length;j++)beam(pts[j-1],pts[j],.17,'bronze');
-      }pagoda(x+52,ground(x+52,z),z,9);
-      walk=loop(x,z,63);
+      walk=loop(x,z,85);
     }else if(p.kind==='skyline'){
-      for(let i=0;i<5;i++)block(x+i*2,y+i*10,z,20-i*2,10,17-i,'glass');
-      beam([x+8,y+50,z],[x+8,y+66,z],.45,'bronze');
-      for(let i=1;i<40;i++)block(x+3,y+i*1.15,z+8.6,17,.12,.15,'white');
+      walk=loop(x,z,58);
+      // Bespoke triangular glass masses replace the generic stack.
     }else if(['pagoda','tower','temple'].includes(p.kind)){
-      if(p.kind==='tower')for(let i=0;i<4;i++)hall(x,y+i*7,z,28-i*4,22-i*3,6,'bronze');
+      if(bespoke){walk=loop(x,z,p.id==='jiming'?52:48);}
+      else if(p.kind==='tower')for(let i=0;i<4;i++)hall(x,y+i*7,z,28-i*4,22-i*3,6,'bronze');
       else{pagoda(x,y,z,p.kind==='temple'?5:7,p.kind==='temple'?'roof':'bronze');hall(x-20,ground(x-20,z+16),z+16,20,14,8);}
     }else if(p.kind==='tomb'){
-      hall(x,y,z,25,17,10,'red');
+      if(!bespoke)hall(x,y,z,25,17,10,'red');
       for(let i=0;i<8;i++){
         const xx=x+(i%2?13:-13),zz=z+25+Math.floor(i/2)*14,yy=ground(xx,zz);
         add(sphere,'stone',[xx,yy+2.3,zz],[2,2,3]);add(sphere,'stone',[xx,yy+3,zz-2],[1.2,1.4,1]);
         for(const dx of [-1,1])for(const dz of [-1,1])block(xx+dx,yy,zz+dz*1.7,.65,2,.65,'stone');
       }walk=Array.from({length:55},(_,i)=>[x,ground(x,z+75-i*1.25)+.35,z+75-i*1.25]);
     }else if(p.kind==='palace'){
-      hall(x,y,z,25,16,9);hall(x-22,y,z-30,20,15,7);hall(x+22,y,z-30,20,15,7);
-      for(const xx of [-10,0,10])block(x+xx,y,z+15,2,5,2,'white');
-      block(x,y+5,z+15,24,2,3,'white');
+      walk=loop(x,z,62);
+      // Arched neoclassical entrance and garden halls are emitted above.
     }else if(p.kind==='springs'){
       for(let i=0;i<5;i++){
         const xx=x+(i%3-1)*14,zz=z+Math.floor(i/3)*16;
@@ -289,6 +271,7 @@ export function buildCityScene(data, shared, makeMaterial) {
             const f=j/count,g=(j+1)/count,xx=a[0]+(b[0]-a[0])*f+nx*4.2,zz=a[2]+(b[2]-a[2])*f+nz*4.2;
             const bx=a[0]+(b[0]-a[0])*g+nx*4.2,bz=a[2]+(b[2]-a[2])*g+nz*4.2;
             const yy=Math.max(a[1]+(b[1]-a[1])*f,ground(xx,zz)+.1),by=Math.max(a[1]+(b[1]-a[1])*g,ground(bx,bz)+.1);
+            if(j%4===0){let tx=xx+nx*12,tz=zz+nz*12;if(wet(tx,tz)){tx=xx-nx*12;tz=zz-nz*12;}tree(tx,tz,.9,2);}
             block(xx,yy,zz,.42,1.35,.42,'stone');add(sphere,'white',[xx,yy+1.45,zz],[.3,.28,.3]);
             beam([xx,yy+1.05,zz],[bx,by+1.05,bz],.13,'white');beam([xx,yy+.5,zz],[bx,by+.5,bz],.1,'stone');
           }
@@ -301,13 +284,14 @@ export function buildCityScene(data, shared, makeMaterial) {
     }
     walk.forEach(pt=>{if(!Number.isFinite(pt[1]))pt[1]=1.5;});
     p.route=routes.length;routes.push({...route(walk),name:p.name});
-    const spawnIndex=p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
+    const frontEntry=['palace','zifeng','niushou','qixia'].includes(p.id);
+    const spawnIndex=p.id==='qixia'?20:frontEntry?0:p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
     p.spawn=walk[spawnIndex].slice();p.spawn[1]+=1.7;
     const headingIndex=spawnIndex>walk.length-7?spawnIndex-6:spawnIndex+6;
     p.look=p.kind==='mount'?walk[headingIndex].slice():p.position.slice();
     // A downhill bend can be far below the eye. Enter looking along its heading
     // with a level horizon, rather than staring into the immediate ground.
-    if(p.kind==='mount')p.look[1]=p.spawn[1]-.3;else p.look[1]+=p.kind==='skyline'?25:5;
+    if(p.kind==='mount')p.look[1]=p.spawn[1]-.3;else p.look[1]+=p.kind==='skyline'?48:5;
     if(p.kind!=='mausoleum'){const path=ribbon(walk,6,.04),vertices=path.attributes.position;
       if(!['wall','truss','cable','eye'].includes(p.kind))for(let i=0;i<vertices.count;i++)vertices.setY(i,Math.max(vertices.getY(i),ground(vertices.getX(i),vertices.getZ(i))+.16));
       path.computeVertexNormals();add(path,'stone');path.dispose();}
@@ -336,7 +320,9 @@ export function buildCityScene(data, shared, makeMaterial) {
     const gx=Math.floor((random()-.5)*15)*100,gz=Math.floor((random()-.5)*13)*100;
     const x=gx+18+random()*65,z=gz+18+random()*65;
     if(wet(x,z)||terrain.relief(x,z)>8||places.some(p=>Math.hypot(x-p.position[0],z-p.position[2])<95))continue;
-    const h=5+random()**2*22,w=8+random()*9,d=8+random()*9,base=ground(x,z);
+    const old=places.find(p=>p.id==='qinhuai').position,modern=places.find(p=>p.id==='zifeng').position;
+    const historic=Math.hypot(x-old[0],z-old[2])<280,cbd=Math.hypot(x-modern[0],z-modern[2])<180;
+    const h=historic?4+random()*5:cbd?18+random()**2*43:5+random()**2*22,w=8+random()*9,d=8+random()*9,base=ground(x,z);
     block(x,base,z,w,h,d,i%4?'white':'glass');
     if(h<14){
       block(x,base-.1,z,w+1,.3,d+1,'stone');add(roof,'roof',[x,base+h,z],[w+2,3.2,d+2]);
@@ -373,7 +359,7 @@ export function buildCityScene(data, shared, makeMaterial) {
     const merged=mergeGeometries(geos);geos.forEach(g=>g.dispose());
     const mesh=new THREE.Mesh(merged,materials[key]);mesh.name=`Nanjing atlas | ${key}`;
     mesh.receiveShadow=key!=='water';mesh.castShadow=false;scene.add(mesh);meshes.push(mesh);
-    if(['roof','blue','white','red'].includes(key)){
+    if(['roof','blue','white','red','ochre'].includes(key)){
       const strokes=new THREE.LineSegments(new THREE.EdgesGeometry(merged,38),
         new THREE.LineBasicMaterial({color:0x344f48,transparent:true,opacity:.28}));
       strokes.name='Illustration contour | '+key;scene.add(strokes);

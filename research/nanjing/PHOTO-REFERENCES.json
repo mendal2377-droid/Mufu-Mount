@@ -1,0 +1,138 @@
+{
+  "accessed": "2026-10-05",
+  "photos": [
+    {
+      "id": "eye",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475084907-Nanjing_Eye_%282%29.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "niushou",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475084961-Niushoushan_cultural_tourism_zone.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "palace",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475085061-Presidential_Palace_Gatehouse.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "zhongshan",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475085140-Sun_Yat-sen.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "yuejiang",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/32.%20Yuejiang%20Tower.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "bridge",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475084706-1.Nanjing_Yangtze_River_Bridge.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "jiming",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475084803-Jiming_Temple_2.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "skyline",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475084894-Nanjing_Cityscape.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "xuanwu",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475085198-Xuanwu_Lake_2.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "qinhuai",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475085083-Qinhuai_River_Confucius_Temple_Scenic_Area.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "dome",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/17.%20Usnisa%20Palace%20of%20Niushou%20Mountain..jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "wall",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/18.%20Nanjing%20City%20Wall..jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "zifeng",
+      "url": "https://www.smithgill.com/media/images/project_images/531/nanjing_01.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "eyeAerial",
+      "url": "https://gjzx.nanjing.gov.cn/xmqk/qabxq/202509/W020250903416163001225.jpg",
+      "pixelsInspected": false,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": "Source endpoint returned 403; not visually verified"
+    },
+    {
+      "id": "xiaoling",
+      "url": "https://zschina.nanjing.gov.cn/lyzx/202506/W020250623364200384057.jpg",
+      "pixelsInspected": false,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": "Source endpoint returned 403; not visually verified"
+    },
+    {
+      "id": "avenue",
+      "url": "https://zschina.nanjing.gov.cn/lyzx/202506/W020250623364220623465.png",
+      "pixelsInspected": false,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": "Source endpoint returned 403; not visually verified"
+    },
+    {
+      "id": "qixia",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/44/Pagoda_at_Qixia_Temple_Nanjing.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": "Photographer Farm; CC BY-SA 3.0 / GFDL; not used as an imagegen input"
+    },
+    {
+      "id": "mochou",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1553182918-Mochou-Lake.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": ""
+    },
+    {
+      "id": "niushouExterior",
+      "url": "https://www.gotonanjing.com/sites/default/files/gallery-img/1475085163-Usnisa_Palace_Nanjing%2C_China.jpg",
+      "pixelsInspected": true,
+      "use": "Research inspection only; not redistributed in the web app",
+      "note": "Niushou interior lattice view, despite gallery filename"
+    }
+  ]
+}

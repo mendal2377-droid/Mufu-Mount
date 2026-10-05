@@ -50,3 +50,12 @@ test('Lake islands remain dry while the surrounding basin is carved below water'
   assert.ok(t.analytic(40,0)<0);
   assert.ok(t.ground(0,0)>t.ground(40,0));t.geometry.dispose();
 });
+
+// Lowland entrance pads must survive the lake-shoulder treatment. Otherwise a
+// hill covers the palace arches and hides Jiming's temple from the arrival path.
+test('lowland landmark forecourts keep their architecture above the approach ground',()=>{
+  for(const id of ['palace','jiming']){
+    const [x,,z]=places.find(p=>p.id===id).position,base=terrain.ground(x,z);
+    for(const dz of [20,35,50])assert.ok(terrain.ground(x,z+dz)<base+1.2,id+' approach rise');
+  }
+});

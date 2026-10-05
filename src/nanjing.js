@@ -12,10 +12,12 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   if(!response.ok)throw Error('Nanjing map unavailable');
   const data=await response.json();
   const loader=new THREE.TextureLoader();
-  const [foliage,meadow]=await Promise.all([
-    loader.loadAsync('/city/art/foliage-gouache-v1.png'),loader.loadAsync('/city/art/meadow-gouache-v1.webp')]);
-  for(const t of [foliage,meadow]){t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;}
+  const [foliage,meadow,tiles,brick,ochre,glass]=await Promise.all([
+    loader.loadAsync('/city/art/foliage-gouache-v1.png'),loader.loadAsync('/city/art/meadow-gouache-v1.webp'),
+    ...['tiles','brick','ochre','glass'].map(name=>loader.loadAsync(`/city/art/${name}-gouache-v1.webp`))]);
+  for(const t of [foliage,meadow,tiles,brick,ochre,glass]){t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;}
   meadow.wrapS=meadow.wrapT=THREE.RepeatWrapping;
+  for(const t of [tiles,brick,ochre,glass])t.wrapS=t.wrapT=THREE.MirroredRepeatWrapping;
   const bands=new THREE.DataTexture(new Uint8Array([90,122,154,184,211,237,255]),7,1,THREE.RedFormat);
   bands.minFilter=bands.magFilter=THREE.NearestFilter;bands.needsUpdate=true;
   const grain=document.createElement('canvas');grain.width=grain.height=128;
@@ -25,14 +27,17 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   const paper=new THREE.CanvasTexture(grain);paper.wrapS=paper.wrapT=THREE.RepeatWrapping;paper.repeat.set(1,1);
   function inkMaterial(name,color){
     const leaves=/foliage/.test(name),land=/relief/.test(name),stone=/warm stone/.test(name),wood=/bark/.test(name);
+    const architectural=/tiled roof|glazed roof/.test(name)?tiles:stone?brick:/ochre/.test(name)?ochre:/glass/.test(name)?glass:null;
     const mat=new THREE.MeshToonMaterial({color:new THREE.Color(...color).convertSRGBToLinear(),gradientMap:bands,
-      map:leaves?foliage:land?meadow:paper,side:THREE.DoubleSide,alphaTest:leaves?.38:0});
+      map:leaves?foliage:land?meadow:architectural||paper,side:THREE.DoubleSide,alphaTest:leaves?.38:0});
     mat.name=name;
     mat.onBeforeCompile=s=>{
       s.uniforms.citySnow=shared.snow;s.uniforms.cityTime=shared.time;
       s.fragmentShader='uniform float citySnow;\n'+s.fragmentShader;
       s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',
         '#include <color_fragment>\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.89,.84),citySnow*.65);');
+      if(architectural)s.fragmentShader=s.fragmentShader.replace('#include <map_fragment>',THREE.ShaderChunk.map_fragment.replace(
+        'diffuseColor *= sampledDiffuseColor;','diffuseColor *= mix(vec4(1.),sampledDiffuseColor,.45);'));
       if(land)s.fragmentShader=s.fragmentShader.replace('#include <map_fragment>',THREE.ShaderChunk.map_fragment.replace(
         'diffuseColor *= sampledDiffuseColor;','diffuseColor *= mix(vec4(1.),sampledDiffuseColor,.48);'));
       if(stone||wood){
@@ -53,7 +58,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
         s.vertexShader=s.vertexShader.replace('#include <begin_vertex>',
           '#include <begin_vertex>\ntransformed.x+=sin(position.z*.7+cityTime)*.14;');
       }
-    };mat.customProgramCacheKey=()=>`city-ink-v1-${leaves?'leaves':land?'terrain':stone?'stone':wood?'wood':'paper'}`;return mat;
+    };mat.customProgramCacheKey=()=>`city-ink-v2-${leaves?'leaves':land?'terrain':stone?'stone':wood?'wood':architectural?'architecture':'paper'}`;return mat;
   }
   const built=buildCityScene(data,shared,inkMaterial),{scene,places,routes,ground}=built;
   const cityDirection=new THREE.Vector3(),skyShared={...shared,uSunDir:{value:cityDirection}};
@@ -156,7 +161,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     menu(){controls.unlock();keys.clear();$('#city-menu-title').textContent=selected.zh;
       $('#city-sound').textContent=$('#sound').textContent==='Sound on'?'Mute nature sound':'Enable nature sound';$('#city-menu').showModal();},
     stats(){return {active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,
-      art:{style:'gouache-ink',foliageReady:!!foliage.image,meadowReady:!!meadow.image,water:'crossing-brush-ripples'},terrain:built.terrain.stats,landscape:{...built.landscape.stats}};},
+      art:{style:'gouache-ink',foliageReady:!!foliage.image,meadowReady:!!meadow.image,architectureReady:[tiles,brick,ochre,glass].every(t=>!!t.image),landmarkDesign:'photo-informed-v2',water:'crossing-brush-ripples'},terrain:built.terrain.stats,landscape:{...built.landscape.stats}};},
   };
   $('#city-scope').onchange=e=>api.showPlan(e.target.value);$('#city-reset').onclick=frameMap;
   $('#city-map-return').onclick=()=>api.showPlan();$('#city-menu-close').onclick=()=>$('#city-menu').close();

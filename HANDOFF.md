@@ -7,6 +7,46 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
+**5 October 2026: public-photo landmark and landscape study.**
+The evidence register is `research/nanjing/LANDMARKS.md`, with 19 image/source
+records in `PHOTO-REFERENCES.json`. Sixteen public images were visually reviewed;
+three additional image endpoints returned 403 and remain explicitly unavailable.
+Primary references include municipal archives, bridge authorities, park management,
+the official tourism gallery and the architect's actual Nanjing Zifeng project.
+Research photos stay in ignored `test-results/research/`; none are published.
+
+Built-in imagegen produced `design/city/nanjing-landmarks-concept-v2.png` and
+`architecture-source-v1.png`. Exact prompts, references and material packing are
+in `design/city/LANDMARK-PROMPTS.md`. Four 512px WebP maps in `public/city/art/`
+add painted tile, brick, ochre plaster and glass to dimensional geometry. These
+are sRGB, mirror-repeating maps blended at 45%; the concept is not a game capture.
+
+`src/city-landmarks.js` emits real arched apertures, layered polygonal pagoda
+roofs, a lattice dome, stepped gables, facade modules and closed bridge rings.
+Jiming has seven octagonal levels; Niushou uses nine FOUR-sided levels following
+the park's primary description. Zhonghua has three open courts/four gates and
+no invented roof towers; its footprint is compacted south of the point anchor
+to avoid the neighbouring Qinhuai/Laomendong lanes. Zifeng is asymmetric and
+faceted. Nanjing Eye has two inclined closed oval pylons; the Third Yangtze ROAD
+bridge has curved cable towers. Yuejiang gains tiered blue roofs and red balconies.
+The palace has a neoclassical three-arch entrance rather than a generic tiled hall.
+
+Central lowland forecourts in `city-terrain.js` are graded within the existing
+continuous terrain so lake shoulders cannot bury the palace or Jiming. Soft bank
+joins and below-water beds remain. Arrival sight lines exclude obstructing trees;
+Qixia enters from an oblique court view. Lake banks favour willows, historic blocks
+stay low/tiled, and taller glass groups concentrate near Zifeng. All dimensions,
+footprints and elevations remain artistic; public coordinate provenance is unchanged.
+
+Verification: 53 unit checks (including open gate raycasts, closed bridge rings,
+forecourt visibility and immutable photo-metadata checks) and the production build.
+Browser verification covers 13 landmark arrivals, generated material readiness,
+three weather changes and portrait layout, plus the city regression for 20 pins,
+eight walks, route clearance, sound, kite launch/climb/landing and the Mufu portal.
+No browser/shader errors were observed; screenshots were reviewed. The scene
+stays below the two-million-triangle limit. Physical-phone/hardware-GPU frame rates
+are not benchmarked. Keep single final tone mapping and the existing foliage caps.
+
 **5 October 2026: imagegen gouache city implementation.**
 The new art direction and exact built-in imagegen prompts are in
 `design/city/PROMPTS.md`. `nanjing-concept-v1.png` is concept art, not a game

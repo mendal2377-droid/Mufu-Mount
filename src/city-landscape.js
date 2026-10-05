@@ -12,11 +12,12 @@ export function createCityLandscape({terrain,places,routes,riverLines,materials,
   const groups=[],trees=[],grass=[],flowers=[],rocks=[];
   const blocked=(x,z,margin=8)=>routes.some(r=>distanceToLine(x,z,r.points)<margin);
   const occupied=(x,z)=>places.some(p=>!['mount','lake'].includes(p.kind)&&Math.hypot(x-p.position[0],z-p.position[2])<32);
-  function placeTree(x,z,scale=1){
-    if(!contains(x,z)||wet(x,z)||blocked(x,z)||occupied(x,z))return;
-    trees.push({x,z,y:ground(x,z),scale:scale*1.28,yaw:random()*Math.PI*2,species:random()<.26?1:random()<.2?2:0,tint:random()});
+  const entranceClear=(x,z)=>places.some(p=>p.spawn&&p.look&&distanceToLine(x,z,[p.spawn,p.look])<12);
+  function placeTree(x,z,scale=1,species=null){
+    if(!contains(x,z)||wet(x,z)||blocked(x,z)||occupied(x,z)||entranceClear(x,z))return;
+    trees.push({x,z,y:ground(x,z),scale:scale*1.28,yaw:random()*Math.PI*2,species:species??(shore(x,z)<25?2:random()<.26?1:random()<.2?2:0),tint:random()});
   }
-  planting.forEach(p=>placeTree(p.x,p.z,p.scale));
+  planting.forEach(p=>placeTree(p.x,p.z,p.scale,p.species));
   terrain.ridges.forEach(h=>{
     const count=h.secondary?280:820;
     for(let i=0;i<count;i++){

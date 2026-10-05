@@ -73,7 +73,7 @@ export function createCityTerrain(places,riverLines,lakes,rings){
     return {x,z,kind,y:raw(x,z+(kind==='mausoleum'?65:0)),rx:kind==='oldtown'?110:kind==='domes'?82:30,
       rz:kind==='oldtown'?70:kind==='domes'?82:kind==='mausoleum'?85:30,offset:kind==='mausoleum'?20:0};
   });
-  function ground(x,z){
+  function landform(x,z){
     let y=raw(x,z);
     for(const p of terraces){
       const d=Math.max(Math.abs(x-p.x)-p.rx,Math.abs(z-p.z-p.offset)-p.rz),weight=1-smooth(0,70,d);
@@ -90,6 +90,26 @@ export function createCityTerrain(places,riverLines,lakes,rings){
     if(lakeBank>0&&lakeBank<240){
       const shoulder=.2+lakeBank*.22+Math.max(0,lakeBank-90)*.5;
       y=THREE.MathUtils.lerp(y,Math.min(y,shoulder),1-smooth(160,240,lakeBank));
+    }
+    return y;
+  }
+  // Lake shoulders must not cut through the lowland landmark forecourts.
+  // Grade the existing continuous surface; keep water beds and soft bank joins.
+  const forecourts=places.filter(p=>['palace','jiming'].includes(p.id)).map(p=>{
+    const [x,,z]=p.position;
+    return {x,z,y:landform(x,z),rx:p.id==='palace'?65:55,rz:p.id==='palace'?75:55};
+  });
+  // These adjacent central-city courtyards share a lowland grade. Independent
+  // heights would produce a ridge where their softened edges overlap.
+  const forecourtGrade=Math.min(...forecourts.map(p=>p.y));
+  forecourts.forEach(p=>p.y=forecourtGrade);
+  function ground(x,z){
+    let y=landform(x,z);const bank=shore(x,z);
+    if(bank<0)return y;
+    for(const p of forecourts){
+      const d=Math.max(Math.abs(x-p.x)-p.rx,Math.abs(z-p.z)-p.rz);
+      const weight=(1-smooth(0,40,d))*smooth(0,24,bank);
+      if(weight)y=THREE.MathUtils.lerp(y,p.y,weight);
     }
     return y;
   }

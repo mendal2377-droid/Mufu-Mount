@@ -6,9 +6,10 @@ const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use
 const errors=[],report={};await fs.mkdir('test-results',{recursive:true});
 try{
   const page=await browser.newPage({viewport:{width:1440,height:900}});
+  await page.route(/fonts\.(googleapis|gstatic)\.com/,r=>r.fulfill({status:200,contentType:'text/css',body:''}));
   await page.addInitScript(()=>localStorage.setItem('mufu-quality','smooth'));
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/fonts|ERR_CERT|PointerLock|pointer lock/i.test(m.text()))errors.push(m.text());});
-  await page.goto(process.env.MUFU_TEST_URL||'http://127.0.0.1:4184');
+  await page.goto(process.env.MUFU_TEST_URL||'http://127.0.0.1:4184',{waitUntil:'domcontentloaded',timeout:120000});
   await page.waitForFunction(()=>window.__mufu?.city?.active,null,{timeout:120000});
   await page.evaluate(()=>{window.__mufu.paused=true;window.__mufu.step(2,.1);});
   assert.equal(await page.locator('.city-pin').count(),20);
