@@ -1175,11 +1175,11 @@ body.playing #touch-controls { bottom: 22px; left: 24px; transform: none; z-inde
 #toast { max-width: calc(100vw - 36px); pointer-events: none; }
 #nanjing-home { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
 .city-card { position: absolute; top: 130px; right: 26px; width: 260px; padding: 16px;
-  background: #f3eddcde; color: #304e42; border: 1px solid #ffffffe0; border-radius: 18px;
+  background: #f5ecdbe8; color: #304e42; border: 1px solid #e3d1a5; border-radius: 18px;
   backdrop-filter: blur(14px); box-shadow: 0 8px 30px #35574418; pointer-events: auto; }
-.city-card-top { display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 12px; }
+.city-card-top { display: flex; align-items: center; justify-content: space-between; font-family: Georgia,serif; font-size: 15px; margin-bottom: 12px; }
 .city-card button { color: #304e42; }
-#city-scope { background: #dfdfc8; color: #304e42; border: 0; padding: 10px; border-radius: 8px; width: 100%; font-size: 12px; }
+#city-scope { background: #e5ddc8; color: #304e42; border: 0; padding: 10px; border-radius: 8px; width: 100%; font-size: 12px; }
 #city-list { margin-top: 12px; font-size: 12px; }
 #city-list summary { cursor: pointer; padding: 8px 0; }
 #city-destinations { max-height: min(48vh,450px); overflow-y: auto; display: grid; }
@@ -1190,7 +1190,7 @@ body.playing #touch-controls { bottom: 22px; left: 24px; transform: none; z-inde
 .city-caption { font-size: 10px; line-height: 1.5; opacity: .7; margin: 12px 0 0; }
 .city-pin { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 6px;
   transform: translate(-50%,calc(-100% + 15px)); padding: 0; border: 0; background: none; pointer-events: auto; min-width: 36px; }
-.city-label { padding: 7px 12px; background: #345446ed; color: #fff6dd; border-radius: 12px; white-space: nowrap;
+.city-label { padding: 7px 12px; background: #2f504ced; color: #fff6dd; border: 1px solid #dacb9550; border-radius: 12px; white-space: nowrap;
   font-size: 12px; font-weight: 500; box-shadow: 0 3px 10px #28443315; }
 .city-dot { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #f2e6af;
   color: #345446; border: 2px solid #fff8d9; box-shadow: 0 2px 8px #34544625; font-size: 17px; }
@@ -1203,7 +1203,7 @@ body.playing #touch-controls { bottom: 22px; left: 24px; transform: none; z-inde
 .city-hint { position: absolute; bottom: 44px; left: 26px; font-size: 11px; color: #294b3d; }
 .city-credit { position: absolute; left: 26px; bottom: 20px; font-size: 9px; color: #294b3d; pointer-events: auto; }
 .city-credit a { color: inherit; text-decoration: underline; }
-body.city-mode .brand { background: #345446db; }
+body.city-mode .brand { background: #2f504ce8; border: 1px solid #dacb9550; }
 body.city-mode .quiet-actions { z-index: 6; }
 #city-menu { max-width: min(430px,90vw); border: 1px solid #77917f; border-radius: 18px; background: #243e33; color: #fff5db; padding: 28px; }
 #city-menu::backdrop { background: #152e2860; backdrop-filter: blur(8px); }

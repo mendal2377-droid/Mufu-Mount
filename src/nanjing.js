@@ -11,7 +11,12 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   const response=await fetch('/city/nanjing.json');
   if(!response.ok)throw Error('Nanjing map unavailable');
   const data=await response.json();
-  const bands=new THREE.DataTexture(new Uint8Array([65,115,160,205,245]),5,1,THREE.RedFormat);
+  const loader=new THREE.TextureLoader();
+  const [foliage,meadow]=await Promise.all([
+    loader.loadAsync('/city/art/foliage-gouache-v1.png'),loader.loadAsync('/city/art/meadow-gouache-v1.webp')]);
+  for(const t of [foliage,meadow]){t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;}
+  meadow.wrapS=meadow.wrapT=THREE.RepeatWrapping;
+  const bands=new THREE.DataTexture(new Uint8Array([90,122,154,184,211,237,255]),7,1,THREE.RedFormat);
   bands.minFilter=bands.magFilter=THREE.NearestFilter;bands.needsUpdate=true;
   const grain=document.createElement('canvas');grain.width=grain.height=128;
   const ctx=grain.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,128,128);
@@ -19,24 +24,41 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     ctx.fillStyle=i%3?'#e5e3d4':'#c8cfb9';ctx.fillRect(x,seed%128,1,i%5===0?3:1);}
   const paper=new THREE.CanvasTexture(grain);paper.wrapS=paper.wrapT=THREE.RepeatWrapping;paper.repeat.set(1,1);
   function inkMaterial(name,color){
-    const mat=new THREE.MeshToonMaterial({color:new THREE.Color(...color).convertSRGBToLinear(),gradientMap:bands,map:paper,side:THREE.DoubleSide});
+    const leaves=/foliage/.test(name),land=/relief/.test(name),stone=/warm stone/.test(name),wood=/bark/.test(name);
+    const mat=new THREE.MeshToonMaterial({color:new THREE.Color(...color).convertSRGBToLinear(),gradientMap:bands,
+      map:leaves?foliage:land?meadow:paper,side:THREE.DoubleSide,alphaTest:leaves?.38:0});
     mat.name=name;
     mat.onBeforeCompile=s=>{
       s.uniforms.citySnow=shared.snow;s.uniforms.cityTime=shared.time;
       s.fragmentShader='uniform float citySnow;\n'+s.fragmentShader;
       s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',
         '#include <color_fragment>\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.89,.84),citySnow*.65);');
+      if(land)s.fragmentShader=s.fragmentShader.replace('#include <map_fragment>',THREE.ShaderChunk.map_fragment.replace(
+        'diffuseColor *= sampledDiffuseColor;','diffuseColor *= mix(vec4(1.),sampledDiffuseColor,.48);'));
+      if(stone||wood){
+        s.vertexShader='varying vec3 citySurface;varying float cityUp;\n'+s.vertexShader.replace('#include <begin_vertex>',
+          '#include <begin_vertex>\ncitySurface=(modelMatrix*vec4(transformed,1.)).xyz;cityUp=abs(normal.y);');
+        s.fragmentShader='varying vec3 citySurface;varying float cityUp;\n'+s.fragmentShader;
+        s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+          vec2 surface=citySurface.xz;
+          surface.x+=step(.5,fract(surface.y/2.4))*.8;
+          vec2 cell=surface/vec2(1.6,1.2),edge=abs(fract(cell)-.5);
+          float mortar=smoothstep(.45,.49,max(edge.x,edge.y))*(1.-smoothstep(.15,.65,max(fwidth(cell.x),fwidth(cell.y))));
+          float pigment=fract(sin(dot(floor(cell),vec2(43.1,29.7)))*45718.31);
+          diffuseColor.rgb*=mix(1.,.87+pigment*.16-mortar*.14,${stone?'cityUp':'0.'});
+          ${wood?'diffuseColor.rgb*=.87+.13*sin(citySurface.y*.8+sin(citySurface.x*13.+citySurface.z*17.)*2.);':''}`);
+      }
       if(/foliage/.test(name)){
         s.vertexShader='uniform float cityTime;\n'+s.vertexShader;
         s.vertexShader=s.vertexShader.replace('#include <begin_vertex>',
           '#include <begin_vertex>\ntransformed.x+=sin(position.z*.7+cityTime)*.14;');
       }
-    };return mat;
+    };mat.customProgramCacheKey=()=>`city-ink-v1-${leaves?'leaves':land?'terrain':stone?'stone':wood?'wood':'paper'}`;return mat;
   }
   const built=buildCityScene(data,shared,inkMaterial),{scene,places,routes,ground}=built;
   const cityDirection=new THREE.Vector3(),skyShared={...shared,uSunDir:{value:cityDirection}};
   const sky=createSkyDome(scene,skyShared).dome;sky.scale.setScalar(5);
-  const hemi=new THREE.HemisphereLight(0xd8e6ed,0x6f7854,2.2),sun=new THREE.DirectionalLight(0xffecc5,2.0);
+  const hemi=new THREE.HemisphereLight(0xe1edf1,0x68766a,2.2),sun=new THREE.DirectionalLight(0xffecc5,2.0);
   scene.add(hemi,sun,sun.target);
   const cityRain=rain.clone(),citySnow=snow.clone();scene.add(cityRain,citySnow);
   const bounds=new THREE.Box3().setFromPoints(built.rings.flat().map(p=>new THREE.Vector3(...p))).expandByScalar(500);
@@ -104,8 +126,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       sun.position.copy(camera.position).addScaledVector(cityDirection,900);sun.target.position.copy(camera.position);
       sun.intensity=(2.4-weather.storm*1.8-weather.snow*.8)*(1-weather.dawn*.6);
       sun.color.setRGB(1,1-weather.sunset*.3,1-weather.sunset*.55);hemi.intensity=1.35-weather.storm*.45-weather.dawn*.65;
-      scene.fog.color.setRGB(.73+weather.sunset*.1-weather.storm*.4,.79-weather.sunset*.14-weather.storm*.38,.71-weather.sunset*.18-weather.storm*.28);
-      scene.fog.density=state.overview?.000014:.0005+weather.storm*.0015+weather.snow*.001;
+      scene.fog.color.setRGB(.69+weather.sunset*.15-weather.storm*.36,.80-weather.sunset*.14-weather.storm*.38,.82-weather.sunset*.24-weather.storm*.32);
+      scene.fog.density=state.overview?.000009:.00032+weather.storm*.0015+weather.snow*.001;
       sky.scale.setScalar(state.overview?5:1);sky.position.copy(camera.position);cityRain.position.copy(camera.position);citySnow.position.copy(camera.position);
       cityRain.visible=!state.overview&&weather.storm>.02;citySnow.visible=!state.overview&&weather.snow>.02;
       boats.forEach(({boat,line,offset})=>{const f=(t*.0008+offset)%1;boat.position.copy(line.getPointAt(f));const d=line.getTangentAt(f);boat.rotation.y=Math.atan2(-d.z,d.x);});
@@ -133,7 +155,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     },resize:frameMap,
     menu(){controls.unlock();keys.clear();$('#city-menu-title').textContent=selected.zh;
       $('#city-sound').textContent=$('#sound').textContent==='Sound on'?'Mute nature sound':'Enable nature sound';$('#city-menu').showModal();},
-    stats(){return {active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,terrain:built.terrain.stats,landscape:{...built.landscape.stats}};},
+    stats(){return {active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,
+      art:{style:'gouache-ink',foliageReady:!!foliage.image,meadowReady:!!meadow.image,water:'crossing-brush-ripples'},terrain:built.terrain.stats,landscape:{...built.landscape.stats}};},
   };
   $('#city-scope').onchange=e=>api.showPlan(e.target.value);$('#city-reset').onclick=frameMap;
   $('#city-map-return').onclick=()=>api.showPlan();$('#city-menu-close').onclick=()=>$('#city-menu').close();

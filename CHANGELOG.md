@@ -1,5 +1,31 @@
 # Change log
 
+## 2026-10-05 — imagegen city art direction
+
+Re-imagined the user's two city screenshots with built-in imagegen: a gouache
+Nanjing concept, four-spray RGBA foliage atlas and meadow pigment texture.
+Versioned sources, runtime assets and exact prompts are in `design/city/PROMPTS.md`.
+The concept is a design reference, not an implemented-scene screenshot.
+
+Implemented curved broadleaf, pine and willow crown volumes with golden leaf
+accents; small opaque interiors make aerial groves readable. Trees stay instanced,
+with no shadow casters. Meadow pigment, jade/sage relief, grounding washes,
+ivory plaster, blue-gray ribbed roofs, vermilion woodwork and clustered courtyard
+buildings give the city a consistent palette. Lake promenades follow dry shore
+samples with stone balustrades; broad park shoulders remove abrupt basin walls.
+Water has crossing filtered normals, warped broken highlights and weather-linked
+reflection colours. The atlas UI uses parchment and jade ink; walking stays quiet.
+
+Public anchors and data are unchanged. Terrain, architecture and planting remain
+artistic approximations. Close plants retain the existing caps; altitude now
+affects tree detail. Source photographs and their private metadata are unchanged.
+
+50 unit checks and the production build pass. City browser checks cover eight
+walks, world pins, terrain clearance, kite, weather, sound, mobile and Mufu
+portal. A final art check verifies texture loading and shader rendering in four
+weather modes and portrait with no browser errors. Screenshots were reviewed;
+physical-phone and hardware-GPU performance remain unbenchmarked.
+
 ## 2026-10-05 — terrain and city detail
 
 Replaced the overlapping flat lawn / hill layers with a single colored relief

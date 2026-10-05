@@ -7,6 +7,48 @@ actually verified, and what is worth doing next.
 Deployment: [mufu-mount.vercel.app](https://mufu-mount.vercel.app/).
 Use `git log` for the current revision.
 
+**5 October 2026: imagegen gouache city implementation.**
+The new art direction and exact built-in imagegen prompts are in
+`design/city/PROMPTS.md`. `nanjing-concept-v1.png` is concept art, not a game
+screenshot. Generated source PNGs remain in that directory; runtime foliage
+RGBA and meadow WebP are in `public/city/art/`. The foliage source quadrants
+are packed into 512-pixel cells with 46-pixel transparent gutters. Keep those
+gutters and the atlas UV convention in `foliagePatch` when replacing the art.
+
+`src/city-art.js` supplies curved multi-directional crown patches and small
+opaque canopy interiors, so distant groves stay readable while close branches
+have depth. Interior normals are rounded; crowns still never cast shadows.
+The landscape has about 7,500 seeded trees, with the same 220-per-species near
+caps and bounded grass/flowers. Grounding washes modify terrain vertex colours,
+not height or separate overlay plates. Altitude also controls detail selection.
+
+`nanjing.js` loads the two generated runtime assets before building the city.
+Its material cache keys distinguish foliage, terrain, stone, bark and paper;
+do not merge those keys because their shader patches differ. The terrain
+texture is blended at 48 percent strength. `paintCityWater` uses crossing,
+warped, derivative-filtered highlights and view-space normals, with shared
+sunset/storm/snow uniforms; it does not add a second tone map.
+
+Ivory courtyard clusters, ribbed blue-gray roofs, vermilion timber and stone
+lake balustrades follow the concept. Lake walks sample the dry side of public
+shore rings; artistic park shoulders soften the compressed basin terrain while
+retaining mountain relief. Public anchors are unchanged. The original detailed
+Mufu scene, private hiking photos and published-photo metadata rules are intact.
+
+The atlas now uses about 1.27 million triangles in the overview. Runtime generated
+art is about 1.95 MB compressed. Browser stats expose `art` readiness/style and
+`landscape.paintedCanopies`; the city browser check captures three weather
+moods as well as walking, orbit anchors, flight, mobile and the Mufu portal.
+Physical-phone and hardware-GPU performance remain unbenchmarked.
+
+Verification for this revision: 50 unit checks and the production build pass.
+The city browser checks pass for eight walks, terrain clearance, pin anchors,
+kite launch/climb/landing, weather, sound, portrait navigation and the Mufu
+portal. The final art check passes in morning/sunset/storm/snow and portrait,
+with generated textures loaded and no browser/shader errors. Screenshots were
+reviewed. One 1440-pixel lake-facing software-GPU capture timed out; reducing
+the deterministic frame workload and capture size to 1100 pixels passed.
+
 **5 October 2026: richer terrain and destinations.**
 `src/city-terrain.js` owns the single adaptive relief mesh, water-bed / island
 masks, scenic ridges, plateau transitions and the triangle-interpolated ground

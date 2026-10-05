@@ -14,7 +14,7 @@ function noise(x,z){
 // The map supplies anchors/centerlines; every elevation is an artistic choice.
 export function createCityTerrain(places,riverLines,lakes,rings){
   const hills=cityHills(places);
-  const config={mufu:[138,285,115,-.18],zijin:[300,340,220,.45],niushou:[165,235,165,-.5],
+  const config={mufu:[138,285,115,-.18],zijin:[240,385,280,.45],niushou:[165,235,165,-.5],
     qixia:[150,255,165,.3],tangshan:[118,420,230,-.3],yuejiang:[36,105,80,0]};
   hills.forEach(h=>{const p=places.find(p=>p.position[0]===h.x&&p.position[2]===h.z),c=config[p.id];
     [h.height,h.rx,h.rz,h.yaw]=c;h.radius=Math.max(h.rx,h.rz);
@@ -29,8 +29,9 @@ export function createCityTerrain(places,riverLines,lakes,rings){
   const cell=96;
   function index(a,b,width){
     const rec={a,b,width,dx:b[0]-a[0],dz:b[2]-a[2]};rec.den=rec.dx*rec.dx+rec.dz*rec.dz;
-    for(let x=Math.floor((Math.min(a[0],b[0])-width-100)/cell);x<=Math.floor((Math.max(a[0],b[0])+width+100)/cell);x++)
-      for(let z=Math.floor((Math.min(a[2],b[2])-width-100)/cell);z<=Math.floor((Math.max(a[2],b[2])+width+100)/cell);z++){
+    const margin=width?100:280;
+    for(let x=Math.floor((Math.min(a[0],b[0])-width-margin)/cell);x<=Math.floor((Math.max(a[0],b[0])+width+margin)/cell);x++)
+      for(let z=Math.floor((Math.min(a[2],b[2])-width-margin)/cell);z<=Math.floor((Math.max(a[2],b[2])+width+margin)/cell);z++){
         const key=`${x},${z}`;if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(rec);
       }
   }
@@ -41,7 +42,7 @@ export function createCityTerrain(places,riverLines,lakes,rings){
     for(let i=1;i<r.length;i++)index(r[i-1],r[i],0);
     l.inner.forEach(h=>{for(let i=1;i<h.length;i++)index(h[i-1],h[i],0);});
   }));
-  function shore(x,z){
+  function shore(x,z,lakeOnly=false){
     let bank=Infinity,river=Infinity;
     for(const r of buckets.get(`${Math.floor(x/cell)},${Math.floor(z/cell)}`)||[]){
       const t=r.den?clamp(((x-r.a[0])*r.dx+(z-r.a[2])*r.dz)/r.den):0;
@@ -49,7 +50,7 @@ export function createCityTerrain(places,riverLines,lakes,rings){
       if(r.width)river=Math.min(river,d-r.width);else bank=Math.min(bank,d);
     }
     const inside=lakeBounds.some(b=>x>=b.xmin&&x<=b.xmax&&z>=b.zmin&&z<=b.zmax&&inRing(x,z,b.ring)&&!b.holes.some(h=>inRing(x,z,h)));
-    return Math.min(river,inside?-Math.min(bank,100):bank);
+    return Math.min(lakeOnly?Infinity:river,inside?-Math.min(bank,100):bank);
   }
   function relief(x,z){
     let height=0;
@@ -83,6 +84,13 @@ export function createCityTerrain(places,riverLines,lakes,rings){
     // caused striped patches during flight. The banks climb smoothly inland.
     if(d<0)return -.8;
     if(d<36)y=THREE.MathUtils.lerp(.2,y,smooth(0,36,d));
+    // The compressed atlas puts mountains close to lakes. Give the lake a
+    // broad park shoulder instead of a near-vertical wall at the waterline.
+    const lakeBank=shore(x,z,true);
+    if(lakeBank>0&&lakeBank<240){
+      const shoulder=.2+lakeBank*.22+Math.max(0,lakeBank-90)*.5;
+      y=THREE.MathUtils.lerp(y,Math.min(y,shoulder),1-smooth(160,240,lakeBank));
+    }
     return y;
   }
   function slope(x,z){return Math.hypot(ground(x+2,z)-ground(x-2,z),ground(x,z+2)-ground(x,z-2))/4;}
@@ -96,7 +104,7 @@ export function createCityTerrain(places,riverLines,lakes,rings){
     for(let j=0;j<=n;j++)border.add(`${Math.floor(THREE.MathUtils.lerp(a[0],b[0],j/(n||1))/tileSize)},${Math.floor(THREE.MathUtils.lerp(a[2],b[2],j/(n||1))/tileSize)}`);
   }});
   const positions=[],colors=[],indices=[],uv=[],cache=new Map();
-  const palette=[new THREE.Color('#a0af61'),new THREE.Color('#728e54'),new THREE.Color('#8c9c64'),new THREE.Color('#a8ac76'),new THREE.Color('#867c64')];
+  const palette=[new THREE.Color('#a4b289'),new THREE.Color('#567d72'),new THREE.Color('#8d9f80'),new THREE.Color('#c0b998'),new THREE.Color('#8a9386')];
   function vertex(x,z){
     const key=`${x},${z}`;if(cache.has(key))return cache.get(key);
     const y=ground(x,z),s=slope(x,z),f=noise(x/85,z/85),d=shore(x,z);

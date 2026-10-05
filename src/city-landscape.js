@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {randomSeed} from './forest-geometry.js';
 import {distanceToLine} from './city-geography.js';
+import {paintedCrown,canopyInterior} from './city-art.js';
 
 // Bounded instancing keeps a whole illustrated city affordable. Close trees
 // have branches and layered crowns; aerial woodland uses smaller prototypes.
@@ -70,29 +71,25 @@ export function createCityLandscape({terrain,places,routes,riverLines,materials,
     const branches=near?(species===1?3:7):0;
     for(let i=0;i<branches;i++){const a=i*2.399,y=3+i*.4;twig([0,y,0],[Math.cos(a)*2.3,y+2.2,Math.sin(a)*2.3],.12);}
     const trunk=merge();
-    if(species===1){for(let i=0;i<5;i++){
-      const cone=new THREE.ConeGeometry(1,1,near?12:7);part(cone,[0,3.5+i*1.25,0],[3.1-i*.46,3.1,3.1-i*.46]);cone.dispose();
-    }}else{
-      const count=near?9:5;
-      for(let i=0;i<count;i++){const a=i*2.399,r=i===0?0:1.8;
-        part(near?ico1:ico0,[Math.cos(a)*r,7.4+Math.sin(i*1.4)*.7,Math.sin(a)*r],[2.45, species===2?3.8:2.7,2.35],a);}
-      if(near)for(let i=0;i<12;i++){const a=i*2.399;part(ico0,[Math.cos(a)*3,7.7+Math.sin(i)*1.4,Math.sin(a)*3],[.75,.55,.85],a);}
-    }return {trunk,crown:merge()};
+    const painted=paintedCrown(species,near),crown=painted.toNonIndexed();painted.dispose();return {trunk,crown};
   }
   function instances(g,mat,capacity,name){const m=new THREE.InstancedMesh(g,mat,Math.max(1,capacity));
     m.name=name;m.count=0;m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);m.frustumCulled=false;m.castShadow=false;m.receiveShadow=false;scene.add(m);return m;}
   function write(mesh,index,p,color){quat.setFromAxisAngle(up,p.yaw);
     matrix.compose(new THREE.Vector3(p.x,p.y,p.z),quat,new THREE.Vector3(p.scale,p.scale,p.scale));mesh.setMatrixAt(index,matrix);if(color)mesh.setColorAt(index,color);}
-  const leafColor=new THREE.Color(),palette=[new THREE.Color('#b9ce83'),new THREE.Color('#94b788'),new THREE.Color('#d2cb89')];
+  const leafColor=new THREE.Color(),palette=[new THREE.Color('#f4ecd4'),new THREE.Color('#bed5cf'),new THREE.Color('#e5dfb9')];
   let totalTriangles=0;
   for(let species=0;species<3;species++){
     const pool=trees.filter(p=>p.species===species),far=prototype(species,false),near=prototype(species,true);
-    const distant={trunk:instances(far.trunk,materials.bark,pool.length,'Atlas grove trunks'),crown:instances(far.crown,materials.leaf,pool.length,'Atlas grove crowns')};
+    const core=canopyInterior(species);
+    const distant={trunk:instances(far.trunk,materials.bark,pool.length,'Atlas grove trunks'),crown:instances(far.crown,materials.leaf,pool.length,'Atlas grove crowns'),
+      core:instances(core,materials.canopy,pool.length,'Painted canopy interiors')};
     const detailed={trunk:instances(near.trunk,materials.bark,220,'Close branching trunks'),crown:instances(near.crown,materials.leaf,220,'Close layered crowns')};
-    pool.forEach((p,i)=>{leafColor.copy(palette[0]).lerp(palette[species===1?1:2],p.tint*.65);write(distant.trunk,i,p);write(distant.crown,i,p,leafColor);});
+    pool.forEach((p,i)=>{leafColor.copy(palette[0]).lerp(palette[species===1?1:2],p.tint*.65);write(distant.trunk,i,p);write(distant.crown,i,p,leafColor);write(distant.core,i,p,leafColor);});
     distant.trunk.count=distant.crown.count=pool.length;distant.trunk.instanceMatrix.needsUpdate=distant.crown.instanceMatrix.needsUpdate=true;
     distant.crown.instanceColor.needsUpdate=true;
-    totalTriangles+=pool.length*(far.trunk.attributes.position.count+far.crown.attributes.position.count)/3;
+    distant.core.count=pool.length;distant.core.instanceMatrix.needsUpdate=true;distant.core.instanceColor.needsUpdate=true;
+    totalTriangles+=pool.length*((far.trunk.attributes.position.count+far.crown.attributes.position.count)/3+core.attributes.position.count/3);
     groups.push({pool,distant,detailed});
   }
   // Curved, upright blades and petals remain three-dimensional while orbiting.
@@ -115,6 +112,19 @@ export function createCityLandscape({terrain,places,routes,riverLines,materials,
   const flowerMesh=instances(merge(),materials.white,650,'Scattered meadow flowers');
   const rockMesh=instances(ico1,materials.stone,220,'Weathered riverbank stones');
   const groundPalette=[new THREE.Color('#d0c382'),new THREE.Color('#91ae6b'),new THREE.Color('#88a5c8'),new THREE.Color('#df98aa'),new THREE.Color('#efe0b1')];
+  // Grounding washes cost no shadow pass and follow the actual relief mesh.
+  // They soften the foot of each grove without floating flat discs on slopes.
+  const treeCells=new Map(),cellSize=24;
+  trees.forEach(p=>{const key=`${Math.floor(p.x/cellSize)},${Math.floor(p.z/cellSize)}`;
+    if(!treeCells.has(key))treeCells.set(key,[]);treeCells.get(key).push(p);});
+  const vertices=terrain.geometry.attributes.position,colours=terrain.geometry.attributes.color;
+  for(let i=0;i<vertices.count;i++){
+    const x=vertices.getX(i),z=vertices.getZ(i),cx=Math.floor(x/cellSize),cz=Math.floor(z/cellSize);let shade=0;
+    for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)for(const p of treeCells.get(`${cx+a},${cz+b}`)||[]){
+      shade=Math.max(shade,Math.max(0,1-Math.hypot(x-p.x,z-p.z)/(8*p.scale))*.2);
+    }
+    colours.setXYZ(i,colours.getX(i)*(1-shade),colours.getY(i)*(1-shade*.8),colours.getZ(i)*(1-shade*.55));
+  }colours.needsUpdate=true;
   // A single material keeps grass/wildflowers in a few draws and adds a soft
   // root-weighted breeze rather than moving every tuft as a rigid card.
   for(const source of [materials.sage,materials.white]){
@@ -126,21 +136,22 @@ export function createCityLandscape({terrain,places,routes,riverLines,materials,
     if(source===materials.sage)grassMesh.material=mat;else flowerMesh.material=mat;
   }
   let stamp=Infinity,mode=null;
-  const stats={trees:trees.length,grassPatches:grass.length,flowerPatches:flowers.length,rocks:rocks.length,totalTriangles,nearTrees:0,visibleGrass:0,visibleFlowers:0,visibleRocks:0,instanced:true};
+  const stats={trees:trees.length,grassPatches:grass.length,flowerPatches:flowers.length,rocks:rocks.length,totalTriangles,nearTrees:0,visibleGrass:0,visibleFlowers:0,visibleRocks:0,instanced:true,paintedCanopies:true};
   function update(camera,overview){
     const x=camera.position.x,z=camera.position.z;
-    if(mode===overview&&Math.hypot(x-(stamp.x||0),z-(stamp.z||0))<12)return;
-    stamp={x,z};mode=overview;let nearCount=0,nearTriangles=0,extraTriangles=0;
+    if(mode===overview&&Math.hypot(x-(stamp.x||0),z-(stamp.z||0),camera.position.y-(stamp.y||0))<12)return;
+    stamp={x,z,y:camera.position.y};mode=overview;let nearCount=0,nearTriangles=0,extraTriangles=0;
     groups.forEach(({pool,distant,detailed})=>{
       let n=0,f=0;
       pool.forEach(p=>{
-        const isNear=!overview&&Math.hypot(x-p.x,z-p.z)<120&&n<220;
+        const isNear=!overview&&Math.hypot(x-p.x,z-p.z,camera.position.y-p.y)<120&&n<220;
         leafColor.copy(palette[0]).lerp(palette[p.species===1?1:2],p.tint*.65);
-        if(isNear){write(detailed.trunk,n,p);write(detailed.crown,n++,p,leafColor);}else{write(distant.trunk,f,p);write(distant.crown,f++,p,leafColor);}
+        if(isNear){write(detailed.trunk,n,p);write(detailed.crown,n++,p,leafColor);}else{write(distant.core,f,p,leafColor);write(distant.trunk,f,p);write(distant.crown,f++,p,leafColor);}
       });
       for(const m of [distant.trunk,distant.crown,detailed.trunk,detailed.crown]){m.count=m===distant.trunk||m===distant.crown?f:n;m.instanceMatrix.needsUpdate=true;if(m.instanceColor)m.instanceColor.needsUpdate=true;}
+      distant.core.count=f;distant.core.instanceMatrix.needsUpdate=true;distant.core.instanceColor.needsUpdate=true;
       nearCount+=n;nearTriangles+=n*(detailed.trunk.geometry.attributes.position.count+detailed.crown.geometry.attributes.position.count)/3;
-      extraTriangles+=n*(detailed.trunk.geometry.attributes.position.count+detailed.crown.geometry.attributes.position.count-distant.trunk.geometry.attributes.position.count-distant.crown.geometry.attributes.position.count)/3;
+      extraTriangles+=n*(detailed.trunk.geometry.attributes.position.count+detailed.crown.geometry.attributes.position.count-distant.trunk.geometry.attributes.position.count-distant.crown.geometry.attributes.position.count-distant.core.geometry.attributes.position.count)/3;
     });stats.nearTrees=nearCount;stats.nearTriangles=nearTriangles;
     for(const [pool,mesh,key,maxDistance] of [[grass,grassMesh,'visibleGrass',100],[flowers,flowerMesh,'visibleFlowers',90],[rocks,rockMesh,'visibleRocks',180]]){
       const close=overview?[]:pool.filter(p=>Math.hypot(p.x-x,p.z-z)<maxDistance).sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z)).slice(0,mesh.instanceMatrix.count);

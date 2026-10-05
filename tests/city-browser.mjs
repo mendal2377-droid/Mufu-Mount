@@ -18,6 +18,9 @@ try{
   assert.ok(report.geometry.terrain.terrainTriangles<400000);
   assert.ok(report.geometry.landscape.trees>4000);
   assert.equal(report.geometry.landscape.instanced,true);
+  assert.equal(report.geometry.landscape.paintedCanopies,true);
+  assert.equal(report.geometry.art.style,'gouache-ink');
+  assert.ok(report.geometry.art.foliageReady&&report.geometry.art.meadowReady);
   const routeChecks=await page.evaluate(()=>window.__mufu.city.routes.map(route=>({
     finite:route.points.flat().every(Number.isFinite),
     clearance:Math.min(...route.points.map(p=>p[1]-window.__mufu.city.ground(p[0],p[2]))),name:route.name
@@ -45,6 +48,11 @@ try{
   assert.ok(report.walkLandscape.visibleGrass>0);
   assert.ok(report.walkLandscape.nearTrees<=660);
   assert.ok(report.walkLandscape.visibleGrass<=1100&&report.walkLandscape.visibleFlowers<=650);
+  for(const mood of ['sunset','storm','snow']){
+    await page.evaluate(mood=>{window.__mufu.setWeather(mood);window.__mufu.step(14,.5);},mood);
+    await page.screenshot({path:`test-results/nanjing-painted-${mood}.png`,timeout:60000});
+  }
+  await page.evaluate(()=>{window.__mufu.setWeather('morning');window.__mufu.step(14,.5);});
   await page.evaluate(()=>{window.__mufu.city.enter('zijin');window.__mufu.city.toggleFlight();const m=window.__mufu.city.places.find(p=>p.id==='zijin');window.__mufu.camera.position.set(m.position[0]-210,m.position[1]+190,m.position[2]+180);window.__mufu.camera.lookAt(...m.position);window.__mufu.step(2,.1);});
   await page.screenshot({path:'test-results/nanjing-ridge-flight.png',timeout:60000});
   await page.evaluate(()=>window.__mufu.city.toggleFlight());

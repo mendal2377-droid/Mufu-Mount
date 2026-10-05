@@ -3,6 +3,7 @@ import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
 import {cityPoint,inRing,ribbon,distanceToLine} from "./city-geography.js";
 import {createCityTerrain} from './city-terrain.js';
 import {createCityLandscape} from './city-landscape.js';
+import {paintCityWater} from './city-art.js';
 import {randomSeed} from "./forest-geometry.js";
 
 export function buildCityScene(data, shared, makeMaterial) {
@@ -14,16 +15,17 @@ export function buildCityScene(data, shared, makeMaterial) {
   const terrain=createCityTerrain(places,riverLines,lakes,rings),{hills,ground,wet}=terrain;
   const materials={
     terrain:makeMaterial('City relief paper',[1,1,1]),
-    stone:makeMaterial('City warm stone',[.65,.60,.45]),
-    white:makeMaterial('City lime plaster',[.83,.80,.65]),
-    roof:makeMaterial('City dark tiled roof',[.12,.17,.16]),
-    red:makeMaterial('City red timber',[.38,.12,.08]),
-    blue:makeMaterial('City blue glazed roof',[.08,.25,.42]),
-    bronze:makeMaterial('City bronze fixture',[.49,.29,.09]),
-    glass:makeMaterial('City blue glass',[.20,.35,.36]),
-    bark:makeMaterial('City bark',[.22,.17,.1]),
-    leaf:makeMaterial('City foliage',[.43,.61,.32]),
-    sage:makeMaterial('City meadow sage',[.42,.49,.28]),
+    stone:makeMaterial('City warm stone',[.76,.72,.60]),
+    white:makeMaterial('City lime plaster',[.92,.88,.76]),
+    roof:makeMaterial('City dark tiled roof',[.29,.38,.40]),
+    red:makeMaterial('City red timber',[.56,.25,.16]),
+    blue:makeMaterial('City blue glazed roof',[.24,.39,.51]),
+    bronze:makeMaterial('City bronze fixture',[.55,.43,.23]),
+    glass:makeMaterial('City blue glass',[.32,.47,.49]),
+    bark:makeMaterial('City bark',[.34,.27,.19]),
+    leaf:makeMaterial('City foliage',[1,1,1]),
+    canopy:makeMaterial('City distant canopy',[.43,.58,.49]),
+    sage:makeMaterial('City meadow sage',[.51,.61,.39]),
     glow:new THREE.MeshStandardMaterial({color:0xda6944,emissive:0xff6725,emissiveIntensity:.35,roughness:.8}),
   };
   const batches=new Map(),geometryCache=new Map(),random=randomSeed(20261005);
@@ -86,6 +88,10 @@ export function buildCityScene(data, shared, makeMaterial) {
     add(roof,tiles,[x,y+h,z],[w+4,8,d+4]);
     block(x,y+h+3.4,z,w*.65,.35,.55,tiles);
     for(const side of [-1,1])add(sphere,tiles,[x+side*w*.32,y+h+3.65,z],[.45,.45,.45]);
+    // Raised tile ribs and a second eave read as brush strokes from above.
+    for(let i=-5;i<=5;i++)for(const side of [-1,1])beam(
+      [x+i*w*.085,y+h+3.3,z],[x+i*w*.085,y+h+.18,z+side*(d+4)*.52],.075,tiles);
+    block(x,y+h-.16,front+.65,w+2,.22,.55,tiles);
   }
   function pagoda(x,y,z,levels=7,tiles='bronze'){
     for(let i=0;i<levels;i++){
@@ -133,31 +139,14 @@ export function buildCityScene(data, shared, makeMaterial) {
   terrainMesh.name='Nanjing continuous relief';terrainMesh.castShadow=false;terrainMesh.receiveShadow=true;scene.add(terrainMesh);
   // Paper-coloured surroundings distinguish the municipality from its neighbours.
   const background=new THREE.Mesh(new THREE.PlaneGeometry(100000,100000),
-    new THREE.MeshStandardMaterial({color:0xd1d3be,roughness:1}));
+    new THREE.MeshStandardMaterial({color:0xe8e1cd,roughness:1}));
   background.rotation.x=-Math.PI/2;background.position.set(0,-10,1700);scene.add(background);
   rings.forEach(r=>{
     const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(r.map(p=>new THREE.Vector3(p[0],ground(p[0],p[2])+.45,p[2]))),
       new THREE.LineBasicMaterial({color:0xe3ddbd}));scene.add(line);
   });
-  const water=new THREE.MeshStandardMaterial({color:0x6da5a2,roughness:.28,metalness:.35,side:THREE.DoubleSide});
-  water.onBeforeCompile=shader=>{
-    shader.uniforms.cityTime=shared.time;shader.uniforms.cityStorm=shared.storm;
-    shader.vertexShader='varying vec3 cityWaterPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>',
-      '#include <begin_vertex>\ncityWaterPoint=(modelMatrix*vec4(position,1.)).xyz;');
-    shader.fragmentShader='uniform float cityTime,cityStorm;varying vec3 cityWaterPoint;\n'+shader.fragmentShader;
-    shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',
-      `#include <normal_fragment_maps>
-       float w=sin(cityWaterPoint.x*1.7+cityWaterPoint.z*.9-cityTime*1.6);
-       float b=cos(cityWaterPoint.z*2.1-cityTime*1.25);
-       normal=normalize(normal+vec3(w,0.,b)*(.09+cityStorm*.12));`);
-    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
-      `#include <color_fragment>
-       float ripple=sin(cityWaterPoint.x*.4+cityWaterPoint.z*.8-cityTime*.7)*.5+.5;
-       float phase=cityWaterPoint.z*2.4+sin(cityWaterPoint.x*.6)-cityTime*.8;
-       float stroke=pow(max(0.,sin(phase)),18.)*(1.-smoothstep(.2,1.,fwidth(phase)));
-       diffuseColor.rgb*=.93+ripple*.13;
-       diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.72,.86,.78),stroke*.2);`);
-  };
+  const water=new THREE.MeshStandardMaterial({color:0x4d898a,roughness:.36,metalness:.22,side:THREE.DoubleSide});
+  paintCityWater(water,shared);
   materials.water=water;
   riverLines.forEach(r=>{const g=ribbon(r.points,r.width,1.31);add(g,'water');g.dispose();});
   lakes.forEach(l=>l.outer.forEach(r=>flatPolygon(r,'water',1.35,l.inner.filter(h=>inRing(h[0][0],h[0][2],r)))));
@@ -276,10 +265,35 @@ export function buildCityScene(data, shared, makeMaterial) {
     }else if(p.kind==='lake'){
       // Sample the same relief as the bank, so this walk stays above the water.
       const r=lakes.find(l=>l.id===p.id)?.outer[0];
-      if(r?.length){const bank=r[Math.floor(r.length*.28)],sx=bank[0]+6,sz=bank[2]+6;
-        p.position=[sx,Math.max(1.7,ground(sx,sz)),sz];
-        walk=Array.from({length:65},(_,i)=>{const xx=sx+(i-32)*1.3;return [xx,Math.max(1.7,ground(xx,sz))+.3,sz];});
-        hall(sx+25,Math.max(1.7,ground(sx+25,sz-12)),sz-12,13,10,7);}
+      if(r?.length){
+        const start=Math.floor(r.length*.18),end=Math.max(start+2,Math.floor(r.length*.40));
+        const shore=[];
+        for(let i=start;i<=end;i++){
+          const a=r[i%r.length],b=r[(i+1)%r.length],length=Math.hypot(b[0]-a[0],b[2]-a[2])||1;
+          let nx=-(b[2]-a[2])/length,nz=(b[0]-a[0])/length;
+          if(wet(a[0]+nx*10,a[2]+nz*10)){nx=-nx;nz=-nz;}
+          const xx=a[0]+nx*10,zz=a[2]+nz*10;
+          if(wet(xx,zz))continue;
+          shore.push([xx,Math.max(1.7,ground(xx,zz))+.3,zz]);
+        }
+        if(shore.length>1)walk=shore;
+        const centre=walk[Math.floor(walk.length*.55)];p.position=centre.slice();
+        const [sx,,sz]=centre;hall(sx+25,Math.max(1.7,ground(sx+25,sz+20)),sz+20,13,10,7);
+        // A scenic balustrade follows the public shoreline's dry side. Its
+        // shape is artistic; the paving remains a clear six-unit corridor.
+        for(let i=1;i<walk.length;i++){
+          const a=walk[i-1],b=walk[i],length=Math.hypot(b[0]-a[0],b[2]-a[2])||1;
+          const nx=-(b[2]-a[2])/length,nz=(b[0]-a[0])/length;
+          const count=Math.ceil(length/3.5);
+          for(let j=0;j<count;j++){
+            const f=j/count,g=(j+1)/count,xx=a[0]+(b[0]-a[0])*f+nx*4.2,zz=a[2]+(b[2]-a[2])*f+nz*4.2;
+            const bx=a[0]+(b[0]-a[0])*g+nx*4.2,bz=a[2]+(b[2]-a[2])*g+nz*4.2;
+            const yy=Math.max(a[1]+(b[1]-a[1])*f,ground(xx,zz)+.1),by=Math.max(a[1]+(b[1]-a[1])*g,ground(bx,bz)+.1);
+            block(xx,yy,zz,.42,1.35,.42,'stone');add(sphere,'white',[xx,yy+1.45,zz],[.3,.28,.3]);
+            beam([xx,yy+1.05,zz],[bx,by+1.05,bz],.13,'white');beam([xx,yy+.5,zz],[bx,by+.5,bz],.1,'stone');
+          }
+        }
+      }
     }else if(p.kind==='mount'){
       hall(x,y,z,15,12,7);
       walk=Array.from({length:161},(_,i)=>{const t=i/160,a=t*Math.PI*3,r=160*(1-t)+38;
@@ -318,13 +332,27 @@ export function buildCityScene(data, shared, makeMaterial) {
   }});
   // Generic blocks communicate the urban fabric. They are deliberately omitted
   // near landmark walks, park slopes and mapped water; no street-level claim.
-  for(let i=0;i<1100;i++){
+  for(let i=0;i<1800;i++){
     const gx=Math.floor((random()-.5)*15)*100,gz=Math.floor((random()-.5)*13)*100;
     const x=gx+18+random()*65,z=gz+18+random()*65;
     if(wet(x,z)||terrain.relief(x,z)>8||places.some(p=>Math.hypot(x-p.position[0],z-p.position[2])<95))continue;
     const h=5+random()**2*22,w=8+random()*9,d=8+random()*9,base=ground(x,z);
     block(x,base,z,w,h,d,i%4?'white':'glass');
-    if(h<10)add(roof,'roof',[x,base+h,z],[w+1,2.4,d+1]);
+    if(h<14){
+      block(x,base-.1,z,w+1,.3,d+1,'stone');add(roof,'roof',[x,base+h,z],[w+2,3.2,d+2]);
+      block(x,base+h+1.3,z,w*.66,.22,.32,'roof');
+      for(const side of [-1,1]){block(x+side*w*.25,base+1.7,z+d*.51,w*.15,1.6,.15,'glass');
+        block(x+side*w*.25,base+2.5,z+d*.52,w*.17,.12,.18,'white');}
+      block(x,base,z+d*.51,1.2,2.6,.2,'red');
+      if(i%3===0){
+        const xx=x+w+5,bz=z+d*.2;
+        if(!wet(xx,bz)&&terrain.relief(xx,bz)<8){
+          const yy=ground(xx,bz);block(xx,yy,bz,w*.65,5,d*.85,'white');
+          add(roof,'roof',[xx,yy+5,bz],[w*.65+2,3,d*.85+2]);
+          block(x+w*.8,base,z-d*.5,w,.85,.35,'stone');tree(x+w*.65,z+d*.8,.55);
+        }
+      }
+    }
     else{block(x,base+h,z,w+1,.45,d+1,'stone');
       for(let level=2;level<h-1;level+=3)block(x,base+level,z+d*.505,w*.8,.55,.1,'glass');}
   }
@@ -347,7 +375,7 @@ export function buildCityScene(data, shared, makeMaterial) {
     mesh.receiveShadow=key!=='water';mesh.castShadow=false;scene.add(mesh);meshes.push(mesh);
     if(['roof','blue','white','red'].includes(key)){
       const strokes=new THREE.LineSegments(new THREE.EdgesGeometry(merged,38),
-        new THREE.LineBasicMaterial({color:0x344f48,transparent:true,opacity:.18}));
+        new THREE.LineBasicMaterial({color:0x344f48,transparent:true,opacity:.28}));
       strokes.name='Illustration contour | '+key;scene.add(strokes);
     }
   });geometryCache.forEach(g=>g.dispose());

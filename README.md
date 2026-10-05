@@ -16,6 +16,14 @@ illustrated farmland, grass and wildflowers, winding mountain paths, timber
 facades and detailed roofs. About 7,300 trees use instanced aerial / close models;
 near planting stays bounded and the plan hides the close ground-cover layer.
 
+The city art direction now uses imagegen gouache foliage and meadow textures,
+ivory courtyards, blue-gray tile roofs, jade woodland and painted water.
+Curved branch sprays give trees volume; opaque canopy interiors keep distant
+groves readable. Stone lake walks follow the shoreline, and broad park shoulders
+soften the compressed terrain. [Concept, assets and exact prompts](design/city/PROMPTS.md)
+record the generated art and how it is implemented. The concept is design art;
+the playable scene remains real 3D geometry.
+
 A browser 3D walk adapted from the photo-informed Mount Mufu / Yangtze Blender scene, hung with twenty photographs from a single morning — 06:16 to 08:26 on 26 September 2026. Walk the rainbow road, the ridge, the forest stairs and the riverside; find photo frames along the paths; change the weather, or let the morning carry you from first light to mid-morning.
 
 **Play:** [mufu-mount.vercel.app](https://mufu-mount.vercel.app)
