@@ -1,11 +1,11 @@
 # Nanjing · Mountains and rivers
 
-An illustrated, navigable Nanjing atlas with twenty selected destinations:
+An illustrated, navigable Nanjing atlas with eighteen selected destinations:
 Yangtze bridges, Qinhuai / Fuzimiao, Laomendong, Zhonghua gate, Xuanwu and
-Mochou lakes, Zijin, Mufu, Niushou, Qixia, Tangshan and Gaochun. Public map
+Mochou lakes, Zijin, Mufu, Niushou and Qixia. Public map
 anchors establish relative geography; enlarged landmarks, linked ridges and valleys, painted
-trees, buildings and walking paths are scenic interpretations. Switch between
-central Nanjing and the whole municipal outline, walk into a destination or fly
+trees, buildings and walking paths are scenic interpretations. Explore
+central Nanjing, walk into a destination or fly
 the bird kite across the atlas. It is not a surveyed digital twin.
 
 Map database: © OpenStreetMap contributors, ODbL 1.0. Sources and explicit
@@ -13,7 +13,7 @@ approximations: [research/nanjing/SOURCES.md](research/nanjing/SOURCES.md).
 The original detailed Mufu experience remains accessible through its map pin.
 The atlas now has continuous shaped terrain, woodland groves, riverbanks,
 illustrated farmland, grass and wildflowers, winding mountain paths, timber
-facades and detailed roofs. About 7,300 trees use instanced aerial / close models;
+facades and detailed roofs. About 5,400 city trees use instanced aerial / close models;
 near planting stays bounded and the plan hides the close ground-cover layer.
 
 The city art direction now uses imagegen gouache foliage and meadow textures,
@@ -28,7 +28,7 @@ A browser 3D walk adapted from the photo-informed Mount Mufu / Yangtze Blender s
 
 **Play:** [mufu-mount.vercel.app](https://mufu-mount.vercel.app)
 
-**Working on it?** Start with [HANDOFF.md](HANDOFF.md) — how it is put
+**Working on it?** Start with [START_HERE.md](START_HERE.md), then [HANDOFF.md](HANDOFF.md) — how it is put
 together, which parts will bite you, what is actually verified, and what is
 worth doing next. [CHANGELOG.md](CHANGELOG.md) has the history.
 
@@ -45,7 +45,7 @@ Open the local URL printed by Vite. `npm run build` creates the static site in `
 
 ## Play
 
-- The home page is the Nanjing aerial atlas. Drag to orbit, scroll to zoom, choose a landmark pin or expand **Choose a place to wander**. **Whole Nanjing · Gaochun** frames the municipal outline. **Map** / M returns from a city walk.
+- The home page is the Nanjing aerial atlas. Drag to orbit, scroll to zoom, choose a landmark pin or expand **Choose a place to wander**. **Map** / M returns from a city walk.
 - **Mufu mountain** opens the detailed Mufu plan with six walking entrances. **Nanjing atlas** returns to the city.
 - Walking shows scene time/weather and two discreet kite/menu icons. Destinations, tours, photos, sound and postcards are in the menu. On small screens, **Choose a path** lists every entrance even when world markers overlap.
 - WASD moves; drag looks; Shift moves faster. Double-click the scenery for mouse capture; Esc releases it. Weather carries into the walk.

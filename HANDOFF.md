@@ -1,5 +1,7 @@
 # Handoff
 
+**Current handoff (7 October 2026): [START_HERE.md](START_HERE.md).** It records release `ae6b554`, the 18-destination central scope, current validation, file ownership and next work. The dated notes below are historical; older counts and verification statements apply to those releases.
+
 For whoever picks this up next. The README says what the thing *is* and how to
 run it; this says how it is put together, which parts will bite you, what is
 actually verified, and what is worth doing next.
