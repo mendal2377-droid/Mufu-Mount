@@ -642,6 +642,7 @@ async function load() {
     city = await createNanjing({camera,orbit,controls,postfx,state,shared:u,baseScene:scene,kite,keys,
       reset:()=>{stopWalks();feel.unapply();feel.reset();drag=null;keys.clear();},onMufu:showPlan,onWeather:setWeather,toast,
       rain:rainLines,snow:particles});
+    city.game.noteMufu(foundMemories.length);
     city.showPlan();
     animate();
     window.__mufu = {
@@ -1569,6 +1570,8 @@ function frame(elapsed) {
         try {
           localStorage.setItem("mufu-memories", JSON.stringify(foundMemories));
         } catch {}
+        // The atlas passport counts the morning photographs towards Mufu's seal.
+        city?.game?.noteMufu(foundMemories.length);
         document
           .querySelector(`[data-memory="${result.active.record.id}"]`)
           ?.classList.add("seen");
@@ -1764,7 +1767,8 @@ window.addEventListener("keydown", (e) => {
   ) {
     endTour(false);
   }
-  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open) return;
+  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open || $("#city-passport").open) return;
+  if (city && e.code === "KeyJ" && !e.repeat && state.ready) { city.passport(true); e.preventDefault(); return; }
   if(city?.active && ["KeyM","KeyT","KeyP"].includes(e.code)) {
     if(e.code==="KeyM" && !e.repeat) city.showPlan();
     e.preventDefault();return;

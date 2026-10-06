@@ -37,6 +37,9 @@
       </div>
     </header>
     <div id="walk-environment" hidden><time id="scene-time">10:00</time><span>·</span><select id="walk-weather" aria-label="Weather"><option value="dawn">✦ Dawn</option><option value="morning" selected>☀ Morning</option><option value="sunset">◒ Sunset</option><option value="storm">ϟ Storm</option><option value="snow">❄ Snow</option></select></div>
+    <div id="game-chip" hidden aria-label="Keepsake progress"><span id="game-lanterns" title="Lanterns found at this landmark">灯 ·</span><span id="game-seals" title="Seals earned">印 0/18</span><span id="game-run" hidden title="Wind run"></span></div>
+    <aside id="fact-card" hidden role="status" aria-live="polite"><small id="fact-title"></small><p id="fact-text"></p><div class="fact-foot"><span id="fact-source"></span><span id="fact-dots"></span></div></aside>
+    <div id="seal-moment" hidden role="status" aria-live="polite"><div class="seal-stamp"><b id="seal-name"></b></div><span id="seal-sub"></span></div>
     <div class="quiet-actions"><button id="kite-toggle" aria-label="Launch bird kite (K)" aria-pressed="false" title="Fly the bird kite · K"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 11 3 5 9 17 16 14 23 17 29 5 16 11 18 23 16 20 14 23Z" fill="currentColor"/><path d="M16 22q-5 3-1 7" fill="none" stroke="currentColor"/></svg></button><button id="walk-menu" aria-label="Open exploration menu" title="Menu" hidden>☰</button></div>
     <main id="welcome" class="welcome">
       <div class="load-track"><i id="load-bar"></i></div>
@@ -65,13 +68,21 @@
       </aside>
       <p class="city-hint">Drag to turn · Scroll to zoom · Choose a pin to enter</p>
       <div class="city-credit">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · <a href="/city/nanjing.json" target="_blank">ODbL / sources</a></div>
+      <button id="city-passport-plan" class="plan-passport" aria-label="Open passport">印 <span id="plan-seals">0/18</span></button>
       <button id="city-weather" class="plan-weather">☀ Change weather</button>
     </section>
     <button id="nanjing-return" hidden>↖ Nanjing atlas</button>
     <dialog id="city-menu"><button id="city-menu-close" aria-label="Close menu">×</button><h2 id="city-menu-title">Nanjing</h2>
-      <p>WASD move · Drag to look · Shift faster<br>K bird kite · E up · Q down · M map</p>
-      <button id="city-map-return">Nanjing map</button><button id="city-mufu">Detailed Mufu walk</button><button id="city-sound">Enable nature sound</button>
+      <p>WASD move · Drag to look · Shift faster<br>K bird kite · E up · Q down · M map · J passport</p>
+      <button id="city-passport-open">Passport · 金陵拾遗</button><button id="city-map-return">Nanjing map</button><button id="city-mufu">Detailed Mufu walk</button><button id="city-sound">Enable nature sound</button>
       <p class="city-caption">A scenic interpretation based on public map anchors and landmark photo references. Not a surveyed city model.</p>
+    </dialog>
+    <dialog id="city-passport" aria-labelledby="passport-title">
+      <button id="passport-close" aria-label="Close passport">×</button>
+      <div class="passport-head"><div><h2 id="passport-title">金陵拾遗</h2><p id="passport-rank"></p></div><div class="passport-count"><b id="passport-seals">0</b><span>/ 18 seals</span></div></div>
+      <p class="passport-how">Each landmark hides three paper lanterns on its approach. Find all three for its seal; each one tells you something true. Seals also come from the Mufu morning photographs, and a kite ring run crosses the whole city.</p>
+      <div id="passport-grid" role="list"></div>
+      <div class="passport-foot"><div class="passport-run"><button id="passport-run" class="primary">Fly the Wind Run</button><span id="passport-run-best"></span></div><button id="passport-reset" class="ghost">Clear my progress</button></div>
     </dialog>
     <section id="hud" hidden>
       <aside class="trail-card glass">
