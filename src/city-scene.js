@@ -7,9 +7,20 @@ import {paintCityWater} from './city-art.js';
 import {landmarkDetails,bridgeDetails,archWall} from './city-landmarks.js';
 import {randomSeed} from "./forest-geometry.js";
 import {planAvenue,loopFrom,framingDistance,arrivalLook,EXTENT} from './city-arrival.js';
-import {buildRoadNetwork,shoreWalk} from './city-network.js';
+import {buildRoadNetwork,shoreWalk,bakedRoadsMatch,roadComponents} from './city-network.js';
 
-export function buildCityScene(data, shared, makeMaterial) {
+/**
+ * A walkway laid on the terrain. Each cross-section is level at the height of its
+ * centre line: following the terrain under both edges made the road a tilted slab
+ * on a hillside (Xiaoling's started with one edge 5 m above the camera and filled
+ * the screen). The hill beside it simply rises above the road, like a cutting.
+ */
+function bedRibbon(points,width,ground){
+  const g=ribbon(points,width,.04),v=g.attributes.position;
+  points.forEach((q,i)=>{const y=ground(q[0],q[2])+.16;v.setY(i*2,y);v.setY(i*2+1,y);});
+  g.computeVertexNormals();return g;
+}
+export function buildCityScene(data, shared, makeMaterial, options = {}) {
   const buildStart=performance.now();
   const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xc4d5c4,.00003);
   const places=data.landmarks.map(p=>({...p,position:cityPoint(p.coord,data)}));
@@ -158,13 +169,31 @@ export function buildCityScene(data, shared, makeMaterial) {
   function route(points,width=7){return {name:'Scenic walking route',width,points};}
   function loop(x,z,r=38,count=48){return Array.from({length:count+1},(_,i)=>{
     const a=(i/count)*Math.PI*2;return [x+Math.sin(a)*r,Math.max(1.7,ground(x+Math.sin(a)*r,z+Math.cos(a)*r))+.3,z+Math.cos(a)*r];});}
+  // Painted name boards. Gold characters on a dark ground are how these places
+  // announce themselves in every photograph, and cost one small quad each.
+  const plaqueTextures=new Map();
+  function plaque(text,{x,y,z,w=8,h=2,yaw=0,bg='#6e2a1f',fg='#e3bd62'}){
+    const key=`${text}|${bg}|${fg}|${w}x${h}`;
+    let texture=plaqueTextures.get(key);
+    if(!texture){
+      const c=document.createElement('canvas');c.width=512;c.height=Math.max(64,Math.round(512*h/w));
+      const g=c.getContext('2d');g.fillStyle=bg;g.fillRect(0,0,c.width,c.height);
+      g.strokeStyle=fg;g.lineWidth=5;g.strokeRect(7,7,c.width-14,c.height-14);
+      let size=Math.floor(c.height*.64);const face=n=>`bold ${n}px "Songti SC","SimSun","Noto Serif CJK SC",serif`;
+      g.font=face(size);while(g.measureText(text).width>c.width-48&&size>18){size-=4;g.font=face(size);}
+      g.fillStyle=fg;g.textAlign='center';g.textBaseline='middle';g.fillText(text,c.width/2,c.height/2+size*.05);
+      texture=new THREE.CanvasTexture(c);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;plaqueTextures.set(key,texture);
+    }
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({map:texture,roughness:.55,side:THREE.DoubleSide}));
+    mesh.position.set(x,y,z);mesh.rotation.y=yaw;mesh.name=`Plaque | ${text}`;scene.add(mesh);return mesh;
+  }
   const routes=[];
   // Pagodas, towers and temples only have a loop walk when their bespoke model exists.
   const bespokeOrLoop=p=>['domes','skyline','palace'].includes(p.kind)||['yuejiang','jiming','qixia'].includes(p.id);
   places.forEach(p=>{
     const [x,,z]=p.position,y=ground(x,z);p.position[1]=y;
     let walk=loop(x,z,p.kind==='mount'?70:p.kind==='oldtown'?43:36);
-    const bespoke=landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree});
+    const bespoke=landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,plaque,cylinder});
     if(p.kind==='oldtown'){
       // A compact district vignette exaggerates alleys and waterfront space.
       // It evokes the photo references; these are not individual surveyed homes.
@@ -211,7 +240,7 @@ export function buildCityScene(data, shared, makeMaterial) {
       if(p.kind==='truss')for(const t of [.13,.87])for(const side of [-1,1]){
         const pos=bp(t,side*7);block(pos[0],deck-6,pos[2],4,22,5,'white',yaw);
       }
-      bridgeDetails(p.kind,bp,deck,{beam,block,add});
+      bridgeDetails(p.kind,bp,deck,{beam,block,add,roof,sphere});
       walk=Array.from({length:81},(_,i)=>bp(i/80,3.6,deck+.03));p.position=[x,deck,z];
     }else if(p.kind==='wall'){
       // Through the four gates, which is the experience: the earlier walk stood
@@ -236,7 +265,8 @@ export function buildCityScene(data, shared, makeMaterial) {
       for(const dx of [-12,12])block(x+dx,hallY,z+12.3,1,10,1,'white');
       block(x,base,z+61,16,.12,8,'white');
       // Stop outside the main hall; keep the steps visible rather than paving over them.
-      walk=Array.from({length:50},(_,i)=>[x,base+Math.max(0,Math.ceil((i-7)/2.1))*.45+.18,z+65-i]);
+      walk=[...Array.from({length:36},(_,i)=>{const zz=z+100-i;return [x,Math.max(1.7,ground(x,zz))+.3,zz];}),
+        ...Array.from({length:50},(_,i)=>[x,base+Math.max(0,Math.ceil((i-7)/2.1))*.45+.18,z+65-i])];
     }else if(p.kind==='domes'){
       walk=loop(x,z,85);
     }else if(p.kind==='skyline'){
@@ -310,21 +340,30 @@ export function buildCityScene(data, shared, makeMaterial) {
     walk.forEach(pt=>{if(!Number.isFinite(pt[1]))pt[1]=1.5;});
     p.route=routes.length;routes.push({...route(walk),name:p.name});
     const frontEntry=['palace','zifeng','niushou','qixia'].includes(p.id);
-    const spawnIndex=p.avenue?0:p.kind==='wall'?0:p.kind==='eye'?40:['zhongshan','xiaoling'].includes(p.id)?0:p.id==='qixia'?20:frontEntry?0:p.kind==='lake'?0:p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
+    const spawnIndex=p.avenue?0:p.kind==='wall'?0:p.kind==='truss'?0:p.kind==='eye'?0:['zhongshan','xiaoling'].includes(p.id)?0:p.id==='qixia'?20:frontEntry?0:p.kind==='lake'?0:p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
     p.spawn=walk[spawnIndex].slice();p.spawn[1]=Math.max(p.spawn[1]+1.7,ground(p.spawn[0],p.spawn[2])+2.05);
     const headingIndex=spawnIndex>walk.length-7?spawnIndex-6:spawnIndex+6;
     p.look=p.kind==='mount'?walk[headingIndex].slice():p.position.slice();
     // A downhill bend can be far below the eye. Enter looking along its heading
     // with a level horizon, rather than staring into the immediate ground.
-    if(['truss','cable','eye'].includes(p.kind)){p.look=walk[Math.min(spawnIndex+12,walk.length-1)].slice();p.look[1]=p.spawn[1]+(p.kind==='eye'?6:.4);}
+    if(['truss','cable','eye'].includes(p.kind)){p.look=walk[Math.min(spawnIndex+(p.kind==='eye'?50:12),walk.length-1)].slice();p.look[1]=p.spawn[1]+(p.kind==='eye'?4:.4);
+      if(p.kind==='truss'){p.look=walk.at(-1).slice();p.look[1]=p.spawn[1]+18;}}
     else if(p.avenue||p.kind==='wall'){
       // The road runs straight at the landmark: look at it, at about half height.
       p.look=p.kind==='wall'?[x,y+EXTENT.zhonghua.h*.45,z+30]:arrivalLook(p.id,p.position,ground);
     }
     else if(p.kind==='lake'){p.look=walk[Math.min(spawnIndex+14,walk.length-1)].slice();p.look[1]=p.spawn[1]+.5;}
     else if(p.kind==='mount')p.look[1]=p.spawn[1]-.3;else p.look[1]+=p.kind==='skyline'?48:5;
-    if(p.kind!=='mausoleum'){const path=ribbon(walk,6,.04),vertices=path.attributes.position;
-      if(!['wall','truss','cable','eye'].includes(p.kind))for(let i=0;i<vertices.count;i++)vertices.setY(i,Math.max(vertices.getY(i),ground(vertices.getX(i),vertices.getZ(i))+.16));
+    // An approach that descends to the landmark (Xiaoling's road starts 26 m above
+    // the tomb) used to pitch the camera 15 degrees down onto bare hillside. Look
+    // no more than a few metres below the eye, so the building stays in view.
+    if(p.kind!=='mount')p.look[1]=Math.max(p.look[1],p.spawn[1]-3);
+    if(p.kind==='mausoleum'){
+      // The stairs are the path; only the approach through the archway needs one.
+      const approach=bedRibbon(walk.slice(0,37),7,ground);add(approach,'stone');approach.dispose();
+    }
+    if(p.kind!=='mausoleum'){
+      const path=['wall','truss','cable','eye'].includes(p.kind)?ribbon(walk,6,.04):bedRibbon(walk,6,ground);
       path.computeVertexNormals();add(path,'stone');path.dispose();}
     if(!['truss','cable','eye','wall','mausoleum'].includes(p.kind))for(let i=7;i<walk.length;i+=18){
       const [px,py,pz]=walk[i],next=walk[Math.min(walk.length-1,i+1)],yaw=Math.atan2(next[0]-px,next[2]-pz);
@@ -354,17 +393,29 @@ export function buildCityScene(data, shared, makeMaterial) {
     else if(p.kind==='mausoleum')cores.push([px,pz+3,26]);
     else if(p.kind==='tomb'){cores.push([px,pz+5,24]);cores.push([px,pz+40,22]);}
   });
+  // Baked roads (tools/research/build-roads.mjs) are used only if every node is still
+  // where it was when they were made; otherwise compute them here, which is correct but
+  // costs seconds of main-thread time at load.
   const roadStart=performance.now();
-  const network=buildRoadNetwork({nodes,polylines:routes.map(r=>r.points),cores,ground,wet});
-  console.info(`[city] ${network.roads.length} roads in ${Math.round(performance.now()-roadStart)} ms (${network.components} components)`);
+  let network;
+  if(bakedRoadsMatch(options.roads,nodes)){
+    const byId=new Map(nodes.map(n=>[n.id,n]));
+    const roads=options.roads.roads.map(r=>{
+      const points=r.points.map(q=>q.slice()),a=byId.get(r.a),b=byId.get(r.b);
+      points[0][0]=a.x;points[0][2]=a.z;points.at(-1)[0]=b.x;points.at(-1)[2]=b.z;   // exact joins
+      return {...r,points};
+    });
+    network={roads,components:roadComponents(nodes,roads),source:'baked'};
+  }else{
+    network={...buildRoadNetwork({nodes,polylines:routes.map(r=>r.points),cores,ground,wet}),source:options.roads?'computed (baked roads were stale)':'computed'};
+  }
+  console.info(`[city] ${network.roads.length} roads from ${network.source} in ${Math.round(performance.now()-roadStart)} ms (${network.components} components)`);
   const roadRoutes=[];
   network.roads.forEach(r=>{
     const a=places.find(q=>q.id===r.a),b=places.find(q=>q.id===r.b);
     const roadRoute={...route(r.points,7),name:`${a.name} — ${b.name}`,road:true,ends:[r.a,r.b]};
     roadRoutes.push(roadRoute);routes.push(roadRoute);
-    const path=ribbon(r.points,5.6,.04),vertices=path.attributes.position;
-    for(let i=0;i<vertices.count;i++)vertices.setY(i,Math.max(vertices.getY(i),ground(vertices.getX(i),vertices.getZ(i))+.16));
-    path.computeVertexNormals();add(path,'stone');path.dispose();
+    const path=bedRibbon(r.points,5.6,ground);add(path,'stone');path.dispose();
     for(let i=9;i<r.points.length-6;i+=14){
       const [px,,pz]=r.points[i],next=r.points[i+1],yaw=Math.atan2(next[0]-px,next[2]-pz);
       const side=i%28===9?1:-1,lx=px+Math.cos(yaw)*side*3.6,lz=pz-Math.sin(yaw)*side*3.6,ly=Math.max(1.7,ground(lx,lz));
@@ -429,6 +480,6 @@ export function buildCityScene(data, shared, makeMaterial) {
     }
   });geometryCache.forEach(g=>g.dispose());
   return {scene,places,routes,ground,rings,riverLines,materials,
-    terrain,landscape,roads:network.roads,roadRoutes,network:{components:network.components,roads:network.roads.length},
+    terrain,landscape,roads:network.roads,roadRoutes,roadNodes:nodes,network:{components:network.components,roads:network.roads.length,source:network.source},
     triangleCount:terrain.stats.terrainTriangles+meshes.reduce((n,m)=>n+m.geometry.attributes.position.count/3,0)+landscape.stats.totalTriangles};
 }

@@ -35,6 +35,14 @@ Camera entry clears movement keys, drag, orbit inertia, roll and zoom, then sets
 
 The city uses generated gouache foliage/material assets on 3D geometry. The detailed Mufu scene uses its own forest, water, ships and beacon systems. Keep these two worlds distinct.
 
+## Explorable layer (7 October 2026)
+
+- **Arrival**: `src/city-arrival.js` plans a straight avenue at each landmark's framing distance; `city-scene.js` prefixes it to loop walks and sets spawn/look. Keep the camera within about 25 degrees of the road and never below the eye (`tests/city-game-browser.mjs` checks this for every destination).
+- **Streets**: `src/city-network.js` finds roads between landmarks. They are baked into `public/city/roads.json`. **Re-run `node tools/research/build-roads.mjs` after changing `nanjing.json`, any landmark walk, or the two modules above**; a stale file is detected and recomputed at load (slow, not wrong). The browser check fails if the page is not using the baked file.
+- **Game 金陵拾遗**: pure rules and facts in `src/city-game.js` (tests in `tests/city-game.test.js`), in-world view in `src/city-game-view.js`, passport and arrival wiring in `src/nanjing.js`. Progress key `mufu-city-game-v1`. Facts and sources: `research/nanjing/GAME-FACTS.md` (cited, not independently verified).
+- Landmark builders have a headless harness: `tests/city-landmark-build.test.js`. Add a landmark detail there first; a missing helper otherwise costs a ten-second browser reload.
+- Walkways are laid by `bedRibbon` (level across the width). Do not clamp each edge to the terrain: on a slope that makes a tilted slab.
+
 ## Files to change for each task
 
 | Task | Entry files |

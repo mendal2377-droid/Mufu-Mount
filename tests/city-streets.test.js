@@ -161,3 +161,48 @@ test('framing distances are bounded, and tall landmarks are seen from farther aw
   }
   assert.ok(framingDistance('zifeng') > framingDistance('palace'));
 });
+
+// --- the baked road file -----------------------------------------------------
+import crypto from 'node:crypto';
+import {bakedRoadsMatch, roadComponents} from '../src/city-network.js';
+const roadsFile = JSON.parse(fs.readFileSync(new URL('../public/city/roads.json', import.meta.url)));
+const nodeList = Object.entries(roadsFile.nodes).map(([id, [x, z]]) => ({id, x, z}));
+
+test('baked roads were made from the map data that is committed now', () => {
+  const hash = crypto.createHash('sha1').update(fs.readFileSync(new URL('../public/city/nanjing.json', import.meta.url))).digest('hex');
+  assert.equal(roadsFile.dataHash, hash, 'public/city/nanjing.json changed: run  node tools/research/build-roads.mjs');
+});
+
+test('baked roads are walkable: evenly spaced, dry apart from short bridges, and they join their nodes', () => {
+  assert.ok(roadsFile.roads.length >= 9, `only ${roadsFile.roads.length} roads`);
+  for (const r of roadsFile.roads) {
+    assert.ok(r.points.length > 10);
+    r.points.forEach((p, i) => {
+      assert.ok(p.every(Number.isFinite));
+      if (i) assert.ok(Math.hypot(p[0] - r.points[i - 1][0], p[2] - r.points[i - 1][2]) < 3.7, `${r.a}–${r.b}: gap in the road at ${i}`);
+    });
+    assert.ok(longestWetRun(r.points, wet) <= MAX_BRIDGE_SAMPLES, `${r.a}–${r.b} wades water`);
+    const a = roadsFile.nodes[r.a], b = roadsFile.nodes[r.b];
+    assert.ok(Math.hypot(r.points[0][0] - a[0], r.points[0][2] - a[1]) < 0.2);
+    assert.ok(Math.hypot(r.points.at(-1)[0] - b[0], r.points.at(-1)[2] - b[1]) < 0.2);
+  }
+});
+
+test('the ten old-city and riverside landmarks are one connected network', () => {
+  const core = ['qinhuai', 'mendong', 'zhonghua', 'zifeng', 'palace', 'jiming', 'xuanwu', 'mochou', 'yuejiang', 'zijin'];
+  const parent = new Map(core.map(id => [id, id]));
+  const find = id => parent.get(id) === id ? id : (parent.set(id, find(parent.get(id))), parent.get(id));
+  for (const r of roadsFile.roads) if (parent.has(r.a) && parent.has(r.b)) parent.set(find(r.a), find(r.b));
+  assert.equal(new Set(core.map(find)).size, 1, 'the core landmarks are not all connected by road');
+});
+
+test('a baked file is rejected when a landmark has moved, vanished or been added', () => {
+  assert.equal(bakedRoadsMatch(roadsFile, nodeList), true);
+  const moved = nodeList.map(n => n.id === 'palace' ? {...n, x: n.x + 30} : n);
+  assert.equal(bakedRoadsMatch(roadsFile, moved), false, 'a moved node must invalidate the bake');
+  assert.equal(bakedRoadsMatch(roadsFile, nodeList.filter(n => n.id !== 'palace')), false, 'a road to a missing node must');
+  assert.equal(bakedRoadsMatch(roadsFile, [...nodeList, {id: 'newplace', x: 0, z: 0}]), false, 'an unbaked new landmark must');
+  assert.equal(bakedRoadsMatch(null, nodeList), false);
+  assert.equal(bakedRoadsMatch({...roadsFile, version: 2}, nodeList), false);
+  assert.equal(roadComponents(nodeList, roadsFile.roads) >= 1, true);
+});

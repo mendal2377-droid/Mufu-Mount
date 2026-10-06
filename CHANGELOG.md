@@ -1,5 +1,36 @@
 # Change log
 
+## 2026-10-07 — arrive on the road, recognisable landmarks, a collecting game
+
+Two complaints: landmarks were hard to recognise, and entering a destination
+left the camera mostly off the road.
+
+- **Arrival.** Every loop-shaped walk used to start tangent to its landmark, so
+  8 of 18 arrivals faced 66-135 degrees across the road. Each now begins on a
+  straight avenue pointing at the landmark (`src/city-arrival.js`); all 16 walkable
+  arrivals are within 5 degrees of the road in the browser check. Pins and the
+  destination list play a short drop-in from above (any key or click skips it).
+  Hillside roads were tilted slabs (Xiaoling's edge rose 5 m above the eye);
+  walkways are now level across their width.
+- **Landmarks.** Name boards in Chinese (总统府, 中华门, 阅江楼, 明孝陵, 夫子庙, 博爱,
+  鸡鸣寺); Yuejiang is four stepped red tiers; Zhonghua Gate has its real arch
+  proportions and flags; the Presidential Palace has a stone gate and Ionic
+  columns; the Yangtze Bridge has cream bridgehead towers with flags and lamp posts.
+- **Streets.** Old-city landmarks are 74-180 m apart at atlas scale, so roads now
+  join them (A* over the real terrain, `src/city-network.js`). They are baked into
+  `public/city/roads.json` by `tools/research/build-roads.mjs` (about 4 s of load-time
+  computation became 1 ms); the page recomputes them if the file is stale.
+- **Game 金陵拾遗.** Three lanterns per landmark, each with a cited fact
+  (`research/nanjing/GAME-FACTS.md`); three earn the landmark seal; Mufu's seal comes
+  from its morning photographs; passport (J), beacons that change colour with
+  progress, and an 11-ring kite "Wind Run" with medals. Progress is in localStorage.
+
+Checks: 104 unit tests, production build, and `tests/city-game-browser.mjs`
+(arrivals, drop-in, lanterns, seal, passport, persistence, Wind Run) pass against the
+dev server under software rendering. Not measured: phones, Safari, hardware-GPU
+frame rates. The facts are cited but not independently verified. Landmark shapes
+are illustrated approximations, still not surveyed.
+
 ## 2026-10-05 — imagegen city art direction
 
 Re-imagined the user's two city screenshots with built-in imagegen: a gouache

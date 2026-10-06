@@ -333,4 +333,35 @@ export function shoreWalk(ring, { from = 0.4, to = 0.7, offset = 11, spacing = 3
   return best;
 }
 
+/**
+ * Does a baked roads file still describe this scene? Every node must be where it
+ * was when the file was written, and every road must start and end on one. A
+ * moved landmark, a changed walk or a new destination all fail this, and the
+ * caller then computes the roads itself, so a stale file is slower, not wrong.
+ */
+export function bakedRoadsMatch(baked, nodes, tolerance = 2.5) {
+  if (!baked || baked.version !== 1 || !Array.isArray(baked.roads) || !baked.nodes) return false;
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  for (const n of nodes) {
+    const was = baked.nodes[n.id];
+    if (!was || Math.hypot(was[0] - n.x, was[1] - n.z) > tolerance) return false;
+  }
+  for (const r of baked.roads) {
+    const a = byId.get(r.a), b = byId.get(r.b);
+    if (!a || !b || !Array.isArray(r.points) || r.points.length < 3) return false;
+    if (!r.points.every(q => Array.isArray(q) && q.length === 3 && q.every(Number.isFinite))) return false;
+    const first = r.points[0], last = r.points.at(-1);
+    if (Math.hypot(first[0] - a.x, first[2] - a.z) > tolerance || Math.hypot(last[0] - b.x, last[2] - b.z) > tolerance) return false;
+  }
+  return true;
+}
+
+/** Number of separate road networks among the nodes (isolated landmarks count as one each). */
+export function roadComponents(nodes, roads) {
+  const parent = new Map(nodes.map(n => [n.id, n.id]));
+  const find = id => parent.get(id) === id ? id : (parent.set(id, find(parent.get(id))), parent.get(id));
+  for (const r of roads) if (parent.has(r.a) && parent.has(r.b)) parent.set(find(r.a), find(r.b));
+  return new Set(nodes.map(n => find(n.id))).size;
+}
+
 export const _internal = { clamp };

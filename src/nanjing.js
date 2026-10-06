@@ -15,6 +15,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   const response=await fetch('/city/nanjing.json');
   if(!response.ok)throw Error('Nanjing map unavailable');
   const data=await response.json();
+  // Optional: roads baked offline. Missing or stale, the scene computes them instead.
+  const roads=await fetch('/city/roads.json').then(r=>r.ok?r.json():null).catch(()=>null);
   const loader=new THREE.TextureLoader();
   const [foliage,meadow,tiles,brick,ochre,glass]=await Promise.all([
     loader.loadAsync('/city/art/foliage-gouache-v1.png'),loader.loadAsync('/city/art/meadow-gouache-v1.webp'),
@@ -64,7 +66,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       }
     };mat.customProgramCacheKey=()=>`city-ink-v2-${leaves?'leaves':land?'terrain':stone?'stone':wood?'wood':architectural?'architecture':'paper'}`;return mat;
   }
-  const built=buildCityScene(data,shared,inkMaterial),{scene,places,routes,ground}=built;
+  const built=buildCityScene(data,shared,inkMaterial,{roads}),{scene,places,routes,ground}=built;
   const cityDirection=new THREE.Vector3(),skyShared={...shared,uSunDir:{value:cityDirection}};
   const sky=createSkyDome(scene,skyShared).dome;sky.scale.setScalar(5);
   const hemi=new THREE.HemisphereLight(0xe1edf1,0x68766a,2.2),sun=new THREE.DirectionalLight(0xffecc5,2.0);
