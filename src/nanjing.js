@@ -67,9 +67,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     };mat.customProgramCacheKey=()=>`city-ink-v2-${leaves?'leaves':land?'terrain':stone?'stone':wood?'wood':architectural?'architecture':'paper'}`;return mat;
   }
   const built=buildCityScene(data,shared,inkMaterial,{roads}),{scene,places,routes,ground}=built;
-  const cityDirection=new THREE.Vector3(),skyShared={...shared,uSunDir:{value:cityDirection}};
+  const cityDirection=new THREE.Vector3(),skyShared={...shared,uSunDir:{value:cityDirection},uPainted:{value:1}};
   const sky=createSkyDome(scene,skyShared).dome;sky.scale.setScalar(5);
-  const hemi=new THREE.HemisphereLight(0xe1edf1,0x68766a,2.2),sun=new THREE.DirectionalLight(0xffecc5,2.0);
+  const hemi=new THREE.HemisphereLight(0xcfe6ff,0x7d9456,2.2),sun=new THREE.DirectionalLight(0xffe7b8,2.0);
   scene.add(hemi,sun,sun.target);
   const cityRain=rain.clone(),citySnow=snow.clone();scene.add(cityRain,citySnow);
   const bounds=new THREE.Box3().setFromPoints(built.rings.flat().map(p=>new THREE.Vector3(...p))).expandByScalar(500);
@@ -151,6 +151,25 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     const boat=new THREE.Group();const hull=new THREE.Mesh(new THREE.BoxGeometry(10,1.6,3),new THREE.MeshToonMaterial({color:0x425b59,gradientMap:bands}));
     const cabin=new THREE.Mesh(new THREE.BoxGeometry(2,2,2.6),new THREE.MeshToonMaterial({color:0xece3c5,gradientMap:bands}));cabin.position.set(-2,1.5,0);boat.add(hull,cabin);
     scene.add(boat);boats.push({boat,line:new THREE.CatmullRomCurve3(r.points.map(p=>new THREE.Vector3(p[0],2.1,p[2]))),offset:i*.13});});
+  // Switching places must not mean leaving the scene, finding the atlas and
+  // re-entering a pin. This lists every destination, nearest first, from inside
+  // the walk; one click drops in on that place's road.
+  function renderPlaces(){
+    const grid=$('#places-grid');if(!grid)return;
+    const here=selected?.id,pos=camera.position;
+    const rows=places.map(p=>({p,d:Math.hypot(p.position[0]-pos.x,p.position[2]-pos.z)})).sort((a,b)=>(a.p.id===here?-1:b.p.id===here?1:a.d-b.d));
+    grid.innerHTML='';
+    for(const {p,d} of rows){
+      const card=document.createElement('button');card.type='button';card.setAttribute('role','listitem');card.dataset.id=p.id;card.dataset.seal=p.zh.slice(0,1);
+      card.className='place-card'+(p.id===here?' here':'')+(game.stamped(p.id)?' sealed':'');
+      const lamps=p.id==='mufu'?'<span>morning walk</span>':`<span class="lamps">${[0,1,2].map(i=>`<i class="${game.has(p.id,i)?'on':''}"></i>`).join('')}</span>`;
+      const dist=p.id===here?'you are here':p.id==='mufu'?'':d<1000?`${Math.round(d/10)*10} m`:`${(d/1000).toFixed(1)} km`;
+      card.innerHTML=`<b>${p.zh}</b><small>${p.name}</small><span class="where">${lamps}<span>${dist}</span></span>`;
+      card.onclick=()=>{$('#city-places').close();api.enter(p.id,{drop:true});};
+      grid.append(card);
+    }
+  }
+  const walkable=()=>places.filter(p=>p.id!=='mufu');
   function renderPassport(){
     const grid=$('#passport-grid');if(!grid)return;
     const rank=game.rank();
@@ -179,7 +198,12 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     const run=game.run,course=gameView.course;
     $('#passport-run-best').textContent=run.best?`Best ${run.best.toFixed(1)} s${run.medal?' · '+run.medal:''} · ${run.runs} run${run.runs>1?'s':''}`:`${course.rings.length} rings · about ${Math.round(course.length/34)} s at cruising speed`;
   }
-  const api={...built,data,game,gameView,refreshPins,renderPassport,
+  const api={...built,data,game,gameView,refreshPins,renderPassport,renderPlaces,
+    openPlaces(open=true){const d=$('#city-places');if(!d||!active||state.overview)return;
+      if(open){controls.unlock();keys.clear();$('#city-menu').close();renderPlaces();if(!d.open)d.showModal();}else d.close();},
+    // [ and ] hop to the previous or next landmark in the atlas order.
+    hop(step){if(!active||state.overview)return;const list=walkable(),i=list.findIndex(p=>p.id===selected?.id);
+      api.enter(list[(Math.max(0,i)+step+list.length)%list.length].id,{drop:true});},
     passport(open=true){const d=$('#city-passport');if(!d)return;
       if(open){controls.unlock();keys.clear();$('#city-menu').close();renderPassport();if(!d.open)d.showModal();}else d.close();},
     startWindRun(){
@@ -193,7 +217,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     get active(){return active;},get scope(){return scope;},get selected(){return selected;},
     showPlan(){arrival=null;gameView.cancelRun();useScene();scope='central';flying(false);state.playing=false;state.overview=true;state.moving=false;state.photoMode=false;
       orbit.enabled=true;document.body.classList.remove('playing','photo-mode','locked');document.body.classList.add('plan-mode');
-      $('#nanjing-home').hidden=false;$('#walk-environment').hidden=true;$('#walk-menu').hidden=true;$('#back-to-plan').hidden=true;
+      $('#nanjing-home').hidden=false;$('#walk-environment').hidden=true;$('#walk-menu').hidden=true;$('#walk-places').hidden=true;$('#back-to-plan').hidden=true;
       $('#city-scope').value=scope;frameMap();},
     // `drop` plays the descent onto the avenue. Pins and menus ask for it;
     // programmatic entry (tests, the debug API) stays instant and deterministic.
@@ -205,9 +229,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       if(opts.drop){const flight=arrivalFlight(p.spawn,p.look);arrival={flight,t:0,p,look:p.look};
         camera.position.fromArray(flight.at(0));camera.lookAt(...p.look);}
       document.body.classList.remove('plan-mode','photo-mode');document.body.classList.add('playing');$('#nanjing-home').hidden=true;
-      $('#walk-environment').hidden=false;$('#walk-menu').hidden=false;$('#back-to-plan').hidden=false;
-      if(!arrival)toast(`${p.zh} · WASD to walk · Drag to look · K to fly`);},
-    leave(){if(!active)return;flying(false);active=false;reset();baseScene.add(camera);postfx.setScene(baseScene);
+      $('#walk-environment').hidden=false;$('#walk-menu').hidden=false;$('#walk-places').hidden=false;$('#back-to-plan').hidden=false;
+      if(!arrival)toast(`${p.zh} · WASD to walk · Drag to look · G places · K to fly`);},
+    leave(){if(!active)return;flying(false);$('#walk-places').hidden=true;$('#city-places')?.close();active=false;reset();baseScene.add(camera);postfx.setScene(baseScene);
       $('#nanjing-home').hidden=true;$('#city-menu').close();document.body.classList.remove('city-mode');
       $('.brand span').innerHTML='Mufu <small>Choose a place to wander.</small>';$('.brand').setAttribute('aria-label','Mufu home');},
     toggleFlight(){if(state.overview)api.enter(selected.id);if(!active)return;
@@ -220,7 +244,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       sun.position.copy(camera.position).addScaledVector(cityDirection,900);sun.target.position.copy(camera.position);
       sun.intensity=(2.4-weather.storm*1.8-weather.snow*.8)*(1-weather.dawn*.6);
       sun.color.setRGB(1,1-weather.sunset*.3,1-weather.sunset*.55);hemi.intensity=1.35-weather.storm*.45-weather.dawn*.65;
-      scene.fog.color.setRGB(.69+weather.sunset*.15-weather.storm*.36,.80-weather.sunset*.14-weather.storm*.38,.82-weather.sunset*.24-weather.storm*.32);
+      scene.fog.color.setRGB(.60+weather.sunset*.30-weather.storm*.30,.78-weather.sunset*.22-weather.storm*.36,.92-weather.sunset*.34-weather.storm*.40);
       scene.fog.density=state.overview?.000009:.00032+weather.storm*.0015+weather.snow*.001;
       sky.scale.setScalar(state.overview?5:1);sky.position.copy(camera.position);cityRain.position.copy(camera.position);citySnow.position.copy(camera.position);
       cityRain.visible=!state.overview&&weather.storm>.02;citySnow.visible=!state.overview&&weather.snow>.02;
@@ -231,7 +255,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
         const interrupted=keys.size>0||arrival.skip;
         arrival.t+=dt;
         if(interrupted||arrival.t>=arrival.flight.seconds){const p=arrival.p;arrival=null;setArrivalCamera(camera,p.spawn,p.look);
-          toast(`${p.zh} · WASD to walk · Drag to look · K to fly`);}
+          toast(`${p.zh} · WASD to walk · Drag to look · G places · K to fly`);}
         else{const pos=arrival.flight.at(arrival.t);pos[1]=Math.max(pos[1],ground(pos[0],pos[2])+6);
           camera.position.fromArray(pos);camera.lookAt(...arrival.look);camera.rotation.z=0;}
         state.moving=false;return false;
@@ -270,6 +294,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   };
   $('#city-passport-open').onclick=()=>api.passport(true);$('#city-passport-plan').onclick=()=>api.passport(true);
   $('#passport-close').onclick=()=>api.passport(false);
+  $('#walk-places').onclick=()=>api.openPlaces(true);$('#places-close').onclick=()=>$('#city-places').close();
+  $('#places-map').onclick=()=>{$('#city-places').close();api.showPlan();};
   $('#passport-run').onclick=()=>{api.passport(false);api.startWindRun();};
   $('#passport-reset').onclick=()=>{if(confirm('Clear all lanterns, seals and your best run?'))game.reset();};
   addEventListener('pointerdown',()=>{if(arrival)arrival.skip=true;},true);

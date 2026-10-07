@@ -11,6 +11,9 @@ const fragmentShader = `
 uniform float time, sunset, storm, snow, flash, dawn;
 uniform vec3 uSunDir;
 uniform float uHorizon;
+// 1 in the illustrated city: a hand-painted sky of saturated blue, towering flat-based
+// cumulus on the horizon and cel-shaded banks overhead. 0 leaves the Mufu sky untouched.
+uniform float uPainted;
 varying vec3 vDir;
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -19,6 +22,11 @@ float noise(vec2 p){
   f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x),
              mix(hash(i + vec2(0, 1)), hash(i + 1.0), f.x), f.y);
+}
+float fbm3(vec2 p){
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 3; i++) { v += noise(p) * a; p *= 2.07; a *= 0.5; }
+  return v / 0.875;
 }
 float fbm(vec2 p){
   float v = 0.0, a = 0.5;
@@ -51,6 +59,12 @@ void main(){
   vec3 zenith = mix(mix(zenithDay, zenithDawn, dawn), zenithGold, sunset);
   vec3 low    = mix(mix(lowDay,    lowDawn,   dawn), lowGold,    sunset);
   vec3 col = mix(low, zenith, pow(h, 0.42));
+  if (uPainted > 0.0) {
+    float dd = max(sunset, dawn * 0.8);
+    vec3 zp = mix(vec3(0.060, 0.290, 0.740), vec3(0.150, 0.110, 0.400), dd);   // cobalt, or dusk indigo
+    vec3 lp = mix(vec3(0.640, 0.870, 0.960), vec3(1.000, 0.640, 0.500), dd);   // pale cyan, or peach
+    col = mix(col, mix(lp, zp, pow(h, 0.50)), uPainted);
+  }
 
   // Overcast and snow flatten the whole dome towards grey.
   col = mix(col, mix(vec3(0.322, 0.376, 0.396), vec3(0.070, 0.113, 0.145), h), storm * 0.9);
@@ -118,25 +132,61 @@ void main(){
   cloudDark = mix(cloudDark, vec3(0.30, 0.26, 0.31), dusk * 0.7);
   vec3 cloud = mix(cloudDark, cloudLit, 0.30 + towardSun * 0.62);
 
-  // High cirrus: the same noise, but sampled on a stretched grid so it draws
-  // long fibrous streaks instead of blobs.
-  vec2 hi = deck(d, 0.95, 0.0042);
-  float cirrus = fbm(vec2(hi.x * 0.17 + hi.y * 0.06, hi.y * 1.35));
-  // Leave plenty of clear sky between the streaks; solid cirrus reads as
-  // overcast and takes the blue out of the dome.
-  cirrus = smoothstep(0.56, 0.84, cirrus) * (0.30 + 0.45 * fbm(hi * 0.5));
+  // In the painted city sky the cel-shaded cumulus below replaces these two decks in clear
+  // weather, which also saves five noise evaluations per sky pixel; overcast brings them back.
+  float cirrus = 0.0, body = 0.0, rim = 0.0, bodyAmount = 0.0;
+  if (uPainted < 0.5 || storm + snow > 0.05) {
+    // High cirrus: the same noise, but sampled on a stretched grid so it draws
+    // long fibrous streaks instead of blobs.
+    vec2 hi = deck(d, 0.95, 0.0042);
+    cirrus = fbm(vec2(hi.x * 0.17 + hi.y * 0.06, hi.y * 1.35));
+    // Leave plenty of clear sky between the streaks; solid cirrus reads as
+    // overcast and takes the blue out of the dome.
+    cirrus = smoothstep(0.56, 0.84, cirrus) * (0.30 + 0.45 * fbm(hi * 0.5));
 
-  // The lower deck is the overcast one. It mostly stays out of the way in
-  // clear weather so the streaks and the horizon band can be seen.
-  vec2 lo = deck(d, 2.30, 0.0135);
-  float low2 = fbm(lo * 0.95 + vec2(cirrus * 0.4));
-  float body = smoothstep(0.50 - storm * 0.26, 0.84, low2);
-  float rim = smoothstep(0.44 - storm * 0.24, 0.66, low2) - body;
-  float bodyAmount = (0.20 + storm * 0.66 + snow * 0.45) * (1.0 - dusk * 0.45);
+    // The lower deck is the overcast one. It mostly stays out of the way in
+    // clear weather so the streaks and the horizon band can be seen.
+    vec2 lo = deck(d, 2.30, 0.0135);
+    float low2 = fbm(lo * 0.95 + vec2(cirrus * 0.4));
+    body = smoothstep(0.50 - storm * 0.26, 0.84, low2);
+    rim = smoothstep(0.44 - storm * 0.24, 0.66, low2) - body;
+    bodyAmount = (0.20 + storm * 0.66 + snow * 0.45) * (1.0 - dusk * 0.45);
+  }
 
   col = mix(col, cloud * 0.96, cirrus * mask * (0.40 + storm * 0.34));
   col = mix(col, cloud, body * mask * bodyAmount);
   col += sunTint * rim * mask * towardSun * 0.9 * clarity;
+
+  // --- painted cumulus ---------------------------------------------------
+  if (uPainted > 0.0) {
+    float az2 = atan(d.z, d.x);
+    // A bank of towering cloud right round the horizon, tops billowing, bases flat.
+    float bank = 0.0, ceil2 = 0.0;
+    if (h < 0.62) {
+      float bankTop = 0.20 + 0.30 * fbm3(vec2(az2 * 1.7, 3.7));
+      float puff = fbm3(vec2(az2 * 8.0 + time * 0.0015, h * 10.0));
+      ceil2 = bankTop + (puff - 0.5) * 0.24;
+      bank = smoothstep(ceil2 + 0.010, ceil2 - 0.010, h) * smoothstep(0.004, 0.030, h);
+    }
+    // Scattered cumulus drifting overhead, on a plane that foreshortens to the horizon.
+    float field = 0.0, over = 0.0;
+    if (h > 0.16) {
+      vec2 cp2 = d.xz / max(d.y + 0.10, 0.10) * 0.85 + vec2(time * 0.0030, 0.0);
+      field = fbm3(cp2 * 0.75 + 5.0) * 0.78 + noise(cp2 * 2.3) * 0.22;
+      over = smoothstep(0.560, 0.605, field) * smoothstep(0.18, 0.40, h);
+    }
+    float cu = max(bank * (1.0 - smoothstep(0.42, 0.62, h)), over);
+    // Cel shading: bright crowns, a mid band, and a blue shadowed underside.
+    float lift = bank > over ? clamp(1.0 - (ceil2 - h) / 0.20, 0.0, 1.0)
+                             : clamp((field - 0.60) * 14.0 + 0.45, 0.0, 1.0);
+    float sunSide = 0.55 + 0.45 * towardSunAz;
+    float tone = floor(clamp(lift * 0.85 + sunSide * 0.25, 0.0, 0.999) * 3.0) / 2.0;
+    vec3 litC = mix(vec3(1.00, 0.99, 0.95), vec3(1.00, 0.80, 0.68), dusk);
+    vec3 midC = mix(vec3(0.84, 0.92, 0.99), vec3(0.93, 0.62, 0.62), dusk);
+    vec3 shdC = mix(vec3(0.54, 0.68, 0.88), vec3(0.42, 0.30, 0.56), dusk);
+    vec3 paint = tone < 0.5 ? mix(shdC, midC, tone * 2.0) : mix(midC, litC, (tone - 0.5) * 2.0);
+    col = mix(col, paint, cu * uPainted * (1.0 - storm) * (1.0 - snow * 0.7) * (0.92));
+  }
 
   // --- horizon haze ------------------------------------------------------
   vec3 haze = mix(vec3(0.75, 0.80, 0.80), vec3(0.92, 0.66, 0.48), sunset);
@@ -176,7 +226,7 @@ void main(){
 }`;
 
 export function createSkyDome(scene, shared) {
-  const uniforms = { ...shared };
+  const uniforms = { uPainted: { value: 0 }, ...shared };
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(18000, 48, 32),
     new THREE.ShaderMaterial({

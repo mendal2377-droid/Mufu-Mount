@@ -101,7 +101,7 @@ export function createCityGame({scene, places, routes, ground, camera, shared, t
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(p.position[0], Math.max(ground(p.position[0], p.position[2]), p.position[1]) - 1, p.position[2]);
-    mesh.name = `Beacon | ${p.id}`; mesh.renderOrder = 4; scene.add(mesh);
+    mesh.name = `Beacon | ${p.id}`; mesh.renderOrder = 4; mesh.visible = false; scene.add(mesh);
     return {id: p.id, mesh, mat};
   });
   function tintBeams() {
@@ -227,6 +227,9 @@ export function createCityGame({scene, places, routes, ground, camera, shared, t
     update(dt, t, {flying}) {
       drawLanterns(t);
       updateBursts(dt);
+      // Columns of light over every landmark hid the view on foot. They are a flyer's
+      // landmarks: shown only from the kite, where the pins and the passport are out of reach.
+      for (const b of beams) b.mesh.visible = !!flying;
       if (factTimer > 0 && (factTimer -= dt) <= 0) $('#fact-card').classList.remove('show');
       if (sealTimer > 0 && (sealTimer -= dt) <= 0) $('#seal-moment').classList.remove('show');
       const pos = camera.position;

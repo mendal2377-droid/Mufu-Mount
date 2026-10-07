@@ -134,7 +134,8 @@ test('the street network links the old-city landmarks without crossing water or 
     polylines.push(street);
     for (let i = -3; i <= 3; i++) for (const row of [-1, 1]) cores.push([x + i * 17, z + row * 19, 11]);
   }
-  const net = buildRoadNetwork({nodes, polylines, cores, ground, wet});
+  // Zifeng is now seen from 250 m, so its nearest neighbours here are farther than the default.
+  const net = buildRoadNetwork({nodes, polylines, cores, ground, wet, maxEdge: 520});
   assert.ok(net.roads.length >= 4, `only ${net.roads.length} roads for ${ids.length} landmarks`);
   assert.equal(net.components, 1, 'the old-city landmarks should form one connected network');
   for (const r of net.roads) {
@@ -157,7 +158,7 @@ test('the street network links the old-city landmarks without crossing water or 
 test('framing distances are bounded, and tall landmarks are seen from farther away', () => {
   for (const id of Object.keys(EXTENT)) {
     const d = framingDistance(id);
-    assert.ok(d >= 60 && d <= 175, `${id}: ${d}`);
+    assert.ok(d >= 60 && d <= 250, `${id}: ${d}`);
   }
   assert.ok(framingDistance('zifeng') > framingDistance('palace'));
 });
@@ -188,8 +189,8 @@ test('baked roads are walkable: evenly spaced, dry apart from short bridges, and
   }
 });
 
-test('the ten old-city and riverside landmarks are one connected network', () => {
-  const core = ['qinhuai', 'mendong', 'zhonghua', 'zifeng', 'palace', 'jiming', 'xuanwu', 'mochou', 'yuejiang', 'zijin'];
+test('the eleven old-city, riverside and hillside landmarks are one connected network', () => {
+  const core = ['qinhuai', 'mendong', 'zhonghua', 'zifeng', 'palace', 'jiming', 'xuanwu', 'mochou', 'yuejiang', 'zijin', 'xiaoling'];
   const parent = new Map(core.map(id => [id, id]));
   const find = id => parent.get(id) === id ? id : (parent.set(id, find(parent.get(id))), parent.get(id));
   for (const r of roadsFile.roads) if (parent.has(r.a) && parent.has(r.b)) parent.set(find(r.a), find(r.b));

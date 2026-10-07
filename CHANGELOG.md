@@ -1,5 +1,35 @@
 # Change log
 
+## 2026-10-07 (b) — storybook look, level ground, true shapes, switching places
+
+Five complaints, and one more mid-task, from screenshots of the live app:
+
+- **Style.** The city is re-coloured and re-lit as a hand-painted storybook: saturated
+  sky with cel-shaded cumulus, lush grass, verdigris roofs, vermilion and gold, red
+  lanterns on brackets over every road and strings of them down the old-town streets
+  (`design/city/STYLE-GUIDE.md`). Inspired by that genre, not copied from any film.
+- **Shapes.** Re-checked against public photographs (`research/nanjing/LANDMARKS.md`):
+  Yangtze Bridge (no pylons beside the deck), Ming Xiaoling, Zhonghua Gate (grey brick),
+  Qixia (the stone pagoda leads), Palace sign, Jiming (nine storeys), Zifeng (a smooth blade).
+- **Floating and sloping buildings.** Xiaoling's ground fell 48 m across its own footprint,
+  because a lake "shoulder" slopes whole hillsides towards the water. Landmarks now stand on
+  level pads at least as large as their buildings (`PADS` in `src/city-terrain.js`), the
+  Mausoleum hall has a real terrace at the head of its ramp, halls have footings, and generic
+  town blocks are only placed on level ground. The Qinhuai canal and lantern boats were on
+  Laomendong's street and put the camera inside a boat canopy; they moved north.
+- **Sky beams.** The columns of light are gone on foot; they show only from the kite.
+- **Cameras.** Eye, Xiaoling, the bridge and Zifeng (now seen from 250 m so the whole tower
+  is in frame) were re-aimed; a new browser check fails if any arrival starts within 0.45 m of a
+  surface (`tests/surface-clearance.mjs`).
+- **Switching places.** A Places button (and **G**) lists every destination, nearest first,
+  from inside a walk; **[** and **]** hop between landmarks. No trip through the atlas.
+
+Checks: 113 unit tests, `npm run build`, and the browser checks for the city, landmarks,
+art, and the game (arrivals, clearance, Places, lanterns, passport, Wind Run) against the dev
+server under software rendering. Not measured: phones, Safari, hardware-GPU frame rates (the
+painted sky does fewer noise evaluations than the old one in clear weather, but that is by
+construction, not a benchmark). The facts in the game are still cited, not independently verified.
+
 ## 2026-10-07 — arrive on the road, recognisable landmarks, a collecting game
 
 Two complaints: landmarks were hard to recognise, and entering a destination

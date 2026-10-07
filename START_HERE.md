@@ -41,6 +41,10 @@ The city uses generated gouache foliage/material assets on 3D geometry. The deta
 - **Streets**: `src/city-network.js` finds roads between landmarks. They are baked into `public/city/roads.json`. **Re-run `node tools/research/build-roads.mjs` after changing `nanjing.json`, any landmark walk, or the two modules above**; a stale file is detected and recomputed at load (slow, not wrong). The browser check fails if the page is not using the baked file.
 - **Game 金陵拾遗**: pure rules and facts in `src/city-game.js` (tests in `tests/city-game.test.js`), in-world view in `src/city-game-view.js`, passport and arrival wiring in `src/nanjing.js`. Progress key `mufu-city-game-v1`. Facts and sources: `research/nanjing/GAME-FACTS.md` (cited, not independently verified).
 - Landmark builders have a headless harness: `tests/city-landmark-build.test.js`. Add a landmark detail there first; a missing helper otherwise costs a ten-second browser reload.
+- **Ground first.** Every landmark has a level pad (`PADS`, `src/city-terrain.js`). When you add or enlarge a building, enlarge its pad, then run `node --test tests/city-foundations.test.js`. Pads are applied after the lake shoulders and before the Mausoleum ramp; the Xiaoling pad and the Mausoleum terrace are only 85 m apart, so widen either with care.
+- **Do not name an API member `places`.** `createNanjing()` spreads the scene's `places` array into its API, and a method of that name once silently replaced it (breaking the browser tests). The Places panel is `openPlaces()`.
+- **Style.** `design/city/STYLE-GUIDE.md`. The painted sky is `uPainted` in `src/sky.js`; Mufu leaves it at 0.
+- **Camera safety.** `tests/surface-clearance.mjs` measures the lens-to-surface distance in the page; `tests/city-game-browser.mjs` fails any arrival closer than 0.45 m.
 - Walkways are laid by `bedRibbon` (level across the width). Do not clamp each edge to the terrain: on a slope that makes a tilted slab.
 
 ## Files to change for each task

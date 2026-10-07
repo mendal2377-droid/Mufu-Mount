@@ -1300,11 +1300,33 @@ body.flying #game-lanterns { opacity: .35; }
 #city-passport .ghost { padding: 8px 14px; border-radius: 20px; background: transparent; color: #a9c0b2; border: 1px solid #ffffff2a; cursor: pointer; font-size: 11px; }
 #passport-run-best { font-size: 11px; color: #cfe0d4; letter-spacing: .05em; }
 #city-menu #city-passport-open { background: #f2e6af; color: #2b4739; }
+#walk-places svg { width: 26px; height: 26px; }
+#city-places { width: min(700px, 94vw); max-height: 86vh; overflow: auto; border: 1px solid #c9ae6a88; border-radius: 20px;
+  background: #1f3830; color: #fff5db; padding: 24px 26px 20px; }
+#city-places::backdrop { background: #0f221d88; backdrop-filter: blur(8px); }
+#city-places h2 { margin: 0 0 6px; font: 600 26px/1.1 "Songti SC", "SimSun", "Noto Serif CJK SC", serif; letter-spacing: .1em; }
+#places-sub { margin: 0 0 14px; padding-right: 30px; font-size: 12px; line-height: 1.7; color: #cfe0d4; }
+#places-sub kbd { font: inherit; padding: 0 5px; border: 1px solid #ffffff3a; border-radius: 4px; }
+#places-close { position: absolute; top: 12px; right: 14px; width: 34px; height: 34px; font-size: 20px; color: #fff5db; background: transparent; border: 0; cursor: pointer; }
+#places-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.place-card { position: relative; text-align: left; padding: 10px 12px; border-radius: 12px; background: #274539; border: 1px solid #ffffff1c; color: inherit; cursor: pointer; font: inherit; display: grid; gap: 1px; }
+.place-card:hover, .place-card:focus-visible { border-color: #e9c77a99; outline: none; background: #2d4d40; }
+.place-card b { font: 600 18px/1.2 "Songti SC", "SimSun", "Noto Serif CJK SC", serif; letter-spacing: .08em; }
+.place-card small { font-size: 10px; letter-spacing: .08em; color: #a9c0b2; }
+.place-card .where { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 10px; color: #cfe0d4; }
+.place-card .lamps i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; border: 1.5px solid #e9c77a; }
+.place-card .lamps i.on { background: #ffb15c; border-color: #ffb15c; }
+.place-card.here { border-color: #e9c77a; background: #33523f; }
+.place-card.sealed::after { content: attr(data-seal); position: absolute; top: 8px; right: 9px; width: 26px; height: 26px; display: grid; place-items: center;
+  background: #b8301f; color: #ffe9d2; border-radius: 5px; font: 700 12px/1 "Songti SC", "SimSun", serif; transform: rotate(-7deg); border: 1.5px double #ffd9bd; }
+.places-foot { margin-top: 14px; }
+#city-places .ghost { padding: 8px 14px; border-radius: 20px; background: transparent; color: #a9c0b2; border: 1px solid #ffffff2a; cursor: pointer; font-size: 11px; }
 @media (max-width: 650px) {
   #game-chip { top: 20px; left: 14px; margin-top: 44px; font-size: 11px; gap: 9px; }
   #fact-card { bottom: 96px; }
   .plan-passport { right: 16px; bottom: 126px; }
-  #city-passport { padding: 20px 16px 16px; }
+  #city-passport, #city-places { padding: 20px 16px 16px; }
+  #places-grid { grid-template-columns: 1fr 1fr; }
   #city-passport h2 { font-size: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {

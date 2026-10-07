@@ -40,7 +40,7 @@
     <div id="game-chip" hidden aria-label="Keepsake progress"><span id="game-lanterns" title="Lanterns found at this landmark">灯 ·</span><span id="game-seals" title="Seals earned">印 0/18</span><span id="game-run" hidden title="Wind run"></span></div>
     <aside id="fact-card" hidden role="status" aria-live="polite"><small id="fact-title"></small><p id="fact-text"></p><div class="fact-foot"><span id="fact-source"></span><span id="fact-dots"></span></div></aside>
     <div id="seal-moment" hidden role="status" aria-live="polite"><div class="seal-stamp"><b id="seal-name"></b></div><span id="seal-sub"></span></div>
-    <div class="quiet-actions"><button id="kite-toggle" aria-label="Launch bird kite (K)" aria-pressed="false" title="Fly the bird kite · K"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 11 3 5 9 17 16 14 23 17 29 5 16 11 18 23 16 20 14 23Z" fill="currentColor"/><path d="M16 22q-5 3-1 7" fill="none" stroke="currentColor"/></svg></button><button id="walk-menu" aria-label="Open exploration menu" title="Menu" hidden>☰</button></div>
+    <div class="quiet-actions"><button id="kite-toggle" aria-label="Launch bird kite (K)" aria-pressed="false" title="Fly the bird kite · K"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 11 3 5 9 17 16 14 23 17 29 5 16 11 18 23 16 20 14 23Z" fill="currentColor"/><path d="M16 22q-5 3-1 7" fill="none" stroke="currentColor"/></svg></button><button id="walk-places" aria-label="Go to another place (G)" title="Go to another place · G" hidden><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3a8 8 0 0 0-8 8c0 6 8 15 8 15s8-9 8-15a8 8 0 0 0-8-8Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="11" r="3" fill="currentColor"/></svg></button><button id="walk-menu" aria-label="Open exploration menu" title="Menu" hidden>☰</button></div>
     <main id="welcome" class="welcome">
       <div class="load-track"><i id="load-bar"></i></div>
       <div id="load-status" role="status">Opening the mountain</div>
@@ -76,6 +76,13 @@
       <p>WASD move · Drag to look · Shift faster<br>K bird kite · E up · Q down · M map · J passport</p>
       <button id="city-passport-open">Passport · 金陵拾遗</button><button id="city-map-return">Nanjing map</button><button id="city-mufu">Detailed Mufu walk</button><button id="city-sound">Enable nature sound</button>
       <p class="city-caption">A scenic interpretation based on public map anchors and landmark photo references. Not a surveyed city model.</p>
+    </dialog>
+    <dialog id="city-places" aria-labelledby="places-title">
+      <button id="places-close" aria-label="Close places">×</button>
+      <h2 id="places-title">Places · 去往</h2>
+      <p id="places-sub">Choose a place and you drop in on its road. Nearest first. <kbd>G</kbd> opens this, <kbd>[</kbd> <kbd>]</kbd> hop to the previous or next landmark.</p>
+      <div id="places-grid" role="list"></div>
+      <div class="places-foot"><button id="places-map" class="ghost">Open the Nanjing atlas (M)</button></div>
     </dialog>
     <dialog id="city-passport" aria-labelledby="passport-title">
       <button id="passport-close" aria-label="Close passport">×</button>

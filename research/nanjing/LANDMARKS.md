@@ -104,3 +104,25 @@ lower and tiled; taller glass groups concentrate near Zifeng. Nearby water-side
 planting favours willow. Palace/Jiming forecourts share a graded lowland surface
 to prevent lake shoulders from burying their entrances; arrival sight lines stay
 clear of obstructing tree crowns. No detailed foliage casts a shadow.
+
+## Re-check against public photographs, 7 October 2026
+
+Photographs from Wikimedia Commons (licences in each file's metadata; inspection
+only, never redistributed or used as textures) were compared with the models, and
+these shapes were found wrong and changed:
+
+| Landmark | Photograph shows | Model had | Now |
+| --- | --- | --- | --- |
+| Yangtze Bridge | Road rides on top of the steel truss; cream bridgehead towers with flags; multi-globe lamp posts | 22 m white pillars standing beside the deck | Pillars removed; walk down the middle of the deck |
+| Ming Xiaoling | Salmon-vermilion walls, yellow-glazed coping and roof, brass-studded round-arched doors in a grey stone frame | A red box with an orange roof | Wall wings, a three-door gate house, double yellow eave |
+| Zhonghua Gate | Pale grey brick, one great round arch, crenellations | Tan stone | Grey brick |
+| Qixia | A five-storey carved stone relic pagoda on a stepped base is the point of the temple | A small stone octagon beside two white halls | Pagoda at the centre of its court, halls around it |
+| Presidential Palace | Gold characters directly on the stone attic | A dark board | Stone-coloured board |
+| Jiming | Nine storeys | Seven | Nine |
+| Zifeng Tower | One smooth tapering, faceted glass blade | Four stacked prisms | A lofted, twisting blade with floor belts and four sharp edges |
+
+Photographs compared this time: bridge, eye, third bridge, palace, qixia, jiming,
+xiaoling, zhonghua, zhongshan, xuanwu, yuejiang. **No new photograph was fetched for
+Zifeng, Qinhuai, Mochou, Niushou or Laomendong;** their shapes follow the earlier pass
+and general knowledge, and are the least checked. Everything remains an illustrated,
+compressed approximation, not a survey.

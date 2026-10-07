@@ -44,7 +44,8 @@ export function framingDistance(id) {
   const e = EXTENT[id] || { h: 30, w: 60 };
   // A 68° vertical field of view: height h fills ~24° at 2.35·h. Width is
   // judged against the narrower horizontal fit.
-  return clamp(Math.max(e.h * 2.35, e.w * 0.85), 60, 175);
+  // A 115 m tower needs room to be seen whole; 175 m left only its lower third in frame.
+  return clamp(Math.max(e.h * 2.35, e.w * 0.85), 60, e.h > 90 ? 250 : 175);
 }
 
 /** Landmark fronts face +z (south), as Chinese halls do; try that bearing first. */

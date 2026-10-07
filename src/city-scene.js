@@ -22,7 +22,7 @@ function bedRibbon(points,width,ground){
 }
 export function buildCityScene(data, shared, makeMaterial, options = {}) {
   const buildStart=performance.now();
-  const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xc4d5c4,.00003);
+  const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xa8d0ea,.00003);
   const places=data.landmarks.map(p=>({...p,position:cityPoint(p.coord,data)}));
   const rings=data.boundary.map(r=>r.map(p=>cityPoint(p,data)));
   const riverLines=cityRiverSurfaces(data);
@@ -30,19 +30,25 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
   const terrain=createCityTerrain(places,riverLines,lakes,rings),{hills,ground,wet}=terrain;
   const materials={
     terrain:makeMaterial('City relief paper',[1,1,1]),
-    stone:makeMaterial('City warm stone',[.76,.72,.60]),
-    white:makeMaterial('City lime plaster',[.92,.88,.76]),
-    roof:makeMaterial('City dark tiled roof',[.29,.38,.40]),
-    red:makeMaterial('City red timber',[.56,.25,.16]),
-    blue:makeMaterial('City blue glazed roof',[.24,.39,.51]),
-    ochre:makeMaterial('City ochre plaster',[.86,.65,.30]),
-    bronze:makeMaterial('City bronze fixture',[.69,.55,.32]),
-    glass:makeMaterial('City blue glass',[.32,.47,.49]),
+    // A hand-painted storybook palette: warm cream plaster, verdigris-teal roofs,
+    // vermilion lacquer and gold trim, under a deep blue sky.
+    stone:makeMaterial('City warm stone',[.80,.74,.60]),
+    white:makeMaterial('City lime plaster',[.97,.91,.76]),
+    roof:makeMaterial('City dark tiled roof',[.20,.47,.43]),
+    red:makeMaterial('City red timber',[.70,.20,.13]),
+    blue:makeMaterial('City blue glazed roof',[.17,.42,.60]),
+    ochre:makeMaterial('City ochre plaster',[.94,.70,.28]),
+    gold:makeMaterial('City imperial yellow glazed roof',[.93,.72,.22]),
+    brick:makeMaterial('City grey warm stone brick',[.60,.60,.55]),
+    wall:makeMaterial('City vermilion wall',[.88,.33,.20]),
+    bronze:makeMaterial('City bronze fixture',[.86,.64,.24]),
+    glass:makeMaterial('City blue glass',[.40,.62,.70]),
     bark:makeMaterial('City bark',[.34,.27,.19]),
     leaf:makeMaterial('City foliage',[1,1,1]),
-    canopy:makeMaterial('City distant canopy',[.43,.58,.49]),
-    sage:makeMaterial('City meadow sage',[.51,.61,.39]),
+    canopy:makeMaterial('City distant canopy',[.36,.62,.42]),
+    sage:makeMaterial('City meadow sage',[.50,.68,.34]),
     glow:new THREE.MeshStandardMaterial({color:0xda6944,emissive:0xff6725,emissiveIntensity:.35,roughness:.8}),
+    lamp:new THREE.MeshStandardMaterial({color:0xfff0cf,emissive:0xffd88a,emissiveIntensity:.55,roughness:.7}),
   };
   const batches=new Map(),geometryCache=new Map(),random=randomSeed(20261005);
   function add(geometry,mat='stone',position=[0,0,0],scale=[1,1,1],yaw=0){
@@ -50,7 +56,7 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw),new THREE.Vector3(...scale));
     g.applyMatrix4(m);const ready=g.index?g.toNonIndexed():g;
     if(ready!==g)g.dispose();
-    const pos=ready.attributes.position,norm=ready.attributes.normal,uv=[],density=mat==='stone'?.32:mat==='roof'||mat==='blue'?.18:.08;
+    const pos=ready.attributes.position,norm=ready.attributes.normal,uv=[],density=mat==='stone'||mat==='brick'?.32:mat==='roof'||mat==='blue'||mat==='gold'?.18:.08;
     for(let i=0;i<pos.count;i++){
       const nx=Math.abs(norm.getX(i)),ny=Math.abs(norm.getY(i)),nz=Math.abs(norm.getZ(i));
       if(ny>=nx&&ny>=nz)uv.push(pos.getX(i)*density,pos.getZ(i)*density);
@@ -83,7 +89,25 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
       vertices.push(...a,...c,...b,...b,...c,...d);
     }g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.computeVertexNormals();return g;
   });
+  // Stone footing under a building: reaches down to the lowest ground under the
+  // footprint, so no corner hangs in the air if the ground is not perfectly level.
+  function groundRange(x,z,w,d){
+    let lo=Infinity,hi=-Infinity;
+    for(const u of [-.5,0,.5])for(const v of [-.5,0,.5]){const y=ground(x+u*w,z+v*d);lo=Math.min(lo,y);hi=Math.max(hi,y);}
+    return [lo,hi];
+  }
+  // A red paper lantern with brass caps: the one prop that makes a street feel inhabited.
+  function lantern(x,y,z,s=1){
+    add(sphere,'glow',[x,y,z],[.4*s,.55*s,.4*s]);
+    block(x,y+.5*s,z,.34*s,.1*s,.34*s,'bronze');block(x,y-.62*s,z,.3*s,.1*s,.3*s,'bronze');
+  }
+  function footing(x,z,w,d,top,yaw=0){
+    let lo=Infinity;const c=Math.cos(yaw),s=Math.sin(yaw);
+    for(let i=0;i<=4;i++)for(let j=0;j<=4;j++){const u=(i/4-.5)*w,v=(j/4-.5)*d;lo=Math.min(lo,ground(x+u*c+v*s,z-u*s+v*c));}
+    if(top-lo>.25)block(x,lo-.6,z,w,top-lo+.6,d,'stone',yaw);
+  }
   function hall(x,y,z,w=20,d=14,h=8,tiles='roof'){
+    footing(x,z,w+1.8,d+1.8,y);
     block(x,y-.2,z,w+1.8,.65,d+1.8,'stone');
     block(x,y,z,w,h,d,'white');
     const front=z+d*.505;
@@ -193,7 +217,7 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
   places.forEach(p=>{
     const [x,,z]=p.position,y=ground(x,z);p.position[1]=y;
     let walk=loop(x,z,p.kind==='mount'?70:p.kind==='oldtown'?43:36);
-    const bespoke=landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,plaque,cylinder});
+    const bespoke=landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,plaque,cylinder,footing});
     if(p.kind==='oldtown'){
       // A compact district vignette exaggerates alleys and waterfront space.
       // It evokes the photo references; these are not individual surveyed homes.
@@ -201,8 +225,19 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
         const bx=x+i*17,bz=z+row*19;hall(bx,ground(bx,bz),bz,13,11,6);
         for(const side of [-1,1])add(sphere,'glow',[bx+side*4,ground(bx,bz)+5,bz-row*6],[.45,.7,.45]);
       }
+      // Strings of red lanterns hung along the street, sagging between the eaves.
+      for(const rowSide of [-1,1]){
+        const zz=z+rowSide*10.5;let prev=null;
+        for(let k=0;k<=20;k++){
+          const lx=x-60+k*6,ly=y+6.4-(k%2?.7:0);
+          if(prev)beam(prev,[lx,ly+.45,zz],.04,'bronze');
+          lantern(lx,ly,zz,.9);prev=[lx,ly+.45,zz];
+        }
+      }
       if(p.id!=='mendong'){
-        const canal=ribbon([[x-75,y,z+40],[x,y,z+44],[x+75,y,z+39]],10,.14);add(canal,'water');canal.dispose();
+        // North of the street: Mendong's street runs along this one's southern side, 41 m away,
+        // and the canal used to cross it (the lantern boats sat on Mendong's spawn point).
+        const canal=ribbon([[x-75,y,z-40],[x,y,z-44],[x+66,y,z-39]],10,.14);add(canal,'water');canal.dispose();
         block(x,y,z+28,15,.3,12,'stone');
       }
       hall(x+82,y,z-45,22,16,9,p.id==='qinhuai'?'red':'roof');
@@ -237,11 +272,12 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
             beam(bp(t,side*4,deck-6),bp(t+.1,side*4,deck-1),.45,'glass');}
         }
       }
-      if(p.kind==='truss')for(const t of [.13,.87])for(const side of [-1,1]){
-        const pos=bp(t,side*7);block(pos[0],deck-6,pos[2],4,22,5,'white',yaw);
-      }
+      // (No tall pylons beside the deck: in the photographs the road rides on top of the
+      // steel truss, and the only things that rise above it are the bridgehead towers.)
       bridgeDetails(p.kind,bp,deck,{beam,block,add,roof,sphere});
-      walk=Array.from({length:81},(_,i)=>bp(i/80,3.6,deck+.03));p.position=[x,deck,z];
+      // The truss bridge is walked down its middle: the lamp posts and rails stand on both edges,
+      // and a lane 3.6 m off-centre put a lamp post a metre from the lens.
+      walk=Array.from({length:81},(_,i)=>bp(i/80,p.kind==='truss'?0:3.6,deck+.03));p.position=[x,deck,z];
     }else if(p.kind==='wall'){
       // Through the four gates, which is the experience: the earlier walk stood
       // on the battlements looking at crenellations. Start outside, in front of
@@ -419,7 +455,8 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     for(let i=9;i<r.points.length-6;i+=14){
       const [px,,pz]=r.points[i],next=r.points[i+1],yaw=Math.atan2(next[0]-px,next[2]-pz);
       const side=i%28===9?1:-1,lx=px+Math.cos(yaw)*side*3.6,lz=pz-Math.sin(yaw)*side*3.6,ly=Math.max(1.7,ground(lx,lz));
-      block(lx,ly,lz,.15,4,.15,'glass');add(sphere,'glow',[lx,ly+4,lz],[.32,.4,.32]);
+      const ex=px+Math.cos(yaw)*side*1.3,ez=pz-Math.sin(yaw)*side*1.3;
+      block(lx,ly,lz,.17,4.6,.17,'red');beam([lx,ly+4.4,lz],[ex,ly+4.7,ez],.08,'red');lantern(ex,ly+4.0,ez,1);
     }
   });
   hills.forEach(h=>{for(let i=0;i<120;i++){
@@ -435,9 +472,17 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     if(wet(x,z)||terrain.relief(x,z)>8||routes.some(r=>distanceToLine(x,z,r.points)<30)||places.some(p=>Math.hypot(x-p.position[0],z-p.position[2])<95))continue;
     const old=places.find(p=>p.id==='qinhuai').position,modern=places.find(p=>p.id==='zifeng').position;
     const historic=Math.hypot(x-old[0],z-old[2])<280,cbd=Math.hypot(x-modern[0],z-modern[2])<180;
-    const h=historic?4+random()*5:cbd?18+random()**2*43:5+random()**2*22,w=8+random()*9,d=8+random()*9,base=ground(x,z);
-    block(x,base,z,w,h,d,i%4?'white':'glass');
-    if(h<14){
+    const h=historic?4+random()*5:cbd?18+random()**2*43:5+random()**2*22,w=8+random()*9,d=8+random()*9;
+    // Stand on level ground only: a block placed by its centre height used to hang off one
+    // corner and sink into the other on a slope.
+    const [lo,hi]=groundRange(x,z,w+2,d+2);
+    if(hi-lo>1.4)continue;
+    const base=lo;
+    block(x,base-.6,z,w+.7,.9,d+.7,'stone');
+    // Warm plaster and vermilion in the old town and suburbs; glass only in the new centre.
+    const fabric=cbd?(i%3?'glass':'white'):['white','white','ochre','wall','white'][i%5];
+    block(x,base,z,w,h,d,fabric);
+    if(h<14||!cbd){
       block(x,base-.1,z,w+1,.3,d+1,'stone');add(roof,'roof',[x,base+h,z],[w+2,3.2,d+2]);
       block(x,base+h+1.3,z,w*.66,.22,.32,'roof');
       for(const side of [-1,1]){block(x+side*w*.25,base+1.7,z+d*.51,w*.15,1.6,.15,'glass');
@@ -445,8 +490,8 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
       block(x,base,z+d*.51,1.2,2.6,.2,'red');
       if(i%3===0){
         const xx=x+w+5,bz=z+d*.2;
-        if(!wet(xx,bz)&&terrain.relief(xx,bz)<8){
-          const yy=ground(xx,bz);block(xx,yy,bz,w*.65,5,d*.85,'white');
+        if(!wet(xx,bz)&&terrain.relief(xx,bz)<8&&(([l,h2])=>h2-l<=1.4)(groundRange(xx,bz,w*.65+2,d*.85+2))){
+          const yy=groundRange(xx,bz,w*.65+2,d*.85+2)[0];block(xx,yy-.6,bz,w*.65+.6,.8,d*.85+.6,'stone');block(xx,yy,bz,w*.65,5,d*.85,'white');
           add(roof,'roof',[xx,yy+5,bz],[w*.65+2,3,d*.85+2]);
           block(x+w*.8,base,z-d*.5,w,.85,.35,'stone');tree(x+w*.65,z+d*.8,.55);
         }
@@ -454,6 +499,11 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     }
     else{block(x,base+h,z,w+1,.45,d+1,'stone');
       for(let level=2;level<h-1;level+=3)block(x,base+level,z+d*.505,w*.8,.55,.1,'glass');}
+    if(h>=14&&!cbd){
+      // A second, narrower storey under its own roof: a tiered tower house, not a slab.
+      block(x,base+h,z,w*.6,4,d*.6,fabric);add(roof,'roof',[x,base+h+4,z],[w*.6+2.4,2.8,d*.6+2.4]);
+      for(let level=3.2;level<h-1;level+=3.6)for(const side of [-1,1])block(x+side*w*.22,base+level,z+d*.505,w*.18,1.5,.12,'glass');
+    }
   }
   for(let i=-6;i<=6;i++){
     const a=[[i*100,1.25,-650],[i*100,1.25,650]],b=[[-700,1.25,i*100],[700,1.25,i*100]];

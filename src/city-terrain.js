@@ -10,6 +10,20 @@ function noise(x,z){
     THREE.MathUtils.lerp(hash(ix,iz+1),hash(ix+1,iz+1),u),v);
 }
 
+// Every building stands on a level pad at least as large as its footprint. The
+// earlier 30 m pads were smaller than the buildings on them, so on a hillside
+// one corner hung in the air and the other sank into the slope. `blend` is the
+// distance over which the pad rejoins the hill; hillside landmarks get a long one
+// so the cut reads as a gentle terrace, not a cliff.
+export const PADS={
+  xiaoling:{rx:40,rz:44,offset:6,blend:60},   // gate hall, wings and the sacred-way forecourt
+  zifeng:{rx:30,rz:40,offset:4,blend:50},      // podium, tower and the two side blocks
+  zhonghua:{rx:46,rz:60,offset:28,blend:50},   // four gates, 76 m wide
+  qixia:{rx:46,rz:52,offset:4,blend:60},       // pagoda court and the halls around it
+  yuejiang:{rx:46,rz:30,offset:0,blend:50},    // podium and flanking pavilions
+  jiming:{rx:48,rz:44,offset:6,blend:50},      // pagoda and three halls
+  palace:{rx:44,rz:50,offset:-10,blend:50},    // gatehouse and garden halls
+};
 // Spatial water queries also shape floodplains, not just decide where to plant.
 // The map supplies anchors/centerlines; every elevation is an artistic choice.
 export function createCityTerrain(places,riverLines,lakes,rings){
@@ -69,14 +83,15 @@ export function createCityTerrain(places,riverLines,lakes,rings){
     return 1.2+relief(x,z)+(noise(x/95,z/95)*.8+noise(x/230,z/230)*.6)*(.9+outskirts*9);
   }
   const terraces=places.filter(p=>!['mount','truss','cable','eye','lake'].includes(p.kind)).map(p=>{
-    const [x,,z]=p.position,kind=p.kind;
+    const [x,,z]=p.position,kind=p.kind,pad=PADS[p.id];
+    if(pad)return {x,z,kind,y:raw(x,z+pad.offset),rx:pad.rx,rz:pad.rz,offset:pad.offset,blend:pad.blend};
     return {x,z,kind,y:raw(x,z+(kind==='mausoleum'?65:0)),rx:kind==='oldtown'?110:kind==='domes'?82:30,
-      rz:kind==='oldtown'?70:kind==='domes'?82:kind==='mausoleum'?85:30,offset:kind==='mausoleum'?20:0};
+      rz:kind==='oldtown'?70:kind==='domes'?82:kind==='mausoleum'?85:30,offset:kind==='mausoleum'?20:0,blend:70};
   });
   function landform(x,z){
     let y=raw(x,z);
     for(const p of terraces){
-      const d=Math.max(Math.abs(x-p.x)-p.rx,Math.abs(z-p.z-p.offset)-p.rz),weight=1-smooth(0,70,d);
+      const d=Math.max(Math.abs(x-p.x)-p.rx,Math.abs(z-p.z-p.offset)-p.rz),weight=1-smooth(0,p.blend,d);
       if(weight)y=THREE.MathUtils.lerp(y,p.y,weight);
     }
     const d=shore(x,z);
@@ -103,6 +118,11 @@ export function createCityTerrain(places,riverLines,lakes,rings){
   // heights would produce a ridge where their softened edges overlap.
   const forecourtGrade=Math.min(...forecourts.map(p=>p.y));
   forecourts.forEach(p=>p.y=forecourtGrade);
+  // The lake shoulder above slopes the whole hillside towards the water, which tilted
+  // every building near a lake. Re-level each pad on the finished landform.
+  const levelPads=places.filter(p=>PADS[p.id]&&!['palace','jiming'].includes(p.id)).map(p=>{
+    const [x,,z]=p.position,pad=PADS[p.id];return {x,z,...pad,y:landform(x,z+pad.offset)};
+  });
   const stairCourts=places.filter(p=>p.id==='zhongshan');
   function ground(x,z){
     let y=landform(x,z);const bank=shore(x,z);
@@ -112,11 +132,23 @@ export function createCityTerrain(places,riverLines,lakes,rings){
       const weight=(1-smooth(0,40,d))*smooth(0,24,bank);
       if(weight)y=THREE.MathUtils.lerp(y,p.y,weight);
     }
+    for(const p of levelPads){
+      const d=Math.max(Math.abs(x-p.x)-p.rx,Math.abs(z-p.z-p.offset)-p.rz);
+      const weight=(1-smooth(0,p.blend,d))*smooth(0,24,bank);
+      if(weight)y=THREE.MathUtils.lerp(y,p.y,weight);
+    }
     for(const p of stairCourts){
       const [px,,pz]=p.position,along=pz+58-z;
-      if(along>=-12&&along<=54){const base=landform(px,pz+58),grade=base+Math.max(0,along)*.45/2.1-.25;
-        const weight=(1-smooth(8.5,22,Math.abs(x-px)))*(1-smooth(48,54,along));
-        y=THREE.MathUtils.lerp(y,Math.min(y,grade),weight);}
+      if(along>=-12&&along<=100){
+        // The stair is a ramp, and the memorial hall stands on a level terrace at its
+        // head. The ground follows both exactly (it used to only be lowered, so the hall
+        // hung 10 m above the hillside behind it). Gentle shoulders, not a trench.
+        const base=landform(px,pz+58),across=Math.abs(x-px);
+        const target=base+Math.max(0,Math.min(along,50))*.45/2.1-.25;
+        const shoulders=1-smooth(9,34,across),head=1-smooth(20,44,across);
+        const weight=THREE.MathUtils.lerp(shoulders,head,smooth(46,54,along))*(1-smooth(86,100,along));
+        y=THREE.MathUtils.lerp(y,target,weight);
+      }
     }
     return y;
   }
@@ -131,7 +163,7 @@ export function createCityTerrain(places,riverLines,lakes,rings){
     for(let j=0;j<=n;j++)border.add(`${Math.floor(THREE.MathUtils.lerp(a[0],b[0],j/(n||1))/tileSize)},${Math.floor(THREE.MathUtils.lerp(a[2],b[2],j/(n||1))/tileSize)}`);
   }});
   const positions=[],colors=[],indices=[],uv=[],cache=new Map();
-  const palette=[new THREE.Color('#a4b289'),new THREE.Color('#567d72'),new THREE.Color('#8d9f80'),new THREE.Color('#c0b998'),new THREE.Color('#8a9386')];
+  const palette=[new THREE.Color('#8fbd5c'),new THREE.Color('#3f8c68'),new THREE.Color('#79ac5a'),new THREE.Color('#d2c58c'),new THREE.Color('#8c9d7c')];
   function vertex(x,z){
     const key=`${x},${z}`;if(cache.has(key))return cache.get(key);
     const y=ground(x,z),s=slope(x,z),f=noise(x/85,z/85),d=shore(x,z);

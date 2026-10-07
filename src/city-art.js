@@ -63,7 +63,7 @@ export function paintCityWater(water,shared){
       float phase=waterP.y*1.83+waterP.x*.52+warp-cityTime*.85;
       float stroke=pow(max(0.,sin(phase)),12.)*(1.-smoothstep(.35,1.8,fwidth(phase)));
       float broken=smoothstep(.1,.72,sin(waterP.x*1.1+sin(waterP.y*.41))*cos(waterP.y*.37-cityTime*.19)*.5+.5);
-      vec3 deep=vec3(.055,.20,.23),shallow=vec3(.17,.37,.36);
+      vec3 deep=vec3(.05,.30,.36),shallow=vec3(.24,.58,.56);
       vec3 reflected=mix(vec3(.70,.79,.71),vec3(.87,.58,.29),citySunset);
       diffuseColor.rgb=mix(deep,shallow,swell)*(.85+.15*citySnow);
       diffuseColor.rgb=mix(diffuseColor.rgb,reflected,stroke*broken*(.35+cityStorm*.12));`);

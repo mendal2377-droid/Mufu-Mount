@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as THREE from 'three';
-import {landmarkDetails, bridgeDetails} from '../src/city-landmarks.js';
+import {landmarkDetails, bridgeDetails, loft, loftRing} from '../src/city-landmarks.js';
 import {cityPoint} from '../src/city-geography.js';
 import {EXTENT} from '../src/city-arrival.js';
 
@@ -41,11 +41,12 @@ function harness() {
     },
     roof: geometry(), sphere: geometry(), cylinder: geometry(),
     ground: () => 0,
+    footing(x, z, w, d, top) { assert.ok(finite(x, z, w, d, top)); calls.footings = (calls.footings || 0) + 1; },
   };
   return {calls, helpers};
 }
 
-const known = new Set(['stone', 'white', 'roof', 'red', 'blue', 'ochre', 'bronze', 'glass', 'bark', 'leaf', 'canopy', 'sage', 'glow', 'water', 'terrain']);
+const known = new Set(['stone', 'white', 'roof', 'red', 'blue', 'ochre', 'bronze', 'glass', 'bark', 'leaf', 'canopy', 'sage', 'glow', 'water', 'terrain', 'gold', 'brick', 'wall', 'lamp']);
 
 for (const p of places.filter(p => !['truss', 'cable', 'eye'].includes(p.kind))) {
   test(`${p.id}: the landmark builder runs and emits only known materials`, () => {
@@ -106,4 +107,55 @@ test('the other bridge builders still run', () => {
     const bp = (t, side = 0, h = 14) => [side, h, t * 100];
     assert.doesNotThrow(() => bridgeDetails(kind, bp, 14, helpers), kind);
   }
+});
+
+test('Xiaoling is a vermilion wall under yellow glazed tile with studded arched doors, not a red box', () => {
+  const {calls, helpers} = harness();
+  const p = places.find(p => p.id === 'xiaoling');
+  landmarkDetails({...p, position: [p.position[0], 0, p.position[2]]}, helpers);
+  for (const m of ['wall', 'gold', 'brick', 'blue', 'bronze']) assert.ok(calls.materials.has(m), `uses ${m}`);
+  assert.deepEqual(calls.plaques.map(x => x.text), ['明孝陵']);
+  assert.ok(calls.footings >= 1, 'the gate house has a footing');
+});
+
+test('Zifeng is one tapering twisted blade, with its floor belts and four sharp edges', () => {
+  const {calls, helpers} = harness();
+  const p = places.find(p => p.id === 'zifeng');
+  landmarkDetails({...p, position: [p.position[0], 0, p.position[2]]}, helpers);
+  assert.ok(calls.beam >= 5 * 5 + 5 * 12, 'five floor belts and five vertical edges');
+  assert.ok(calls.materials.has('glass'));
+});
+
+test('the loft narrows smoothly and stays finite', () => {
+  const outline = [[-12, -9], [9, -10], [14, 2], [-3, 13], [-12, 6]];
+  const shape = {height: 92, twist: .42, taper: t => 1 - .78 * t ** 1.15, drift: [5, 0]};
+  const g = loft(outline, shape);
+  const pos = g.attributes.position;
+  assert.ok(Array.from(pos.array).every(Number.isFinite));
+  g.computeBoundingBox();
+  assert.ok(Math.abs(g.boundingBox.max.y - 92) < 1e-6, 'reaches its full height');
+  let prev = Infinity;
+  for (const t of [0, .25, .5, .75, 1]) {
+    const ring = loftRing(outline, shape, t), width = Math.max(...ring.map(r => r[0])) - Math.min(...ring.map(r => r[0]));
+    assert.ok(width < prev + 1e-9, 'each slice is no wider than the one below');
+    prev = width;
+  }
+});
+
+test('Qixia is led by its stone pagoda; the Zhonghua wall is grey brick', () => {
+  const qixia = harness(), zh = harness();
+  const q = places.find(p => p.id === 'qixia'), z = places.find(p => p.id === 'zhonghua');
+  landmarkDetails({...q, position: [q.position[0], 0, q.position[2]]}, qixia.helpers);
+  landmarkDetails({...z, position: [z.position[0], 0, z.position[2]]}, zh.helpers);
+  assert.ok(qixia.calls.add >= 5 * 3, 'five storeys, each with its own eave');
+  assert.ok(zh.calls.materials.has('brick'), 'grey brick as photographed');
+});
+
+test('the Yangtze Bridge has no tall pylons beside the deck', () => {
+  const {calls, helpers} = harness();
+  const bp = (t, side = 0, h = 20) => [side, h, t * 112];
+  bridgeDetails('truss', bp, 20, helpers);
+  // Nothing but the four bridgehead towers (8 x 36) rises above the deck.
+  const tall = calls.boxes.filter(b => b[4] > 12);
+  assert.ok(tall.every(b => b[3] === 8 && b[4] === 36), 'only the bridgehead towers are tall');
 });

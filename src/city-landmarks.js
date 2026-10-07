@@ -28,7 +28,37 @@ function prism(points,height){
   const g=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false});g.rotateX(-Math.PI/2);return g;
 }
 
-export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,plaque,cylinder}){
+/**
+ * A smooth tapering tower: the outline is scaled and twisted slice by slice, instead of
+ * stacking a few extruded prisms (which read as a wedding cake, not as Zifeng Tower).
+ */
+export function loft(outline,{height,slices=30,taper=t=>1-.8*t**1.2,twist=.5,drift=[0,0]}){
+  const n=outline.length,pos=[],idx=[];
+  for(let i=0;i<=slices;i++){
+    const t=i/slices,s=taper(t),a=twist*t,c=Math.cos(a),sn=Math.sin(a);
+    for(const [u,v] of outline)pos.push((u*c-v*sn)*s+drift[0]*t,t*height,(u*sn+v*c)*s+drift[1]*t);
+  }
+  for(let i=0;i<slices;i++)for(let k=0;k<n;k++){
+    const a=i*n+k,b=i*n+(k+1)%n,c=(i+1)*n+k,d=(i+1)*n+(k+1)%n;idx.push(a,c,b,b,c,d);
+  }
+  const top=slices*n;let cx=0,cz=0;for(let k=0;k<n;k++){cx+=pos[(top+k)*3];cz+=pos[(top+k)*3+2];}
+  pos.push(cx/n,height,cz/n);const centre=pos.length/3-1;for(let k=0;k<n;k++)idx.push(top+k,top+(k+1)%n,centre);
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(idx);
+  const flat=g.toNonIndexed();g.dispose();flat.computeVertexNormals();return flat;
+}
+
+/** A round-headed door leaf (a rectangle capped by a half disc), extruded `depth`. */
+export function archLeaf(r,spring,depth){
+  const shape=new THREE.Shape();shape.moveTo(-r,0);shape.lineTo(-r,spring);shape.absarc(0,spring,r,Math.PI,0,true);shape.lineTo(r,0);shape.closePath();
+  const g=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false,curveSegments:10});g.translate(0,0,-depth/2);return g;
+}
+/** Points of the lofted outline at height fraction t, relative to the tower's foot. */
+export function loftRing(outline,{height,taper=t=>1-.8*t**1.2,twist=.5,drift=[0,0]},t){
+  const s=taper(t),a=twist*t,c=Math.cos(a),sn=Math.sin(a);
+  return outline.map(([u,v])=>[(u*c-v*sn)*s+drift[0]*t,t*height,(u*sn+v*c)*s+drift[1]*t]);
+}
+
+export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,plaque,cylinder,footing}){
   const [x,y,z]=p.position;
   const emit=(g,mat,pos)=>{add(g,mat,pos);g.dispose();};
   const arch=(xx,yy,zz,w,h,d,openings,mat='stone',yaw=0)=>{
@@ -74,16 +104,16 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
     // tall and wide, give it its name board, and fly the small red flags.
     const H=15;
     for(let gate=0;gate<4;gate++){
-      const zz=z+55-gate*15;arch(x,y,zz,76,H,6,[{x:0,r:5.2,spring:5.8}]);
-      for(let i=-9;i<=9;i++)for(const side of [-1,1])block(x+i*4,y+H,zz+side*3,1.8,1.6,1.2,'stone');
+      const zz=z+55-gate*15;arch(x,y,zz,76,H,6,[{x:0,r:5.2,spring:5.8}],'brick');
+      for(let i=-9;i<=9;i++)for(const side of [-1,1])block(x+i*4,y+H,zz+side*3,1.8,1.6,1.2,'brick');
       if(gate<3)block(x,y-.05,zz-7.5,64,.2,9,'stone');
     }
     plaque('中华门',{x,y:y+13.2,z:z+55+3.1,w:7.5,h:1.7,bg:'#cfc7b0',fg:'#3a3d36'});
     for(const side of [-1,1]){
-      block(x+side*34,y,z+32.5,8,H,51,'stone');
-      for(let i=0;i<13;i++)block(x+side*37,y+H,z+57-i*4,1.2,1.6,1.8,'stone');
+      block(x+side*34,y,z+32.5,8,H,51,'brick');
+      for(let i=0;i<13;i++)block(x+side*37,y+H,z+57-i*4,1.2,1.6,1.8,'brick');
       for(let i=0;i<20;i++)block(x+side*26,y+i*.7,z+57-i*2.25,5,.65,2.3,'stone');
-      arch(x+side*30,y,z+32.5,42,6,2,Array.from({length:5},(_,i)=>({x:-18+i*9,r:2,spring:2.2})),'stone',Math.PI/2);
+      arch(x+side*30,y,z+32.5,42,6,2,Array.from({length:5},(_,i)=>({x:-18+i*9,r:2,spring:2.2})),'brick',Math.PI/2);
       // A small red flag on each front corner.
       beam([x+side*37,y+H+1.4,z+57],[x+side*37,y+H+9,z+57],.12,'bronze');
       const flag=new THREE.PlaneGeometry(3.4,1.9);add(flag,'red',[x+side*37+1.7,y+H+7.8,z+57]);flag.dispose();
@@ -99,14 +129,14 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
       block(x+dx,y+9.4,z+22.4,1.5,.5,1.5,'stone');block(x+dx,y,z+22.4,1.5,.45,1.5,'stone');
     }
     block(x,y+10,z+20,39,.8,5,'stone');block(x,y+10.8,z+20,17,2.6,4,'stone');block(x,y+13.4,z+20,18,.45,4.6,'stone');
-    plaque('总统府',{x,y:y+12.1,z:z+22.05,w:10.5,h:2.1,bg:'#4a4a42',fg:'#e0b85c',yaw:0});
+    plaque('总统府',{x,y:y+12.1,z:z+22.05,w:10.5,h:2.1,bg:'#8c8672',fg:'#e6bf5a',yaw:0});
     beam([x,y+13.6,z+20],[x,y+26,z+20],.14,'white');
     for(let i=-4;i<=4;i++)block(x+i*3,y+8.8,z+22.15,1.2,.8,.15,'stone');
     hall(x,y,z-6,26,16,8);hall(x-24,y,z-35,18,14,7);hall(x+24,y,z-35,18,14,7);
     return true;
   }
   if(p.id==='jiming'){
-    octagon(x,y,z,7,'red','roof',6.5,4.7);
+    octagon(x,y,z,9,'red','roof',7,4.6);
     for(const [dx,dz,w,d,h] of [[-23,14,22,13,7],[12,29,24,13,6],[-23,-11,19,12,7]]){
       const yy=ground(x+dx,z+dz);hall(x+dx,yy,z+dz,w,d,h);
       block(x+dx,yy,z+dz+d*.51,w,h,.12,'ochre');
@@ -134,24 +164,35 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
     return true;
   }
   if(p.id==='zifeng'){
-    const outline=[[-12,-9],[9,-10],[14,2],[-3,13],[-12,6]];
-    for(const [base,h,s,shift] of [[0,43,1,0],[43,24,.84,2],[67,13,.61,3],[80,9,.36,5]]){
-      emit(prism(outline.map(([a,b])=>[a*s+shift,b*s]),h),'glass',[x,y+base,z]);
-      for(let j=2;j<h;j+=2)for(let i=0;i<outline.length;i++){
-        const a=outline[i],b=outline[(i+1)%outline.length];beam([x+a[0]*s+shift,y+base+j,z+a[1]*s],[x+b[0]*s+shift,y+base+j,z+b[1]*s],.075,'white');
-      }
+    // One tall, tapering, faceted glass blade with a slight twist, as in every photograph
+    // of the skyline, not four stacked boxes. Belts of white trim mark the floors.
+    const outline=[[-12,-9],[9,-10],[14,2],[-3,13],[-12,6]],shape={height:92,twist:.42,taper:t=>1-.78*t**1.15,drift:[5,0]};
+    footing(x,z,34,34,y);
+    emit(loft(outline,shape),'glass',[x,y,z]);
+    for(const t of [.2,.4,.58,.74,.88]){
+      const ring=loftRing(outline,shape,t);
+      for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length];beam([x+a[0],y+a[1],z+a[2]],[x+b[0],y+b[1],z+b[2]],.16,'white');}
     }
-    beam([x+5,y+89,z],[x+5,y+112,z],.23,'bronze');
+    // The four sharp vertical edges that make the blade read as faceted.
+    for(let k=0;k<outline.length;k++)for(let j=0;j<12;j++){
+      const a=loftRing(outline,shape,j/12)[k],b=loftRing(outline,shape,(j+1)/12)[k];
+      beam([x+a[0],y+a[1],z+a[2]],[x+b[0],y+b[1],z+b[2]],.2,'white');
+    }
+    beam([x+5,y+91,z],[x+5,y+114,z],.22,'bronze');
     block(x,y,z-22,45,7,22,'white');block(x,y+7,z-22,43,.7,20,'glass');
-    for(const side of [-1,1]){block(x+side*22,y,z+30,12,15,14,'glass');tree(x+side*28,z+10,.85);}
+    for(const side of [-1,1]){footing(x+side*22,z+30,12,14,y);block(x+side*22,y,z+30,12,15,14,'glass');tree(x+side*28,z+10,.85);}
     return true;
   }
   if(p.id==='qixia'){
-    // The relic pagoda is carved stone with close eaves, not a tall timber tower.
-    octagon(x+22,y,z-8,5,'stone','stone',4.5,2.3);
-    hall(x,y,z+13,31,18,8);hall(x,y,z-23,28,18,8);
-    for(const side of [-1,1])hall(x+side*28,ground(x+side*28,z),z,13,28,6);
-    block(x,y+.05,z+38,28,.2,12,'stone');return true;
+    // The relic pagoda is the whole point of this temple: five carved stone storeys with
+    // close, dense eaves on a stepped carved base (see the reference photographs). It
+    // stands in the middle of its court, with the halls around it.
+    block(x,y,z,24,1.3,24,'stone');block(x,y+1.3,z,19,1.2,19,'stone');
+    emit(new THREE.CylinderGeometry(7.4,8.2,1.6,8).rotateY(Math.PI/8),'stone',[x,y+3.1,z]);
+    octagon(x,y+3.9,z,5,'stone','stone',6.6,3.5);
+    hall(x,y,z-34,34,18,8);
+    for(const side of [-1,1])hall(x+side*34,y,z+2,14,30,6);
+    block(x,y+.05,z+36,30,.2,12,'stone');return true;
   }
   if(p.id==='yuejiang'){
     // The photographed tower is not a wide, flat castle: it is four red tiers that
@@ -184,15 +225,31 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
     return true;
   }
   if(p.id==='xiaoling'){
-    // Bright vermilion walls with golden-yellow coping and red studded doors,
-    // under blue-green painted brackets: the colours of the imperial tomb.
-    arch(x,y,z,34,12,22,[{x:0,r:3.3,spring:4.5}],'red');
-    block(x,y+12,z,35,.7,23,'bronze');
-    block(x,y,z+11.05,6.6,6.6,.3,'roof');
-    for(let r=0;r<5;r++)for(let c=-2;c<=2;c++)add(sphere,'bronze',[x+c*1.15,y+1.1+r*1.05,z+11.4],[.2,.2,.2]);
-    hall(x,y+12.7,z,28,17,8,'bronze');block(x,y+12.7,z,28.2,8,17.2,'red');
-    for(const side of [-1,1])for(let i=0;i<11;i++)block(x+side*18,y+i*1.1,z+12-i*2,6,1.15,2.05,'stone');
-    plaque('明孝陵',{x,y:y+8.2,z:z+11.4,w:7.5,h:1.5,bg:'#2f3a33',fg:'#e0b85c'});
+    // The photographs: salmon-vermilion walls under a yellow-glazed coping, round-arched
+    // doors studded in brass inside a grey stone frame, and a yellow-tiled hip roof over a
+    // band of cyan brackets. A low red wall runs off either side into the woods.
+    const W=34,D=13,H=10,doors=[[-9,2.4,3.4],[0,3.0,4.0],[9,2.4,3.4]];
+    footing(x,z,W+6,D+4,y);
+    for(const side of [-1,1]){
+      block(x+side*(W/2+15),y,z,30,6.4,2.4,'wall');
+      block(x+side*(W/2+15),y+6.4,z,31,.7,3.2,'gold');
+      for(let i=0;i<7;i++)block(x+side*(W/2+3+i*4.4),y,z+1.6,.9,7.1,.8,'wall');   // buttresses
+    }
+    block(x,y,z-.4,W,H,D-2,'wall');
+    arch(x,y,z+D/2-1.6,W,H,1.3,doors.map(([dx,r,spring])=>({x:dx,r,spring})),'wall');
+    for(const [dx,r,spring] of doors){
+      const frame=archWall(r*2+2,spring+r+1,.5,[{x:0,r:r+.15,spring}]);add(frame,'brick',[x+dx,y,z+D/2-.55]);frame.dispose();
+      const leaf=archLeaf(r,spring,.35);add(leaf,'red',[x+dx,y,z+D/2-1.6]);leaf.dispose();
+      for(let row=0;row<5;row++)for(let c=-Math.floor(r/.55);c<=Math.floor(r/.55);c++)
+        add(sphere,'bronze',[x+dx+c*.55,y+.8+row*.8,z+D/2-1.15],[.13,.13,.13]);
+    }
+    block(x,y+H,z,W+1.2,.7,D+1.2,'blue');
+    add(roof,'gold',[x,y+H-2.4,z],[W+10,3.2,D+10]);
+    add(roof,'gold',[x,y+H+.7,z],[W+4,6.2,D+4]);
+    block(x,y+H+.7+2.95,z,W*.62,.5,.7,'gold');
+    for(const sx of [-1,1])add(sphere,'gold',[x+sx*W*.31,y+H+.7+3.3,z],[.55,.7,.55]);
+    block(x,y,z+D/2+1.8,W+5,.5,3.6,'stone');for(let i=0;i<3;i++)block(x,y,z+D/2+3.6+i*.9,12+i*3,.5-i*.16,.9,'stone');
+    plaque('明孝陵',{x,y:y+7.9,z:z+D/2-.6,w:6.2,h:1.3,bg:'#33463b',fg:'#e6bf5a'});
     return true;
   }
   if(p.id==='zhongshan'){
@@ -205,7 +262,7 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
     if(p.id==='qinhuai'){
       // Lantern boats: the Qinhuai River's postcard image, drifting along the canal.
       for(let i=0;i<5;i++){
-        const bx=x-48+i*24,bz=z+42.5+(i%2?1.6:-1.2),by=y+.5;
+        const bx=x-48+i*24,bz=z-42.5+(i%2?1.6:-1.2),by=y+.5;
         block(bx,by,bz,10,.9,2.6,'red');block(bx,by+.9,bz,6.4,1.7,2.1,'roof');block(bx,by+2.6,bz,7.2,.25,2.6,'bronze');
         for(let k=-1;k<=1;k++)add(sphere,'glow',[bx+k*2.4,by+1.4,bz+1.5],[.34,.46,.34]);
       }
@@ -213,9 +270,9 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
     for(const side of [-1,1])for(let i=-3;i<=3;i++)horsehead(x+i*17,ground(x+i*17,z+side*19),z+side*19,11);
     if(p.id==='qinhuai'){
       // A stone footbridge crosses the artistic canal; its arched opening is real geometry.
-      arch(x+37,y,z+43,19,7,6,[{x:0,r:6,spring:0}],'stone',Math.PI/2);
+      arch(x+37,y,z-43,19,7,6,[{x:0,r:6,spring:0}],'stone',Math.PI/2);
       for(const side of [-1,1])for(let i=-5;i<=5;i++){
-        const yy=y+7-Math.abs(i)*.75;block(x+37+side*3.2,yy,z+43+i*1.8,.35,1.1,.35,'white');
+        const yy=y+7-Math.abs(i)*.75;block(x+37+side*3.2,yy,z-43+i*1.8,.35,1.1,.35,'white');
       }
       block(x+82,y,z-65,42,8,1.5,'ochre');add(roof,'roof',[x+82,y+8,z-65],[43,3,3]);
     }
@@ -272,7 +329,7 @@ export function bridgeDetails(kind,bp,deck,{beam,block,add,roof,sphere}){
       for(const side of [-1,1]){
         const post=bp(t,side*5.2,deck);
         beam([post[0],deck,post[2]],[post[0],deck+5.6,post[2]],.13,'white');
-        for(const k of [-1,0,1]){const g=bp(t+k*.004,side*5.2,deck+5.9+(k?0:.7));add(sphere,'glow',g,[.2,.25,.2]);}
+        for(const k of [-1,0,1]){const g=bp(t+k*.004,side*5.2,deck+5.9+(k?0:.7));add(sphere,'lamp',g,[.2,.25,.2]);}
       }
     }
     // Inverted-V approach piers under the deck.

@@ -7,6 +7,7 @@
 import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import {surfaceClearance} from './surface-clearance.mjs';
 
 const browser = await chromium.launch({channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist']});
 const errors = [], report = {};
@@ -51,6 +52,10 @@ try {
     assert.ok(a.clearance > 1.5, `${a.id} starts underground`);
     assert.ok(a.pitch > -12 && a.pitch < 20, `${a.id} looks at the ground or sky (${a.pitch.toFixed(1)} deg)`);
   }
+  // The camera must not start inside or against any model. Lantern boats once sat on Mendong's
+  // spawn point and put the lens inside a bronze canopy: a screen of solid gold, found by eye.
+  report.surfaceClearance = await page.evaluate(surfaceClearance);
+  for (const s of report.surfaceClearance) assert.ok(s.nearest > .45, `${s.id}: the camera starts ${s.nearest.toFixed(2)} m from ${s.where}`);
   const wellAimed = report.arrivals.filter(a => a.angle <= 35).length;
   assert.ok(wellAimed >= report.arrivals.length - 3, `only ${wellAimed}/${report.arrivals.length} arrivals face the road`);
 
@@ -65,6 +70,30 @@ try {
   });
   assert.ok(drop.mid > 5, 'the drop-in starts high above the avenue');
   assert.ok(drop.gap < .6, `drop-in ended ${drop.gap} m from the spawn`);
+
+  // Switching places from inside a walk: no trip back to the atlas.
+  const places = await page.evaluate(() => {
+    const m = window.__mufu;
+    m.city.enter('palace'); m.step(2, .1);
+    const visible = !document.querySelector('#walk-places').hidden;
+    document.body.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyG', key: 'g', bubbles: true}));
+    const open = document.querySelector('#city-places').open;
+    const cards = [...document.querySelectorAll('.place-card')].map(c => c.dataset.id);
+    const nearest = cards[1];
+    document.querySelector(`.place-card[data-id="${nearest}"]`).click();
+    m.step(60, .1);
+    const moved = m.city.selected.id, closed = !document.querySelector('#city-places').open, stillWalking = m.city.active && !m.state.overview;
+    document.body.dispatchEvent(new KeyboardEvent('keydown', {code: 'BracketRight', key: ']', bubbles: true}));
+    m.step(60, .1);
+    return {visible, open, cards: cards.length, first: cards[0], nearest, moved, closed, stillWalking, hopped: m.city.selected.id};
+  });
+  report.places = places;
+  assert.ok(places.visible, 'the Places button shows while walking');
+  assert.ok(places.open && places.cards === 18, 'G opens a list of every destination');
+  assert.equal(places.first, 'palace', 'the current place leads the list');
+  assert.equal(places.moved, places.nearest, 'choosing a card enters that place');
+  assert.ok(places.closed && places.stillWalking, 'and goes straight there, still walking');
+  assert.notEqual(places.hopped, places.moved, ']' + ' hops to the next landmark');
 
   // Lanterns -> fact cards -> seal, then persistence across a reload.
   await page.evaluate(() => { localStorage.removeItem('mufu-city-game-v1'); });
