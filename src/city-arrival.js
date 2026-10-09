@@ -24,7 +24,7 @@ export const EXTENT = {
   yuejiang: { h: 38, w: 36 },
   xuanwu: { h: 14, w: 90 },
   jiming: { h: 44, w: 44 },
-  zifeng: { h: 115, w: 50 },
+  zifeng: { h: 130, w: 50 },
   zijin: { h: 25, w: 120 },
   zhongshan: { h: 30, w: 60 },
   xiaoling: { h: 25, w: 50 },

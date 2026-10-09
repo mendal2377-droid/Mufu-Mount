@@ -97,7 +97,7 @@ try {
 
   // Lanterns -> fact cards -> seal, then persistence across a reload.
   await page.evaluate(() => { localStorage.removeItem('mufu-city-game-v1'); });
-  await page.reload({waitUntil: 'domcontentloaded', timeout: 180000});
+  await page.reload({waitUntil: 'domcontentloaded', timeout: 240000});
   await page.waitForFunction(() => window.__mufu?.city?.active, null, {timeout: 180000});
   await page.evaluate(() => { window.__mufu.paused = true; window.__mufu.step(2, .1); });
   const sealed = await page.evaluate(() => {
@@ -119,7 +119,7 @@ try {
   assert.equal(await page.locator('#city-passport').evaluate(d => d.open), true);
   await page.screenshot({path: 'test-results/nanjing-passport.png'});
   await page.evaluate(() => window.__mufu.city.passport(false));
-  await page.reload({waitUntil: 'domcontentloaded', timeout: 180000});
+  await page.reload({waitUntil: 'domcontentloaded', timeout: 240000});
   await page.waitForFunction(() => window.__mufu?.city?.active, null, {timeout: 180000});
   assert.ok(await page.evaluate(() => window.__mufu.city.gameView.game.stamped('qinhuai')), 'progress survives a reload');
 

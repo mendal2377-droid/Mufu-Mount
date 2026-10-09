@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {cityPoint, cityRiverSurfaces} from '../src/city-geography.js';
-import {createCityTerrain, PADS} from '../src/city-terrain.js';
+import {createCityTerrain, PADS, AXIS} from '../src/city-terrain.js';
 
 // Buildings used to hang off hillsides: Xiaoling's ground fell 48 m across a 46 m
 // footprint (a lake "shoulder" slopes the whole hill towards the water), and a pad
@@ -30,10 +30,10 @@ test('every pad is level across its whole footprint', () => {
   // lake shore, so their footprints include the water's edge.
   // Yuejiang and Zifeng stand at the water's edge, where the pad deliberately gives way
   // to the shore; their buildings occupy the inner part of it, which is what is checked.
-  const inner = {yuejiang: .5, zifeng: .85};
+  const inner = {yuejiang: .5, zifeng: .85, zijin: .7};
   for (const [id, pad] of Object.entries(PADS)) {
     if (['palace', 'jiming'].includes(id)) continue;
-    const [x, , z] = get(id).position, f = inner[id] ?? .95;
+    const [x0, , z] = get(id).position, f = inner[id] ?? .95, x = x0 + (pad.dx || 0);
     // The mapped Qinhuai channel winds through the gate's inner courts (z+10 to z+40), so only
     // the great outer arch and its wings, z+43 to z+59, are on level ground to be checked.
     const r = id === 'zhonghua' ? range(x, z + 51, 38, 8) : range(x, z + pad.offset, pad.rx * f, pad.rz * f);
@@ -48,7 +48,7 @@ test('Xiaoling no longer stands on a ramp', () => {
 });
 
 test('the Sun Yat-sen stair is a ramp and the memorial hall stands on a level terrace at its head', () => {
-  const [x, , z] = get('zhongshan').position;
+  const [px, , pz] = get('zhongshan').position, x = px + AXIS.du, z = pz + AXIS.dv;
   const top = terrain.analytic(x, z + 8), at = terrain.analytic(x, z + 3), behind = terrain.analytic(x + 10, z - 10), side = terrain.analytic(x + 20, z + 3);
   for (const [name, y] of [['hall front', at], ['behind the hall', behind], ['beside the hall', side]]) {
     assert.ok(Math.abs(y - top) < 1.2, `${name} is ${(y - top).toFixed(1)} m from the stair head; the hall would hang or sink`);
@@ -65,6 +65,6 @@ test('the Sun Yat-sen stair is a ramp and the memorial hall stands on a level te
 test('pads do not drag neighbouring landmarks off their own hills', () => {
   // Zhongshan, the Mausoleum, sits 100+ m from Xiaoling's pad on the same mountain.
   const [zx, , zz] = get('zhongshan').position;
-  assert.ok(terrain.analytic(zx, zz + 58) > 110, 'the Mausoleum stair has been pulled down the hill');
+  assert.ok(terrain.analytic(zx + AXIS.du, zz + AXIS.dv + 58) > 110, 'the Mausoleum stair has been pulled down the hill');
   assert.ok(terrain.analytic(...(([x, , z]) => [x, z])(get('zijin').position)) > 150, 'Purple Mountain has been flattened');
 });

@@ -32,3 +32,19 @@ What it is not: there is no hand-drawn linework beyond the existing edge contour
 no painted skyboxes from artwork, and no per-building texture painting. A stronger
 version would commission or generate painted textures for walls and roofs (see
 `design/city/PROMPTS.md` for how the current set was made).
+
+## Why not Gaussian splatting
+
+Suggested on 8 October 2026 as a way to improve the scenes. Considered and left out, for these reasons:
+
+- A splat scene is trained from dozens to hundreds of photographs of one place from many angles. The reference
+  set is one to five web photographs per place, taken from similar angles, with watermarks and unclear
+  licences, so there is nothing to train from and nothing we may redistribute.
+- Single-image-to-splat research exists but needs a GPU model at build time and gives a blurry single viewpoint;
+  it cannot support walking through an avenue.
+- A trained scene is typically 20-200 MB. This site is a static page that must load fast on a phone.
+- Splats carry photographic lighting, which would clash with the painted look and with the day/sunset/storm
+  weather the rest of the city responds to.
+
+Where it could fit: a short optional "photo vista" for one hero place, if the owner captures an orbit video of it
+themselves and accepts a separate download. That is a product decision, not an optimisation.

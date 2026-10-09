@@ -136,49 +136,50 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
     return true;
   }
   if(p.id==='jiming'){
-    octagon(x,y,z,9,'red','roof',7,4.6);
-    for(const [dx,dz,w,d,h] of [[-23,14,22,13,7],[12,29,24,13,6],[-23,-11,19,12,7]]){
-      const yy=ground(x+dx,z+dz);hall(x+dx,yy,z+dz,w,d,h);
-      block(x+dx,yy,z+dz+d*.51,w,h,.12,'ochre');
-      if(dx===-23&&dz===14)plaque('鸡鸣寺',{x:x+dx,y:yy+h*.72,z:z+dz+d*.51+.12,w:7.5,h:1.5,bg:'#c98a2a',fg:'#4a1e12'});
-      for(const side of [-1,1])block(x+dx+side*w*.505,yy,z+dz,.13,h,d,'ochre');
-    }
+    // Nine dark-red storeys, upswept black-tiled eaves with gilt tips and a golden finial, on a stone
+    // base. The courtyard halls and the name board are laid out by city-sets-town.js.
+    block(x,y,z,24,1.2,24,'stone');block(x,y+1.2,z,19,1,19,'stone');
+    octagon(x,y+2.2,z,9,'red','slate',7,4.6);
     return true;
   }
   if(p.id==='niushou'){
-    for(const [dx,dz,r,h,mat] of [[-16,0,28,18,'bronze'],[27,-9,18,13,'white']]){
+    // The Buddhist culture park: a pale stone plaza, a golden lattice dome beside a rose-gold shell, and a
+    // nine-storey pagoda of dark red with golden roofs (see the reference photographs).
+    add(cylinder,'white',[x+6,y+.12,z+12],[78,.3,78]);
+    for(const [dx,dz,r,h,shellMat,beamMat] of [[-16,0,28,18,'ochre','bronze'],[27,-9,18,13,'ochre','gold']]){
       block(x+dx,y-.3,z+dz,r*2,1.5,r*2,'stone');
-      // The visible inner shell and triangulated rib cage are independent volumes.
       const shell=new THREE.SphereGeometry(1,32,14,0,Math.PI*2,0,Math.PI/2);
-      add(shell,dx<0?'stone':mat,[x+dx,y+2,z+dz],[r*.96,h*.96,r*.96]);shell.dispose();
+      add(shell,shellMat,[x+dx,y+2,z+dz],[r*.96,h*.96,r*.96]);shell.dispose();
       const point=(i,j)=>{const a=i/24*Math.PI*2,t=j/8*Math.PI/2;return [x+dx+Math.cos(a)*Math.sin(t)*r,y+2+Math.cos(t)*h,z+dz+Math.sin(a)*Math.sin(t)*r];};
       for(let j=1;j<=8;j++)for(let i=0;i<24;i++){
-        beam(point(i,j),point(i+1,j),.15,'bronze');beam(point(i,j),point(i,j-1),.17,'bronze');beam(point(i,j),point(i+1,j-1),.18,'bronze');
+        beam(point(i,j),point(i+1,j),.15,beamMat);beam(point(i,j),point(i,j-1),.17,beamMat);beam(point(i,j),point(i+1,j-1),.18,beamMat);
       }
       for(let i=0;i<16;i++){
         const a=i/16*Math.PI*2;beam([x+dx+Math.cos(a)*r,y,z+dz+Math.sin(a)*r],[x+dx+Math.cos(a)*r,y+2,z+dz+Math.sin(a)*r],.24,'white');
       }
     }
-    octagon(x+63,ground(x+63,z-18),z-18,9,'red','bronze',4.8,4.2,4);
-    block(x+6,y+.02,z+37,65,.18,17,'stone');block(x+6,y+.25,z+37,61,.05,13,'water');
+    block(x+66,y,z-20,22,1.2,22,'stone');
+    octagon(x+66,y+1.2,z-20,9,'red','gold',6,4.2,8);
     return true;
   }
   if(p.id==='zifeng'){
-    // One tall, tapering, faceted glass blade with a slight twist, as in every photograph
-    // of the skyline, not four stacked boxes. Belts of white trim mark the floors.
-    const outline=[[-12,-9],[9,-10],[14,2],[-3,13],[-12,6]],shape={height:92,twist:.42,taper:t=>1-.78*t**1.15,drift:[5,0]};
+    // The photographs show a slim, almost parallel-sided silver-blue prism, faceted, with a stepped crown
+    // and a tall spire, not a cone: a shaft with a whisper of twist, then two setbacks.
+    const outline=[[-10,-8],[9,-9],[11,6],[-8,10]],shaft={height:82,twist:.1,taper:t=>1-.07*t,drift:[0,0]};
     footing(x,z,34,34,y);
-    emit(loft(outline,shape),'glass',[x,y,z]);
-    for(const t of [.2,.4,.58,.74,.88]){
-      const ring=loftRing(outline,shape,t);
-      for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length];beam([x+a[0],y+a[1],z+a[2]],[x+b[0],y+b[1],z+b[2]],.16,'white');}
+    emit(loft(outline,shaft),'glass',[x,y,z]);
+    const scaled=k=>outline.map(([a,b])=>[a*k,b*k]);
+    emit(loft(scaled(.74),{height:17,twist:.05,taper:t=>1-.1*t}),'glass',[x+.8,y+82,z]);
+    emit(loft(scaled(.48),{height:13,twist:.04,taper:t=>1-.12*t}),'glass',[x+1.6,y+99,z]);
+    for(const t of [.25,.5,.75]){
+      const ring=loftRing(outline,shaft,t);
+      for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length];beam([x+a[0],y+a[1],z+a[2]],[x+b[0],y+b[1],z+b[2]],.14,'white');}
     }
-    // The four sharp vertical edges that make the blade read as faceted.
-    for(let k=0;k<outline.length;k++)for(let j=0;j<12;j++){
-      const a=loftRing(outline,shape,j/12)[k],b=loftRing(outline,shape,(j+1)/12)[k];
-      beam([x+a[0],y+a[1],z+a[2]],[x+b[0],y+b[1],z+b[2]],.2,'white');
+    for(let k=0;k<outline.length;k++)for(let j=0;j<8;j++){
+      const a=loftRing(outline,shaft,j/8)[k],b=loftRing(outline,shaft,(j+1)/8)[k];
+      beam([x+a[0],y+a[1],z+a[2]],[x+b[0],y+b[1],z+b[2]],.18,'white');
     }
-    beam([x+5,y+91,z],[x+5,y+114,z],.22,'bronze');
+    beam([x+1.6,y+111,z],[x+1.6,y+134,z],.2,'bronze');
     block(x,y,z-22,45,7,22,'white');block(x,y+7,z-22,43,.7,20,'glass');
     for(const side of [-1,1]){footing(x+side*22,z+30,12,14,y);block(x+side*22,y,z+30,12,15,14,'glass');tree(x+side*28,z+10,.85);}
     return true;
@@ -252,10 +253,11 @@ export function landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,p
     plaque('明孝陵',{x,y:y+7.9,z:z+D/2-.6,w:6.2,h:1.3,bg:'#33463b',fg:'#e6bf5a'});
     return true;
   }
-  if(p.id==='zhongshan'){
-    const base=ground(x,z+58);paifang(x,base,z+69);
-    plaque('博爱',{x,y:base+7.2,z:z+69.45,w:6.2,h:1.7,bg:'#2f4a73',fg:'#f0d98a'});return false;
-  }
+  // The Mausoleum's archway, avenue, gate and pavilion are composed in city-sets.js; the stair and
+  // hall are built by city-scene.js on the plateau terrace.
+  if(p.id==='zhongshan')return false;
+  // Qinhuai's waterfront is composed in city-sets-town.js.
+  if(p.id==='qinhuai')return false;
   if(p.kind==='oldtown'){
     paifang(x-55,ground(x-55,z),z,p.id!=='qinhuai',Math.PI/2);
     if(p.id==='qinhuai')plaque('夫子庙',{x:x-55.5,y:ground(x-55,z)+7.4,z,w:7,h:1.6,yaw:-Math.PI/2,bg:'#6e2a1f',fg:'#e3bd62'});

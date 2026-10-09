@@ -1,13 +1,14 @@
 import * as THREE from "three";
 import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
 import {cityPoint,inRing,ribbon,distanceToLine,cityRiverSurfaces} from "./city-geography.js";
-import {createCityTerrain} from './city-terrain.js';
+import {createCityTerrain,AXIS} from './city-terrain.js';
 import {createCityLandscape} from './city-landscape.js';
 import {paintCityWater} from './city-art.js';
 import {landmarkDetails,bridgeDetails,archWall} from './city-landmarks.js';
 import {randomSeed} from "./forest-geometry.js";
 import {planAvenue,loopFrom,framingDistance,arrivalLook,EXTENT} from './city-arrival.js';
 import {buildRoadNetwork,shoreWalk,bakedRoadsMatch,roadComponents} from './city-network.js';
+import {buildVista} from './city-sets.js';
 
 /**
  * A walkway laid on the terrain. Each cross-section is level at the height of its
@@ -15,9 +16,9 @@ import {buildRoadNetwork,shoreWalk,bakedRoadsMatch,roadComponents} from './city-
  * on a hillside (Xiaoling's started with one edge 5 m above the camera and filled
  * the screen). The hill beside it simply rises above the road, like a cutting.
  */
-function bedRibbon(points,width,ground){
+function bedRibbon(points,width,ground,lift=.16){
   const g=ribbon(points,width,.04),v=g.attributes.position;
-  points.forEach((q,i)=>{const y=ground(q[0],q[2])+.16;v.setY(i*2,y);v.setY(i*2+1,y);});
+  points.forEach((q,i)=>{const y=ground(q[0],q[2])+lift;v.setY(i*2,y);v.setY(i*2+1,y);});
   g.computeVertexNormals();return g;
 }
 export function buildCityScene(data, shared, makeMaterial, options = {}) {
@@ -47,6 +48,15 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     leaf:makeMaterial('City foliage',[1,1,1]),
     canopy:makeMaterial('City distant canopy',[.36,.62,.42]),
     sage:makeMaterial('City meadow sage',[.50,.68,.34]),
+    canopyMaple:makeMaterial('City distant canopy maple',[.86,.24,.10]),
+    canopyPlane:makeMaterial('City distant canopy plane',[.92,.68,.18]),
+    paleBark:makeMaterial('City pale bark',[.80,.78,.70]),
+    plank:makeMaterial('City plank bark',[.58,.38,.22]),
+    pink:makeMaterial('City peach plaster',[.96,.68,.56]),
+    slate:makeMaterial('City slate tiled roof',[.26,.30,.33]),
+    asphalt:makeMaterial('City asphalt',[.31,.32,.35]),
+    lotus:makeMaterial('City lotus leaf',[.18,.54,.28]),
+    blossom:makeMaterial('City lotus blossom',[.98,.58,.70]),
     glow:new THREE.MeshStandardMaterial({color:0xda6944,emissive:0xff6725,emissiveIntensity:.35,roughness:.8}),
     lamp:new THREE.MeshStandardMaterial({color:0xfff0cf,emissive:0xffd88a,emissiveIntensity:.55,roughness:.7}),
   };
@@ -56,7 +66,7 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw),new THREE.Vector3(...scale));
     g.applyMatrix4(m);const ready=g.index?g.toNonIndexed():g;
     if(ready!==g)g.dispose();
-    const pos=ready.attributes.position,norm=ready.attributes.normal,uv=[],density=mat==='stone'||mat==='brick'?.32:mat==='roof'||mat==='blue'||mat==='gold'?.18:.08;
+    const pos=ready.attributes.position,norm=ready.attributes.normal,uv=[],density=mat==='stone'||mat==='brick'?.32:mat==='roof'||mat==='blue'||mat==='gold'||mat==='slate'?.18:.08;
     for(let i=0;i<pos.count;i++){
       const nx=Math.abs(norm.getX(i)),ny=Math.abs(norm.getY(i)),nz=Math.abs(norm.getZ(i));
       if(ny>=nx&&ny>=nz)uv.push(pos.getX(i)*density,pos.getZ(i)*density);
@@ -143,7 +153,7 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     }beam([x,y+levels*4,z],[x,y+levels*4+5,z],.25,'bronze');
   }
   const planting=[];
-  function tree(x,z,scale=1,species=null){planting.push({x,z,scale,species});}
+  function tree(x,z,scale=1,species=null,opts={}){planting.push({x,z,scale,species,force:!!opts.force,tint:opts.tint});}
   function flatPolygon(ring,mat,y=1.2,holes=[]){
     const shape=new THREE.Shape(ring.map(p=>new THREE.Vector2(p[0],-p[2])));
     holes.forEach(r=>shape.holes.push(new THREE.Path(r.map(p=>new THREE.Vector2(p[0],-p[2])))));
@@ -218,7 +228,7 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     const [x,,z]=p.position,y=ground(x,z);p.position[1]=y;
     let walk=loop(x,z,p.kind==='mount'?70:p.kind==='oldtown'?43:36);
     const bespoke=landmarkDetails(p,{add,block,beam,hall,roof,sphere,ground,tree,plaque,cylinder,footing});
-    if(p.kind==='oldtown'){
+    if(p.kind==='oldtown'&&p.id!=='qinhuai'){
       // A compact district vignette exaggerates alleys and waterfront space.
       // It evokes the photo references; these are not individual surveyed homes.
       for(let row=-1;row<=1;row+=2)for(let i=-3;i<=3;i++){
@@ -284,25 +294,26 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
       // the great arch, and pass under each successive gate.
       walk=Array.from({length:70},(_,i)=>{const zz=z+125-i*2;return [x,Math.max(1.7,ground(x,zz))+.3,zz];});
     }else if(p.kind==='mausoleum'){
-      const base=ground(x,z+58);
-      for(let i=0;i<24;i++){const yy=base+i*.45,zz=z+58-i*2.1;block(x,yy,zz,16,.5,2.2,'white');
-        for(const side of [-1,1]){block(x+side*8.4,yy,zz,.4,1.8,.4,'white');
-          add(sphere,'white',[x+side*8.4,yy+1.9,zz],[.35,.35,.35]);
-          if(i)beam([x+side*8.4,yy+1.6,zz],[x+side*8.4,yy+1.15,zz+2.1],.16,'white');}}
+      const mx=x+AXIS.du,mz=z+AXIS.dv;   // the axis stands on the plateau (see AXIS in city-terrain.js)
+      const base=ground(mx,mz+58);
+      for(let i=0;i<24;i++){const yy=base+i*.45,zz=mz+58-i*2.1;block(mx,yy,zz,16,.5,2.2,'white');
+        for(const side of [-1,1]){block(mx+side*8.4,yy,zz,.4,1.8,.4,'white');
+          add(sphere,'white',[mx+side*8.4,yy+1.9,zz],[.35,.35,.35]);
+          if(i)beam([mx+side*8.4,yy+1.6,zz],[mx+side*8.4,yy+1.15,zz+2.1],.16,'white');}}
       // White memorial hall with three portals and blue hip roofs.
       const hallY=base+10.8;
-      block(x,hallY,z+3,27,10,14,'white');
+      block(mx,hallY,mz+3,27,10,14,'white');
       const facade=archWall(27,10,2,[-8,0,8].map(v=>({x:v,r:2.3,spring:4.2})));
-      add(facade,'white',[x,hallY,z+11.5]);facade.dispose();
-      for(const dx of [-8,0,8])block(x+dx,hallY,z+10.1,3.8,6.4,.25,'roof');
-      add(roof,'blue',[x,hallY+10,z+3],[32,8,21]);
-      block(x,hallY+6,z-8,16,9,9,'white');add(roof,'blue',[x,hallY+15,z-8],[22,7,14]);
-      block(x,hallY+8,z+12.6,8,1.4,.3,'blue');
-      for(const dx of [-12,12])block(x+dx,hallY,z+12.3,1,10,1,'white');
-      block(x,base,z+61,16,.12,8,'white');
+      add(facade,'white',[mx,hallY,mz+11.5]);facade.dispose();
+      for(const dx of [-8,0,8])block(mx+dx,hallY,mz+10.1,3.8,6.4,.25,'roof');
+      add(roof,'blue',[mx,hallY+10,mz+3],[32,8,21]);
+      block(mx,hallY+6,mz-8,16,9,9,'white');add(roof,'blue',[mx,hallY+15,mz-8],[22,7,14]);
+      block(mx,hallY+8,mz+12.6,8,1.4,.3,'blue');
+      for(const dx of [-12,12])block(mx+dx,hallY,mz+12.3,1,10,1,'white');
+      block(mx,base,mz+61,16,.12,8,'white');
       // Stop outside the main hall; keep the steps visible rather than paving over them.
-      walk=[...Array.from({length:36},(_,i)=>{const zz=z+100-i;return [x,Math.max(1.7,ground(x,zz))+.3,zz];}),
-        ...Array.from({length:50},(_,i)=>[x,base+Math.max(0,Math.ceil((i-7)/2.1))*.45+.18,z+65-i])];
+      walk=[...Array.from({length:36},(_,i)=>{const zz=mz+100-i;return [mx,Math.max(1.7,ground(mx,zz))+.3,zz];}),
+        ...Array.from({length:50},(_,i)=>[mx,base+Math.max(0,Math.ceil((i-7)/2.1))*.45+.18,mz+65-i])];
     }else if(p.kind==='domes'){
       walk=loop(x,z,85);
     }else if(p.kind==='skyline'){
@@ -359,11 +370,18 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
       walk=Array.from({length:161},(_,i)=>{const t=i/160,a=t*Math.PI*3,r=160*(1-t)+38;
         const xx=x+Math.sin(a)*r,zz=z+Math.cos(a)*r;return [xx,Math.max(1.7,ground(xx,zz))+.35,zz];});
     }
+    // Composed views (city-sets.js): the place is rebuilt to the framing of its best photograph and
+    // brings its own walk, so it skips the generic avenue below.
+    const vista=buildVista(p,{walk,add,block,beam,hall,roof,sphere,cylinder,ground,wet,tree,plaque,lantern,footing,random,ribbon,places,shore:terrain.shore,
+      pave:(pts,width,mat='stone',lift=.16)=>{const g=bedRibbon(pts,width,ground,lift);add(g,mat);g.dispose();}});
+    p.vista=vista?{weather:vista.weather,season:vista.season,autumn:vista.autumn||null}:null;
+    p.boats=vista?.boats||null;
+    if(vista?.walk)walk=vista.walk;
     // Loop-shaped walks begin tangent to the landmark, so the camera used to
     // face 90° off the road. Prefix a straight avenue that points at it.
     const LOOP_RADIUS={domes:85,skyline:58,palace:62,pagoda:p.id==='jiming'?52:48,tower:48,temple:48};
     p.avenue=null;
-    if(LOOP_RADIUS[p.kind]&&bespokeOrLoop(p)){
+    if(!vista?.walk&&LOOP_RADIUS[p.kind]&&bespokeOrLoop(p)){
       const radius=LOOP_RADIUS[p.kind],distance=framingDistance(p.id);
       const avoid=places.filter(q=>q!==p).map(q=>[q.position[0],q.position[2],(LOOP_RADIUS[q.kind]||40)+14]);
       // Prefer an approach from which the landmark is visible, not hidden behind a crest.
@@ -376,7 +394,7 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     walk.forEach(pt=>{if(!Number.isFinite(pt[1]))pt[1]=1.5;});
     p.route=routes.length;routes.push({...route(walk),name:p.name});
     const frontEntry=['palace','zifeng','niushou','qixia'].includes(p.id);
-    const spawnIndex=p.avenue?0:p.kind==='wall'?0:p.kind==='truss'?0:p.kind==='eye'?0:['zhongshan','xiaoling'].includes(p.id)?0:p.id==='qixia'?20:frontEntry?0:p.kind==='lake'?0:p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
+    const spawnIndex=vista?.walk?(vista.spawnIndex??0):p.avenue?0:p.kind==='wall'?0:p.kind==='truss'?0:p.kind==='eye'?0:['zhongshan','xiaoling'].includes(p.id)?0:p.id==='qixia'?20:frontEntry?0:p.kind==='lake'?0:p.kind==='mount'?walk.reduce((best,pt,i)=>pt[1]>walk[best][1]?i:best,0):Math.floor(walk.length*.18);
     p.spawn=walk[spawnIndex].slice();p.spawn[1]=Math.max(p.spawn[1]+1.7,ground(p.spawn[0],p.spawn[2])+2.05);
     const headingIndex=spawnIndex>walk.length-7?spawnIndex-6:spawnIndex+6;
     p.look=p.kind==='mount'?walk[headingIndex].slice():p.position.slice();
@@ -390,6 +408,11 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
     }
     else if(p.kind==='lake'){p.look=walk[Math.min(spawnIndex+14,walk.length-1)].slice();p.look[1]=p.spawn[1]+.5;}
     else if(p.kind==='mount')p.look[1]=p.spawn[1]-.3;else p.look[1]+=p.kind==='skyline'?48:5;
+    if(vista?.walk){
+      let k=spawnIndex;while(k<walk.length-1&&Math.hypot(walk[k][0]-p.spawn[0],walk[k][2]-p.spawn[2])<(vista.lookAhead||40))k++;
+      const ahead=walk[k];
+      p.look=vista.lookAt?vista.lookAt.slice():[ahead[0],p.spawn[1]+(vista.lookDy??0),ahead[2]];
+    }
     // An approach that descends to the landmark (Xiaoling's road starts 26 m above
     // the tomb) used to pitch the camera 15 degrees down onto bare hillside. Look
     // no more than a few metres below the eye, so the building stays in view.
@@ -398,10 +421,10 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
       // The stairs are the path; only the approach through the archway needs one.
       const approach=bedRibbon(walk.slice(0,37),7,ground);add(approach,'stone');approach.dispose();
     }
-    if(p.kind!=='mausoleum'){
+    if(p.kind!=='mausoleum'&&!vista?.walk){
       const path=['wall','truss','cable','eye'].includes(p.kind)?ribbon(walk,6,.04):bedRibbon(walk,6,ground);
       path.computeVertexNormals();add(path,'stone');path.dispose();}
-    if(!['truss','cable','eye','wall','mausoleum'].includes(p.kind))for(let i=7;i<walk.length;i+=18){
+    if(!vista?.walk&&!['truss','cable','eye','wall','mausoleum'].includes(p.kind))for(let i=7;i<walk.length;i+=18){
       const [px,py,pz]=walk[i],next=walk[Math.min(walk.length-1,i+1)],yaw=Math.atan2(next[0]-px,next[2]-pz);
       const bx=px+Math.cos(yaw)*5.4,bz=pz-Math.sin(yaw)*5.4,by=Math.max(1.7,ground(bx,bz));
       block(bx,by+.7,bz,2.6,.18,.7,'bark',yaw);
@@ -424,9 +447,10 @@ export function buildCityScene(data, shared, makeMaterial, options = {}) {
   places.forEach(p=>{
     const [px,,pz]=p.position;
     if(p.avenue||p.kind==='mount')cores.push([px,pz,(({domes:85,skyline:58,palace:62,mount:40}[p.kind])||48)*.85]);
+    else if(p.id==='qinhuai')cores.push([px+10,pz-62,46]);
     else if(p.kind==='oldtown'){for(let i=-3;i<=3;i++)for(const row of [-1,1])cores.push([px+i*17,pz+row*19,11]);cores.push([px+82,pz-45,16]);}
     else if(p.kind==='wall')cores.push([px,pz+33,52]);
-    else if(p.kind==='mausoleum')cores.push([px,pz+3,26]);
+    else if(p.kind==='mausoleum')cores.push([px+AXIS.du,pz+AXIS.dv+3,26]);
     else if(p.kind==='tomb'){cores.push([px,pz+5,24]);cores.push([px,pz+40,22]);}
   });
   // Baked roads (tools/research/build-roads.mjs) are used only if every node is still

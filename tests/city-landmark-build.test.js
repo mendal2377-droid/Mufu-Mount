@@ -46,7 +46,7 @@ function harness() {
   return {calls, helpers};
 }
 
-const known = new Set(['stone', 'white', 'roof', 'red', 'blue', 'ochre', 'bronze', 'glass', 'bark', 'leaf', 'canopy', 'sage', 'glow', 'water', 'terrain', 'gold', 'brick', 'wall', 'lamp']);
+const known = new Set(['stone', 'white', 'roof', 'red', 'blue', 'ochre', 'bronze', 'glass', 'bark', 'leaf', 'canopy', 'sage', 'glow', 'water', 'terrain', 'gold', 'brick', 'wall', 'lamp', 'slate', 'pink', 'plank', 'asphalt', 'lotus', 'blossom']);
 
 for (const p of places.filter(p => !['truss', 'cable', 'eye'].includes(p.kind))) {
   test(`${p.id}: the landmark builder runs and emits only known materials`, () => {
@@ -69,9 +69,6 @@ test('signage names the places it should, in the right characters', () => {
   assert.deepEqual(texts.zhonghua, ['中华门']);
   assert.deepEqual(texts.yuejiang, ['阅江楼']);
   assert.deepEqual(texts.xiaoling, ['明孝陵']);
-  assert.deepEqual(texts.qinhuai, ['夫子庙']);
-  assert.deepEqual(texts.zhongshan, ['博爱']);
-  assert.ok(texts.jiming.includes('鸡鸣寺'));
 });
 
 test('Yuejiang Tower is four stepped red tiers, not one wide castle', () => {
@@ -118,11 +115,11 @@ test('Xiaoling is a vermilion wall under yellow glazed tile with studded arched 
   assert.ok(calls.footings >= 1, 'the gate house has a footing');
 });
 
-test('Zifeng is one tapering twisted blade, with its floor belts and four sharp edges', () => {
+test('Zifeng is a slim faceted blade with floor belts, four sharp edges and a stepped crown', () => {
   const {calls, helpers} = harness();
   const p = places.find(p => p.id === 'zifeng');
   landmarkDetails({...p, position: [p.position[0], 0, p.position[2]]}, helpers);
-  assert.ok(calls.beam >= 5 * 5 + 5 * 12, 'five floor belts and five vertical edges');
+  assert.ok(calls.beam >= 3 * 4 + 4 * 8, 'floor belts and four vertical edges');
   assert.ok(calls.materials.has('glass'));
 });
 

@@ -13,11 +13,20 @@ export function createCityLandscape({terrain,places,routes,riverLines,materials,
   const blocked=(x,z,margin=8)=>routes.some(r=>distanceToLine(x,z,r.points)<margin);
   const occupied=(x,z)=>places.some(p=>!['mount','lake'].includes(p.kind)&&Math.hypot(x-p.position[0],z-p.position[2])<32);
   const entranceClear=(x,z)=>places.some(p=>p.spawn&&p.look&&distanceToLine(x,z,[p.spawn,p.look])<12);
-  function placeTree(x,z,scale=1,species=null){
-    if(!contains(x,z)||wet(x,z)||blocked(x,z)||occupied(x,z)||entranceClear(x,z))return;
-    trees.push({x,z,y:ground(x,z),scale:scale*1.28,yaw:random()*Math.PI*2,species:species??(shore(x,z)<25?2:random()<.26?1:random()<.2?2:0),tint:random()});
+  // `force` is for composed views (an avenue of statues, a boardwalk through maples): the
+  // tree stands exactly where the scene put it, even beside the walk or in the entrance sight line.
+  // Hillsides that look best in autumn (Qixia's maples, the Purple Mountain road) turn red and gold.
+  const zones=places.filter(p=>p.vista?.autumn).map(p=>p.vista.autumn);
+  function seasonal(x,z){
+    for(const a of zones)if(Math.hypot(x-a.x,z-a.z)<a.r){const r=random();return r<.5?3:r<.82?4:null;}
+    return null;
   }
-  planting.forEach(p=>placeTree(p.x,p.z,p.scale,p.species));
+  function placeTree(x,z,scale=1,species=null,force=false,tint=null){
+    if(!contains(x,z)||wet(x,z))return;
+    if(!force&&(blocked(x,z)||occupied(x,z)||entranceClear(x,z)))return;
+    trees.push({x,z,y:ground(x,z),scale:scale*1.28,yaw:random()*Math.PI*2,species:species??seasonal(x,z)??(shore(x,z)<25?2:random()<.26?1:random()<.2?2:0),tint:tint??random()});
+  }
+  planting.forEach(p=>placeTree(p.x,p.z,p.scale,p.species,p.force,p.tint));
   terrain.ridges.forEach(h=>{
     const count=h.secondary?280:820;
     for(let i=0;i<count;i++){
@@ -79,19 +88,37 @@ export function createCityLandscape({terrain,places,routes,riverLines,materials,
   function write(mesh,index,p,color){quat.setFromAxisAngle(up,p.yaw);
     matrix.compose(new THREE.Vector3(p.x,p.y,p.z),quat,new THREE.Vector3(p.scale,p.scale,p.scale));mesh.setMatrixAt(index,matrix);if(color)mesh.setColorAt(index,color);}
   const leafColor=new THREE.Color(),palette=[new THREE.Color('#f4ecd4'),new THREE.Color('#bed5cf'),new THREE.Color('#e5dfb9')];
+  // Autumn: the same painted crowns, re-mapped by luminance from deep red to bright orange (maple) or
+  // from ochre to gold (plane tree). No new texture; the painted texture's own light and shade survive.
+  function autumn(source,dark,light,key){
+    const mat=source.clone(),compile=source.onBeforeCompile;
+    mat.onBeforeCompile=s=>{compile(s);
+      s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+        float autumnL=dot(diffuseColor.rgb,vec3(.3,.59,.11));
+        diffuseColor.rgb=mix(vec3(${dark}),vec3(${light}),smoothstep(.08,.55,autumnL))*(.8+autumnL*.45);`);};
+    mat.customProgramCacheKey=()=>'city-ink-v2-leaves-'+key;return mat;
+  }
+  const speciesMaterials={
+    3:{leaf:autumn(materials.leaf,'.55,.07,.04','1.0,.42,.10','maple'),canopy:materials.canopyMaple,trunk:materials.bark},
+    4:{leaf:autumn(materials.leaf,'.62,.36,.05','1.0,.80,.22','plane'),canopy:materials.canopyPlane,trunk:materials.paleBark},
+  };
+  // The near-tree budget is shared by every species: it is what bounds the cost of a walk.
+  const NEAR_BUDGET=660;
   let totalTriangles=0;
-  for(let species=0;species<3;species++){
-    const pool=trees.filter(p=>p.species===species),far=prototype(species,false),near=prototype(species,true);
+  for(let species=0;species<5;species++){
+    const pool=trees.filter(p=>p.species===species);
+    if(species>=3&&!pool.length)continue;
+    const far=prototype(species,false),near=prototype(species,true),mats=speciesMaterials[species]||{leaf:materials.leaf,canopy:materials.canopy,trunk:materials.bark};
     const core=canopyInterior(species);
-    const distant={trunk:instances(far.trunk,materials.bark,pool.length,'Atlas grove trunks'),crown:instances(far.crown,materials.leaf,pool.length,'Atlas grove crowns'),
-      core:instances(core,materials.canopy,pool.length,'Painted canopy interiors')};
-    const detailed={trunk:instances(near.trunk,materials.bark,220,'Close branching trunks'),crown:instances(near.crown,materials.leaf,220,'Close layered crowns')};
+    const distant={trunk:instances(far.trunk,mats.trunk,pool.length,'Atlas grove trunks'),crown:instances(far.crown,mats.leaf,pool.length,'Atlas grove crowns'),
+      core:instances(core,mats.canopy,pool.length,'Painted canopy interiors')};
+    const detailed={trunk:instances(near.trunk,mats.trunk,Math.min(NEAR_BUDGET,Math.max(1,pool.length)),'Close branching trunks'),crown:instances(near.crown,mats.leaf,Math.min(NEAR_BUDGET,Math.max(1,pool.length)),'Close layered crowns')};
     pool.forEach((p,i)=>{leafColor.copy(palette[0]).lerp(palette[species===1?1:2],p.tint*.65);write(distant.trunk,i,p);write(distant.crown,i,p,leafColor);write(distant.core,i,p,leafColor);});
     distant.trunk.count=distant.crown.count=pool.length;distant.trunk.instanceMatrix.needsUpdate=distant.crown.instanceMatrix.needsUpdate=true;
     distant.crown.instanceColor.needsUpdate=true;
     distant.core.count=pool.length;distant.core.instanceMatrix.needsUpdate=true;distant.core.instanceColor.needsUpdate=true;
     totalTriangles+=pool.length*((far.trunk.attributes.position.count+far.crown.attributes.position.count)/3+core.attributes.position.count/3);
-    groups.push({pool,distant,detailed});
+    groups.push({pool,distant,detailed,species});
   }
   // Curved, upright blades and petals remain three-dimensional while orbiting.
   const blades=[],bladeUV=[];
@@ -142,10 +169,12 @@ export function createCityLandscape({terrain,places,routes,riverLines,materials,
     const x=camera.position.x,z=camera.position.z;
     if(mode===overview&&Math.hypot(x-(stamp.x||0),z-(stamp.z||0),camera.position.y-(stamp.y||0))<12)return;
     stamp={x,z,y:camera.position.y};mode=overview;let nearCount=0,nearTriangles=0,extraTriangles=0;
+    let budget=NEAR_BUDGET;
     groups.forEach(({pool,distant,detailed})=>{
       let n=0,f=0;
       pool.forEach(p=>{
-        const isNear=!overview&&Math.hypot(x-p.x,z-p.z,camera.position.y-p.y)<120&&n<220;
+        const isNear=!overview&&budget>0&&Math.hypot(x-p.x,z-p.z,camera.position.y-p.y)<120&&n<detailed.trunk.instanceMatrix.count;
+        if(isNear)budget--;
         leafColor.copy(palette[0]).lerp(palette[p.species===1?1:2],p.tint*.65);
         if(isNear){write(detailed.trunk,n,p);write(detailed.crown,n++,p,leafColor);}else{write(distant.core,f,p,leafColor);write(distant.trunk,f,p);write(distant.crown,f++,p,leafColor);}
       });

@@ -1,5 +1,27 @@
 # Change log
 
+## 2026-10-10 — ten places rebuilt to their best photograph
+
+From the owner's folder of best-view photographs (`research/nanjing/BEST-VIEWS.md`): Ming Xiaoling's
+Sacred Way, the Mausoleum's axis, Jiming Temple's courts, the Qinhuai canal at dusk, Mochou Lake's
+pavilion, Xuanwu's lotus and arching trees, Zifeng Tower's true silhouette, Qixia's red-maple boardwalk,
+the Purple Mountain plane-tree road with the music stage, and Niushou's golden domes and pagoda. Each
+arrival starts where the photographer stood and in the light the place looks best in (a visitor's own
+weather choice wins). Reference only: no photograph is in the repository.
+
+- New: `src/city-sets*.js` (the views), `WAYS`/`AXIS` terrain features, autumn maple and plane-tree
+  species (same painted crowns, colour re-mapped in the shader, no new texture), moving gold-roofed boats
+  on the Qinhuai, lotus on Xuanwu, a shared near-tree budget.
+- Found by the tests while building: a duplicate `const` that silently broke the whole app until the page
+  was loaded; the Jiming axis ran through the Presidential Palace's rear halls; the Qixia boardwalk began
+  on a cliff. All fixed; `tests/city-views.test.js` now builds every view on the real terrain.
+- Checks: 118 unit tests, `npm run build`, and the city, landmark, art and game browser checks pass against the
+  dev server under software rendering (1.15 M triangles, 111 near trees on the Qixia walk). Not measured:
+  phones, Safari, hardware-GPU speed.
+- Gaussian splatting was considered and not used: it needs many photographs of one place trained into a splat
+  file (tens of MB each), which these single web photographs cannot supply, and it would not take the painted
+  look. See `design/city/STYLE-GUIDE.md`.
+
 ## 2026-10-07 (b) — storybook look, level ground, true shapes, switching places
 
 Five complaints, and one more mid-task, from screenshots of the live app:

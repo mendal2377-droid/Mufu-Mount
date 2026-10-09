@@ -77,7 +77,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   const storage=(()=>{try{return window.localStorage;}catch{return null;}})();
   const gameView=createCityGame({scene,places,routes,ground,camera,shared,toast,storage,onChange:()=>refreshPins()});
   const game=gameView.game;
-  let arrival=null,currentRoute=0,lastNearest=-1;
+  let arrival=null,currentRoute=0,lastNearest=-1,userWeather=false;
   // Routes now include the streets between landmarks, so a walker can pass from
   // one corridor to another where they meet. Boxes keep the per-frame test cheap.
   const boxes=routes.map(r=>{let a=1e9,b=1e9,c=-1e9,d=-1e9;for(const q of r.points){a=Math.min(a,q[0]);c=Math.max(c,q[0]);b=Math.min(b,q[2]);d=Math.max(d,q[2]);}
@@ -154,6 +154,19 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   // Switching places must not mean leaving the scene, finding the atlas and
   // re-entering a pin. This lists every destination, nearest first, from inside
   // the walk; one click drops in on that place's road.
+  // Boats that drift along a composed view's water (the Qinhuai's gold-roofed pleasure boats).
+  function pleasureBoat(){
+    const boat=new THREE.Group(),skin=(c,e=0)=>new THREE.MeshToonMaterial({color:c,gradientMap:bands,emissive:e});
+    const hull=new THREE.Mesh(new THREE.BoxGeometry(9.5,1.2,2.8),skin(0x8c2a1c)),cabin=new THREE.Mesh(new THREE.BoxGeometry(6.6,1.7,2.3),skin(0xf3d99a,0x6b4a10));
+    const roofM=new THREE.Mesh(new THREE.BoxGeometry(8.2,.28,3.4),skin(0xe0a81e,0x5a3c00)),trim=new THREE.Mesh(new THREE.BoxGeometry(8.4,.14,.16),skin(0xffe08a,0xcc9a30));
+    hull.position.y=.6;cabin.position.y=2.05;roofM.position.y=3.05;trim.position.set(0,3.25,1.7);
+    const trim2=trim.clone();trim2.position.z=-1.7;boat.add(hull,cabin,roofM,trim,trim2);return boat;
+  }
+  for(const p of places){
+    if(!p.boats)continue;
+    const line=new THREE.CatmullRomCurve3(p.boats.path.map(q=>new THREE.Vector3(...q))),length=line.getLength();
+    for(let i=0;i<p.boats.count;i++){const boat=pleasureBoat();scene.add(boat);boats.push({boat,line,offset:i/p.boats.count,rate:2.0/length,lift:.05});}
+  }
   function renderPlaces(){
     const grid=$('#places-grid');if(!grid)return;
     const here=selected?.id,pos=camera.position;
@@ -224,6 +237,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');
       if(id==='mufu'){api.leave();onMufu();return;}
       useScene();reset();clearOrbitMotion(orbit);selected=p;currentRoute=p.route;flying(false);gameView.cancelRun();arrival=null;
+      if(opts.drop&&!userWeather&&p.vista?.weather&&state.weather!==p.vista.weather)onWeather(p.vista.weather);
       state.playing=true;state.overview=false;state.photoMode=false;state.moving=false;
       setArrivalCamera(camera,p.spawn,p.look);gameView.setCurrent(p.id);
       if(opts.drop){const flight=arrivalFlight(p.spawn,p.look);arrival={flight,t:0,p,look:p.look};
@@ -248,7 +262,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       scene.fog.density=state.overview?.000009:.00032+weather.storm*.0015+weather.snow*.001;
       sky.scale.setScalar(state.overview?5:1);sky.position.copy(camera.position);cityRain.position.copy(camera.position);citySnow.position.copy(camera.position);
       cityRain.visible=!state.overview&&weather.storm>.02;citySnow.visible=!state.overview&&weather.snow>.02;
-      boats.forEach(({boat,line,offset})=>{const f=(t*.0008+offset)%1;boat.position.copy(line.getPointAt(f));const d=line.getTangentAt(f);boat.rotation.y=Math.atan2(-d.z,d.x);});
+      boats.forEach(({boat,line,offset,rate=.0008,lift=0})=>{const f=(t*rate+offset)%1;boat.position.copy(line.getPointAt(f));boat.position.y+=lift;const d=line.getTangentAt(f);boat.rotation.y=Math.atan2(-d.z,d.x);});
       built.landscape.update(camera,state.overview);
       if(arrival){
         // The drop-in: any key or a click ends it at once, never trapping the visitor.
@@ -294,6 +308,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   };
   $('#city-passport-open').onclick=()=>api.passport(true);$('#city-passport-plan').onclick=()=>api.passport(true);
   $('#passport-close').onclick=()=>api.passport(false);
+  // Each composed view has the light it looks best in; a visitor who has chosen their own keeps it.
+  $('#walk-weather').addEventListener('change',()=>{userWeather=true;});$('#city-weather').addEventListener('click',()=>{userWeather=true;});
   $('#walk-places').onclick=()=>api.openPlaces(true);$('#places-close').onclick=()=>$('#city-places').close();
   $('#places-map').onclick=()=>{$('#city-places').close();api.showPlan();};
   $('#passport-run').onclick=()=>{api.passport(false);api.startWindRun();};

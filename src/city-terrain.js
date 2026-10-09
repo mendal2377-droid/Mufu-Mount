@@ -23,7 +23,30 @@ export const PADS={
   yuejiang:{rx:46,rz:30,offset:0,blend:50},    // podium and flanking pavilions
   jiming:{rx:48,rz:44,offset:6,blend:50},      // pagoda and three halls
   palace:{rx:44,rz:50,offset:-10,blend:50},    // gatehouse and garden halls
+  zijin:{dx:132,offset:231,rx:54,rz:54,blend:36}, // the music stage at the end of the plane-tree road
 };
+// Ceremonial and scenic ways that need a gentle, continuous grade the atlas relief does not
+// give them (Ming Xiaoling's Sacred Way, the Mausoleum's approach, the plane-tree road). Points
+// are [east, south, height] relative to the place: height is an offset from the ground at `ref`
+// (also relative to the place). Between points the grade is linear; `half` is the half-width kept
+// level and `blend` the distance over which the road's shoulders rejoin the hillside.
+// The Sun Yat-sen Mausoleum's axis stands on the broad plateau 25 m east and 65 m north of its map
+// pin: the pin's own ground is a hillside, and the stairs, terraces and an approach of a hundred
+// metres need level land.
+export const AXIS={du:25,dv:-65};
+
+export const WAYS={
+  // The approach, level with the foot of the stairs, from the Boai arch to the tomb gate.
+  // Jiming's axis, from the south gate to the pagoda.
+  jiming:{ref:[0,12],half:14,blend:22,pts:[[0,72,0],[0,14,0]]},
+  // The plane-tree road along the foot of the mountain, 230 m south of the pin.
+  zijin:{ref:[0,231],half:11,blend:30,pts:[[-112,231,-6],[-40,231,0],[-20,231,0],[78,231,-12.5]]},
+  zhongshan:{ref:[AXIS.du,AXIS.dv+58],half:13,blend:26,pts:[[AXIS.du,AXIS.dv+200,0],[AXIS.du,AXIS.dv+60,0]]},
+  // Valley floor 50 m west of the tomb gate, then east into the forecourt: the real Sacred Way
+  // also bends, around Plum Blossom Hill.
+  xiaoling:{ref:[0,0],half:8,blend:34,pts:[[-50,185,2],[-50,100,-3],[-50,42,0],[0,42,0],[0,12,0]]},
+};
+
 // Spatial water queries also shape floodplains, not just decide where to plant.
 // The map supplies anchors/centerlines; every elevation is an artistic choice.
 export function createCityTerrain(places,riverLines,lakes,rings){
@@ -121,8 +144,26 @@ export function createCityTerrain(places,riverLines,lakes,rings){
   // The lake shoulder above slopes the whole hillside towards the water, which tilted
   // every building near a lake. Re-level each pad on the finished landform.
   const levelPads=places.filter(p=>PADS[p.id]&&!['palace','jiming'].includes(p.id)).map(p=>{
-    const [x,,z]=p.position,pad=PADS[p.id];return {x,z,...pad,y:landform(x,z+pad.offset)};
+    const [x0,,z]=p.position,pad=PADS[p.id],x=x0+(pad.dx||0);return {x,z,...pad,y:landform(x,z+pad.offset)};
   });
+  const ways=places.filter(p=>WAYS[p.id]).map(p=>{
+    const [px,,pz]=p.position,w=WAYS[p.id],y0=landform(px+w.ref[0],pz+w.ref[1]);
+    const pts=w.pts.map(([u,v,dy])=>[px+u,pz+v,y0+dy]);
+    const reach=w.half+w.blend;
+    return {pts,half:w.half,blend:w.blend,
+      xmin:Math.min(...pts.map(q=>q[0]))-reach,xmax:Math.max(...pts.map(q=>q[0]))+reach,
+      zmin:Math.min(...pts.map(q=>q[1]))-reach,zmax:Math.max(...pts.map(q=>q[1]))+reach};
+  });
+  // Nearest point on a way: distance and the road's height there.
+  function wayAt(w,x,z){
+    let best=Infinity,height=0;
+    for(let i=1;i<w.pts.length;i++){
+      const a=w.pts[i-1],b=w.pts[i],dx=b[0]-a[0],dz=b[1]-a[1],den=dx*dx+dz*dz;
+      const f=den?clamp(((x-a[0])*dx+(z-a[1])*dz)/den):0,d=Math.hypot(x-a[0]-f*dx,z-a[1]-f*dz);
+      if(d<best){best=d;height=a[2]+(b[2]-a[2])*f;}
+    }
+    return {d:best,y:height};
+  }
   const stairCourts=places.filter(p=>p.id==='zhongshan');
   function ground(x,z){
     let y=landform(x,z);const bank=shore(x,z);
@@ -137,8 +178,13 @@ export function createCityTerrain(places,riverLines,lakes,rings){
       const weight=(1-smooth(0,p.blend,d))*smooth(0,24,bank);
       if(weight)y=THREE.MathUtils.lerp(y,p.y,weight);
     }
+    for(const w of ways){
+      if(x<w.xmin||x>w.xmax||z<w.zmin||z>w.zmax)continue;
+      const {d,y:h}=wayAt(w,x,z),weight=(1-smooth(w.half,w.half+w.blend,d))*smooth(0,24,bank);
+      if(weight)y=THREE.MathUtils.lerp(y,h,weight);
+    }
     for(const p of stairCourts){
-      const [px,,pz]=p.position,along=pz+58-z;
+      const px=p.position[0]+AXIS.du,pz=p.position[2]+AXIS.dv,along=pz+58-z;
       if(along>=-12&&along<=100){
         // The stair is a ramp, and the memorial hall stands on a level terrace at its
         // head. The ground follows both exactly (it used to only be lowered, so the hall
@@ -225,6 +271,6 @@ export function createCityTerrain(places,riverLines,lakes,rings){
       if(u>=-1e-6&&v>=-1e-6&&u+v<=1+1e-6)return u*p[a+1]+v*p[b+1]+(1-u-v)*p[c+1];
     }return ground(x,z);
   }
-  return {hills,ridges,ground:surface,analytic:ground,relief,shore,wet:(x,z)=>shore(x,z)<.8,slope,contains,bounds,geometry,
+  return {hills,ridges,ground:surface,analytic:ground,ways:ways.map(w=>({...w})),relief,shore,wet:(x,z)=>shore(x,z)<.8,slope,contains,bounds,geometry,
     stats:{terrainTriangles:indices.length/3,terrainVertices:positions.length/3,tiles,singleSurface:true}};
 }
