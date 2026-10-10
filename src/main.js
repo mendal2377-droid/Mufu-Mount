@@ -314,17 +314,71 @@ const RAIL_OPENINGS = [
     min: [2627.4, 187.4, -973.6],
     max: [2632.4, 191.5, -969.9],
   },
-  // Two cross-rails stand in the middle of the forest stairs, where a landing meets the flight: a
-  // handrail across the steps you are climbing. Found by looking for rail triangles on the stair's own
-  // centre line (the film showed them from the camera). These openings are oriented to the stair: `along`
-  // and `across` are half-lengths in metres along and across its heading `yaw`, so the cut spans the
-  // steps but stops short of the side rails a metre and a half out.
-  { name: /pale weathered balustrade/i, at: [1530.95, -743.55], yaw: 0.789, along: 0.9, across: 1.25, y: [63.6, 67.0] },
-  { name: /pale weathered balustrade/i, at: [1549.85, -724.1], yaw: 0.764, along: 0.9, across: 1.25, y: [67.4, 70.8] },
+  // Two rails run across the middle of the forest stairs, where a landing's railing meets the flight: a
+  // handrail across the steps you are climbing. The export builds every rail from separate boxes, so these
+  // are removed whole (`component`): any box within `along` metres of the stair's centre line whose long side
+  // lies across the stair (a box lying along it is a side rail and stays), out to `across` metres either side.
+  // Clipping triangles instead left stubs sticking out of the side rails.
+  { name: /pale weathered balustrade/i, component: true, at: [1530.95, -743.55], yaw: 0.789, along: 0.75, across: 14, y: [62.5, 67.5] },
+  { name: /pale weathered balustrade/i, component: true, at: [1549.85, -724.1], yaw: 0.764, along: 0.75, across: 14, y: [66.0, 71.5] },
 ];
 
+/**
+ * Remove whole rail boxes. Rails are exported as separate boxes (twelve triangles each), so connected
+ * components of the index buffer are the individual rails and posts; each is tested as a unit, in the
+ * frame of the stair (`yaw`): centre within the opening, and either lying across the stair or a post on
+ * its centre line.
+ */
+function removeRailBoxes(mesh, cuts) {
+  const position = mesh.geometry.attributes.position, array = mesh.geometry.index.array;
+  const parent = new Int32Array(position.count).map((_, i) => i);
+  const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  for (let t = 0; t < array.length; t += 3) {
+    const r = find(array[t]);
+    for (let k = 1; k < 3; k++) { const q = find(array[t + k]); if (q !== r) parent[q] = r; }
+  }
+  const boxes = new Map();
+  for (let t = 0; t < array.length; t += 3) {
+    const root = find(array[t]);
+    let b = boxes.get(root);
+    if (!b) { b = { tris: [], pts: [], lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity] }; boxes.set(root, b); }
+    b.tris.push(t);
+    for (let k = 0; k < 3; k++) {
+      const i = array[t + k], p = [position.getX(i), position.getY(i), position.getZ(i)];
+      b.pts.push(p);
+      for (let j = 0; j < 3; j++) { b.lo[j] = Math.min(b.lo[j], p[j]); b.hi[j] = Math.max(b.hi[j], p[j]); }
+    }
+  }
+  let removed = 0;
+  for (const b of boxes.values()) {
+    const cx = (b.lo[0] + b.hi[0]) / 2, cz = (b.lo[2] + b.hi[2]) / 2;
+    for (const cut of cuts) {
+      const s = Math.sin(cut.yaw), c = Math.cos(cut.yaw), dx = cx - cut.at[0], dz = cz - cut.at[1];
+      const along = dx * s + dz * c, across = dx * c - dz * s;
+      if (Math.abs(along) > cut.along || Math.abs(across) > cut.across || b.lo[1] < cut.y[0] || b.hi[1] > cut.y[1]) continue;
+      // Extents in the stair's frame, from the box's own vertices (a rail turned 45 degrees has a
+      // world-axis bounding box far squarer than the rail).
+      let ea = [Infinity, -Infinity], ec = [Infinity, -Infinity];
+      for (const [x, , z] of b.pts) {
+        const a2 = (x - cut.at[0]) * s + (z - cut.at[1]) * c, c2 = (x - cut.at[0]) * c - (z - cut.at[1]) * s;
+        ea = [Math.min(ea[0], a2), Math.max(ea[1], a2)]; ec = [Math.min(ec[0], c2), Math.max(ec[1], c2)];
+      }
+      // Lying across the stair, or a post on the cross-rail's own line: the stair's side rails sit a metre out
+      // from the centre, so anything further out at the same station belongs to the cross-rail.
+      const lyingAcross = ec[1] - ec[0] > (ea[1] - ea[0]) * 1.4, post = Math.abs(across) < 0.5 || (Math.abs(across) > 1.4 && Math.abs(along) < 0.45);
+      if (!lyingAcross && !post) continue;
+      for (const t of b.tris) { array[t + 1] = array[t]; array[t + 2] = array[t]; }
+      removed += b.tris.length;
+      break;
+    }
+  }
+  return removed;
+}
+
 function carveOpenings(mesh) {
-  const cuts = RAIL_OPENINGS.filter((o) => o.name.test(mesh.name));
+  const cuts = RAIL_OPENINGS.filter((o) => o.name.test(mesh.name) && !o.component);
+  const boxCuts = RAIL_OPENINGS.filter((o) => o.name.test(mesh.name) && o.component);
+  if (boxCuts.length && mesh.geometry.index) { const n = removeRailBoxes(mesh, boxCuts); if (n) mesh.geometry.index.needsUpdate = true; if (!cuts.length) return n; }
   if (!cuts.length) return 0;
   const position = mesh.geometry.attributes.position;
   const index = mesh.geometry.index;
