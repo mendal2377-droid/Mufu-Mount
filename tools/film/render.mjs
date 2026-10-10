@@ -2,14 +2,14 @@
 // Frames go to film-out/frames/NNNNN.jpg at 48 fps; assemble.py blends them to 24 for motion blur.
 import fs from 'node:fs/promises';
 import {openApp} from './lib.mjs';
-import {timeline, FPS, TOTAL_SECONDS} from './storyboard.mjs';
+import {timeline, FPS, BPM, TOTAL_SECONDS} from './storyboard.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => { const [k, v] = a.replace(/^--/, '').split('='); return [k, v ?? true]; }));
 const preview = !!args.preview;
 const shots = timeline();
 const total = shots.reduce((n, s) => n + s.frames, 0);
 console.log(`${shots.length} shots, ${TOTAL_SECONDS.toFixed(1)} s, ${total} frames at ${FPS} fps`);
-await fs.writeFile('film-out/timeline.json', JSON.stringify({fps: FPS, total, shots: shots.map(({id, index, start, seconds, frames, frame0, weather, kind, montage, changes, lightning, label}) =>
+await fs.writeFile('film-out/timeline.json', JSON.stringify({fps: FPS, bpm: BPM, total, shots: shots.map(({id, index, start, seconds, frames, frame0, weather, kind, montage, changes, lightning, label}) =>
   ({id, index, start, seconds, frames, frame0, weather, kind, montage: !!montage, changes, lightning, label}))}, null, 1));
 
 const dir = preview ? 'film-out/preview' : 'film-out/frames';

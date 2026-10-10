@@ -314,6 +314,13 @@ const RAIL_OPENINGS = [
     min: [2627.4, 187.4, -973.6],
     max: [2632.4, 191.5, -969.9],
   },
+  // Two cross-rails stand in the middle of the forest stairs, where a landing meets the flight: a
+  // handrail across the steps you are climbing. Found by looking for rail triangles on the stair's own
+  // centre line (the film showed them from the camera). These openings are oriented to the stair: `along`
+  // and `across` are half-lengths in metres along and across its heading `yaw`, so the cut spans the
+  // steps but stops short of the side rails a metre and a half out.
+  { name: /pale weathered balustrade/i, at: [1530.95, -743.55], yaw: 0.789, along: 0.9, across: 1.25, y: [63.6, 67.0] },
+  { name: /pale weathered balustrade/i, at: [1549.85, -724.1], yaw: 0.764, along: 0.9, across: 1.25, y: [67.4, 70.8] },
 ];
 
 function carveOpenings(mesh) {
@@ -323,10 +330,17 @@ function carveOpenings(mesh) {
   const index = mesh.geometry.index;
   if (!index) return 0;
   const array = index.array;
-  const inside = (cut, x, y, z) =>
-    x >= cut.min[0] && x <= cut.max[0] &&
-    y >= cut.min[1] && y <= cut.max[1] &&
-    z >= cut.min[2] && z <= cut.max[2];
+  const inside = (cut, x, y, z) => {
+    if (cut.at) {
+      const dx = x - cut.at[0], dz = z - cut.at[1], s = Math.sin(cut.yaw), c = Math.cos(cut.yaw);
+      return Math.abs(dx * s + dz * c) <= cut.along && Math.abs(dx * c - dz * s) <= cut.across && y >= cut.y[0] && y <= cut.y[1];
+    }
+    return (
+      x >= cut.min[0] && x <= cut.max[0] &&
+      y >= cut.min[1] && y <= cut.max[1] &&
+      z >= cut.min[2] && z <= cut.max[2]
+    );
+  };
   let removed = 0;
   for (let t = 0; t < array.length; t += 3) {
     const a = array[t],

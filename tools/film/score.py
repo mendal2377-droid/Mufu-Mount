@@ -2,7 +2,7 @@
 
     python tools/film/score.py            ->  film-out/score.wav
 
-Bright, kind music: G major, 100 bpm, the I-V-vi-IV turn (G D Em C) four bars at a time, kalimba and
+Bright, kind music: G major, 96 bpm, the I-V-vi-IV turn (G D Em C) four bars at a time, kalimba and
 glockenspiel tones over a soft pad, a light pulse that builds through the montage, drops out for the snow
 and comes back for the evening. Sound effects (a whoosh on every flash, rain and thunder, wind, birds,
 water) are laid on the same clock as the cuts, read from film-out/timeline.json.
@@ -12,13 +12,14 @@ import wave
 import numpy as np
 
 SR = 44100
-BPM = 100
+BPM = 96
 BEAT = 60 / BPM
 BAR = BEAT * 4
 TAIL = 3.0                                   # the title card holds after the last shot
 rng = np.random.default_rng(20261010)
 
 timeline = json.load(open('film-out/timeline.json'))
+assert timeline['bpm'] == BPM, 'the score and the storyboard must share a tempo'
 shots = timeline['shots']
 FILM = sum(s['seconds'] for s in shots)
 N = int((FILM + TAIL) * SR)
@@ -95,6 +96,35 @@ def bass(freq, dur=.6):
     n = int(dur * SR); t = np.arange(n) / SR
     y = np.sin(2 * np.pi * freq * t) + .3 * np.sin(2 * np.pi * freq * 2 * t) * np.exp(-t * 6)
     return y * np.exp(-t * 3.2) * np.minimum(1, t / .004) * .75
+
+def pluck(freq, dur=.7):
+    """A nylon-string pluck: harmonics that die at their own speeds, and a small pick click."""
+    n = int(dur * SR); t = np.arange(n) / SR; y = np.zeros(n)
+    for h in range(1, 9):
+        y += np.sin(2 * np.pi * freq * h * t * (1 + .0004 * h * h)) / h ** 1.1 * np.exp(-t * (3.2 + 1.5 * h))
+    click = fft_filter(rng.standard_normal(n), lo=1800, hi=7000) * np.exp(-t * 160) * .25
+    return (y * .5 + click) * np.minimum(1, t / .002)
+
+def strum(freqs, down=True, dur=.7):
+    """Four strings struck a few milliseconds apart."""
+    out = np.zeros(int(dur * SR) + int(.05 * SR)); order = freqs if down else freqs[::-1]
+    for k, f in enumerate(order):
+        p = pluck(f, dur); i = int(k * .011 * SR); out[i:i + len(p)] += p * (1 - .07 * k)
+    return out * .45
+
+def tambourine(accent=1.0):
+    n = int(.16 * SR); t = np.arange(n) / SR
+    y = fft_filter(rng.standard_normal(n), lo=5500, hi=13000) * np.exp(-t * 28)
+    for f in (6900, 8300, 10100): y += .35 * np.sin(2 * np.pi * f * t) * np.exp(-t * 45)
+    return y * .45 * accent
+
+def flute(freq, dur=1.0):
+    n = int(dur * SR); t = np.arange(n) / SR
+    vib = 1 + .004 * np.sin(2 * np.pi * 5.4 * t) * np.minimum(1, t / .3)
+    ph = 2 * np.pi * np.cumsum(freq * vib) / SR
+    y = np.sin(ph) + .28 * np.sin(2 * ph) + .08 * np.sin(3 * ph)
+    y += .06 * fft_filter(rng.standard_normal(n), lo=2000, hi=6000)       # breath
+    return y * env_ar(n, .05, .18) * .35
 
 def kick(dur=.35):
     n = int(dur * SR); t = np.arange(n) / SR
@@ -175,6 +205,8 @@ def water_bed(dur, level=1.0):
 # ---------------------------------------------------------------------------------------------------
 # Structure. 20 bars; section gains for each layer, indexed by bar (0-based).
 CHORDS = [('G', ['G3', 'B3', 'D4'], 'G2'), ('D', ['F#3', 'A3', 'D4'], 'D2'), ('Em', ['E3', 'G3', 'B3'], 'E2'), ('C', ['E3', 'G3', 'C4'], 'C2')]
+GUITAR = {0: ['G3', 'D4', 'G4', 'B4'], 1: ['D3', 'A3', 'D4', 'F#4'], 2: ['E3', 'B3', 'E4', 'G4'], 3: ['C3', 'G3', 'C4', 'E4']}
+FIFTH = {0: 'D3', 1: 'A2', 2: 'B2', 3: 'G2'}
 ARP = {0: ['G4', 'B4', 'D5', 'B4', 'G5', 'D5', 'B4', 'D5'], 1: ['F#4', 'A4', 'D5', 'A4', 'F#5', 'D5', 'A4', 'D5'],
        2: ['E4', 'G4', 'B4', 'G4', 'E5', 'B4', 'G4', 'B4'], 3: ['E4', 'G4', 'C5', 'G4', 'E5', 'C5', 'G4', 'C5']}
 MEL = {  # (beat, note, beats long): the tune of the morning, over each chord
@@ -189,7 +221,11 @@ G_ARP =     [.3, .0, .6, .7, .9, .9, .9, .0, .0, .0, .5, .6, .8, .0, .0, .0, .5,
 G_ARP8 =    [.0, .0, .0, .0, .0, .0, .0, .6, .7, .7, .0, .0, .0, .8, .8, .8, .0, .0, .0, .0]   # a second, gentler arpeggio for rain and snow
 G_MEL =     [.0, .0, .0, .0, .0, .0, .0, .0, .0, .0, .85, .9, .95, .0, .55, .6, .95, 1.0, .9, .8]
 G_BASS =    [.0, .0, .7, .8, .9, .9, .9, .5, .6, .6, .8, .8, .9, .0, .0, .0, .8, .9, .8, .5]
-G_DRUMS =   [.0, .0, .5, .7, .9, .95, 1.0, .0, .0, .4, .8, .9, 1.0, .0, .0, .0, .75, .85, .8, .0]
+G_DRUMS =   [.0, .0, .5, .7, .9, .95, 1.0, .35, .4, .5, .8, .9, 1.0, .0, .0, .0, .75, .85, .8, .0]
+#   the happy rhythm: an upbeat strum, a tambourine, and a walking pizzicato bass, kept (softly) through the rain and the snow
+G_STRUM =   [.0, .3, .7, .8, .9, .9, .9, .5, .55, .5, .85, .9, .95, .3, .3, .3, .85, .9, .9, .6]
+G_TAMB =    [.0, .0, .4, .6, .8, .85, .9, .35, .4, .45, .7, .8, .9, .0, .0, .0, .75, .85, .8, .0]
+G_FLUTE =   [.0, .0, .0, .0, .0, .0, .0, .0, .0, .0, .6, .7, .8, .0, .0, .0, .75, .85, .8, .6]
 
 def bar_of(t): return min(19, int(t / BAR))
 
@@ -197,7 +233,7 @@ music = Bus(); sfx = Bus()
 for bar in range(20):
     t0 = bar * BAR; name, tones, root = CHORDS[bar % 4]; ci = bar % 4
     music.add(t0, pad([hz(n) for n in tones], BAR * 1.15), G_PAD[bar] * .55, pan=0)
-    if G_BASS[bar]:
+    if G_BASS[bar] and not G_STRUM[bar]:
         for b in (0, 2):
             music.add(t0 + b * BEAT, bass(hz(root)), G_BASS[bar] * .38)
         if bar % 2: music.add(t0 + 3.5 * BEAT, bass(hz(root) * 1.5, .3), G_BASS[bar] * .35)
@@ -211,11 +247,27 @@ for bar in range(20):
     if G_MEL[bar]:
         for beat, note, length in MEL[ci]:
             music.add(t0 + beat * BEAT, glock(hz(note), 1.4 + length * .3), G_MEL[bar] * .55, pan=.15)
+    if G_STRUM[bar]:
+        g = G_STRUM[bar]
+        # boom - chick - chick: down on 1, down on 2, up on the & of 2, up on the & of 3, down on 4, up on the & of 4
+        for step, down, vel in ((0, True, 1.0), (2, True, .7), (3, False, .6), (5, False, .55), (6, True, .8), (7, False, .6)):
+            music.add(t0 + step * BEAT / 2, strum([hz(n) for n in GUITAR[ci]], down), g * vel * .55, pan=-.25 + .1 * (step % 2))
+    if G_TAMB[bar]:
+        for step in range(8):
+            if step % 2: music.add(t0 + step * BEAT / 2, tambourine(1.0 if step in (3, 7) else .7), G_TAMB[bar] * .6, pan=.4)
+    if G_BASS[bar] or G_STRUM[bar] > .5:
+        gb = max(G_BASS[bar], .5 * G_STRUM[bar])
+        for step, note in ((0, root), (3, FIFTH[ci]), (4, root), (7, root[:-1] + str(int(root[-1]) + 1))):
+            music.add(t0 + step * BEAT / 2, bass(hz(note), .45), gb * .3)
+    if G_FLUTE[bar]:
+        for beat, note, length in MEL[ci]:
+            music.add(t0 + beat * BEAT, flute(hz(note) / 2, length * BEAT + .3), G_FLUTE[bar] * .5, pan=-.1)
     d = G_DRUMS[bar]
     if d:
         for beat in range(4):
             tb = t0 + beat * BEAT
-            if beat in (0, 2): music.add(tb, kick(), d * .5)
+            if beat in (0, 2) and d > .45: music.add(tb, kick(), d * .5)
+            if beat in (0, 2) and d <= .45: music.add(tb, kick(), d * .35)
             if beat in (1, 3): music.add(tb, clap(), d * .55, pan=.1)
             music.add(tb, shaker(), d * .32, pan=-.3); music.add(tb + BEAT / 2, hat(), d * .5, pan=.35)
         if bar in (6, 12):       # a fill into the next section
@@ -230,7 +282,7 @@ music.add(19 * BAR + .14, glock(hz('B5'), 4.5), .42)
 # Sound design on the film's own clock.
 for s in shots:
     t0 = s['start']
-    if s['montage'] or s['index'] == 1 or s['index'] > 13:
+    if s['montage'] or s['index'] == 1 or s['id'] in ('rain-road', 'kite', 'snow-ridge', 'sunset-promenade'):
         sfx.add(max(0, t0 - .12), whoosh(.42, True), .9, pan=rng.uniform(-.4, .4))
     if s['montage']:
         sfx.add(t0, kick(), .7)
@@ -244,7 +296,7 @@ for s in shots:
         sfx.add(t0, wind_bed(s['seconds'], .5), .6)
     if s['id'] == 'kite':
         sfx.add(t0, wind_bed(s['seconds'], 1.1), .9)
-        sfx.add(t0 + 3.4 - .15, riser(.4), .6); sfx.add(t0 + 3.4, whoosh(.5, False), .8)
+        sfx.add(t0 + 3.6 - .15, riser(.4), .6); sfx.add(t0 + 3.6, whoosh(.5, False), .8)
     if s['id'] == 'dawn-stairs':
         for k, tb in enumerate([.3, .9, 1.7, 2.2, 3.1, 3.7, 4.3]):
             sfx.add(t0 + tb, bird(k % 3, .22 + .1 * (k % 2)), .9, pan=rng.uniform(-.9, .9))
@@ -257,7 +309,7 @@ for s in shots:
             sfx.add(t0 + tb, bird(k, .35), .55, pan=rng.uniform(-.9, .9))
 # a short riser into the first and the last big sections
 sfx.add(shots[2]['start'] - 1.2, riser(1.2), .7)
-sfx.add(shots[14]['start'] - 1.2, riser(1.2), .8)
+sfx.add(next(x for x in shots if x['id'] == 'kite')['start'] - 1.2, riser(1.2), .8)
 
 # ---------------------------------------------------------------------------------------------------
 def reverb_ir(seconds, damp):
