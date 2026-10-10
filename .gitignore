@@ -4,3 +4,6 @@ dist/
 test-results/
 public/world/route_surfaces.json
 public/sunset.png
+
+# Rendered film frames and cuts (tools/film); the tools are tracked, their output is not.
+film-out/

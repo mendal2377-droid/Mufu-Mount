@@ -1598,6 +1598,17 @@ function frame(elapsed) {
   postfx.grade.uniforms.uVignette.value = state.overview ? 0.12 : 1;
   postfx.grade.uniforms.uGrain.value = state.overview ? 0.08 : 1;
   postfx.grade.uniforms.uAberration.value = state.overview ? 0 : 1;
+  // Offline film rendering (tools/film) sets window.__director to take over the last few grade
+  // inputs: fades, flashes, letterbox. It does not exist for visitors.
+  const director = window.__director;
+  if (director) {
+    const g = postfx.grade.uniforms;
+    g.uFade.value = Math.max(g.uFade.value, director.fade);
+    g.uLetterbox.value = director.letterbox;
+    g.uLift.value.addScalar(director.flash + (director.lift || 0));
+    if (director.saturation != null) g.uSaturation.value = director.saturation;
+    if (director.contrast != null) g.uContrast.value = director.contrast;
+  }
 
   if (t - lastMap > 0.25) {
     lastMap = t;
