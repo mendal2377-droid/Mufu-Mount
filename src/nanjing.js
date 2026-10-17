@@ -8,6 +8,7 @@ import {createSkyDome} from './sky.js';
 import {arrivalFlight} from './city-arrival.js';
 import {createCityGame} from './city-game-view.js';
 import {STAMPS,FACTS,rankFor,MUFU_PHOTOS_NEEDED} from './city-game.js';
+import {loadLandmarkWorld} from './landmark-world.js';
 
 // A separate illustrated atlas: its compressed map coordinates must never be
 // confused with the photo-informed, unregistered Mufu reconstruction.
@@ -72,6 +73,24 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   const hemi=new THREE.HemisphereLight(0xcfe6ff,0x7d9456,2.2),sun=new THREE.DirectionalLight(0xffe7b8,2.0);
   scene.add(hemi,sun,sun.target);
   const cityRain=rain.clone(),citySnow=snow.clone();scene.add(cityRain,citySnow);
+  // Landmarks rebuilt in Blender (true metres, free walking) replace their atlas walk. Each is
+  // fetched on first visit and kept; the atlas pin and its stamps stay as they are.
+  const WORLDS={zhongshan:{spawn:'axis'}},worlds={};
+  let world=null,worldBounds=null,lastSeatHint=-10;
+  function exitWorld(){if(!world)return;world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
+  async function enterWorld(p,opts){
+    const id=p.id;
+    if(!worlds[id]){toast(`${p.zh} · on the wind…`);
+      worlds[id]=loadLandmarkWorld(id,{shared,skyShared,bands,rain,snow}).catch(e=>{delete worlds[id];throw e;});}
+    let w;
+    try{w=await worlds[id];}catch(e){console.error(e);toast(`${p.name} could not load`);return;}
+    // The visitor may have gone back to the map or elsewhere while it loaded.
+    if(!active||state.overview||selected!==p)return;
+    exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
+    const g=w.meta.walk;worldBounds=new THREE.Box3(new THREE.Vector3(g.x0-150,-60,-(g.y0+g.ny*g.cell)-150),new THREE.Vector3(g.x0+g.nx*g.cell+150,700,-g.y0+150));
+    const s=w.spawn(opts.spawn||WORLDS[id].spawn);setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
+    toast(`${p.zh} · ${w.meta.title} · WASD walk · Shift run · F sit · K fly`);
+  }
   const bounds=new THREE.Box3().setFromPoints(built.rings.flat().map(p=>new THREE.Vector3(...p))).expandByScalar(500);
   const $=s=>document.querySelector(s),records=[];
   const storage=(()=>{try{return window.localStorage;}catch{return null;}})();
@@ -211,6 +230,20 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     const run=game.run,course=gameView.course;
     $('#passport-run-best').textContent=run.best?`Best ${run.best.toFixed(1)} s${run.medal?' · '+run.medal:''} · ${run.runs} run${run.runs>1?'s':''}`:`${course.rings.length} rings · about ${Math.round(course.length/34)} s at cruising speed`;
   }
+  function frameWorld(dt,t,weather){
+    world.frame(dt,t,weather,cityDirection,camera,state);
+    if(state.flying){
+      const forward=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
+      const side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
+      const up=Number(keys.has('KeyE')||keys.has('Space'))-Number(keys.has('KeyQ')||keys.has('ControlLeft')||keys.has('ControlRight'));
+      const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+      const next=flightStep(camera.position.toArray(),dir.toArray(),{forward,side,up,fast:keys.has('ShiftLeft')||keys.has('ShiftRight')},dt,worldBounds);
+      const h=world.ground(next[0],next[2]);next[1]=Math.max(next[1],(h??0)+12);camera.position.fromArray(next);
+      kite.bird.rotation.z=-side*.14+Math.sin(t*1.3)*.04;state.moving=!!(forward||side||up);return false;}
+    state.moving=world.walk(camera,keys,dt);
+    if(t-lastSeatHint>6&&!world.seated&&world.nearestSeat(camera.position,2.5)){lastSeatHint=t;toast('F to sit');}
+    const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
+  }
   const api={...built,data,game,gameView,refreshPins,renderPassport,renderPlaces,
     openPlaces(open=true){const d=$('#city-places');if(!d||!active||state.overview)return;
       if(open){controls.unlock();keys.clear();$('#city-menu').close();renderPlaces();if(!d.open)d.showModal();}else d.close();},
@@ -228,7 +261,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       camera.position.fromArray(pose.position);camera.lookAt(...pose.look);camera.rotation.z=0;
       state.overview=false;flying(true);keys.clear();},
     get active(){return active;},get scope(){return scope;},get selected(){return selected;},
-    showPlan(){arrival=null;gameView.cancelRun();useScene();scope='central';flying(false);state.playing=false;state.overview=true;state.moving=false;state.photoMode=false;
+    showPlan(){arrival=null;gameView.cancelRun();exitWorld();useScene();scope='central';flying(false);state.playing=false;state.overview=true;state.moving=false;state.photoMode=false;
       orbit.enabled=true;document.body.classList.remove('playing','photo-mode','locked');document.body.classList.add('plan-mode');
       $('#nanjing-home').hidden=false;$('#walk-environment').hidden=true;$('#walk-menu').hidden=true;$('#walk-places').hidden=true;$('#back-to-plan').hidden=true;
       $('#city-scope').value=scope;frameMap();},
@@ -236,7 +269,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // programmatic entry (tests, the debug API) stays instant and deterministic.
     enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');
       if(id==='mufu'){api.leave();onMufu();return;}
-      useScene();reset();clearOrbitMotion(orbit);selected=p;currentRoute=p.route;flying(false);gameView.cancelRun();arrival=null;
+      exitWorld();useScene();reset();clearOrbitMotion(orbit);selected=p;currentRoute=p.route;flying(false);gameView.cancelRun();arrival=null;
       if(opts.drop&&!userWeather&&p.vista?.weather&&state.weather!==p.vista.weather)onWeather(p.vista.weather);
       state.playing=true;state.overview=false;state.photoMode=false;state.moving=false;
       setArrivalCamera(camera,p.spawn,p.look);gameView.setCurrent(p.id);
@@ -244,17 +277,25 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
         camera.position.fromArray(flight.at(0));camera.lookAt(...p.look);}
       document.body.classList.remove('plan-mode','photo-mode');document.body.classList.add('playing');$('#nanjing-home').hidden=true;
       $('#walk-environment').hidden=false;$('#walk-menu').hidden=false;$('#walk-places').hidden=false;$('#back-to-plan').hidden=false;
+      if(WORLDS[id]){arrival=null;enterWorld(p,opts);return;}
       if(!arrival)toast(`${p.zh} · WASD to walk · Drag to look · G places · K to fly`);},
-    leave(){if(!active)return;flying(false);$('#walk-places').hidden=true;$('#city-places')?.close();active=false;reset();baseScene.add(camera);postfx.setScene(baseScene);
+    leave(){if(!active)return;exitWorld();flying(false);$('#walk-places').hidden=true;$('#city-places')?.close();active=false;reset();baseScene.add(camera);postfx.setScene(baseScene);
       $('#nanjing-home').hidden=true;$('#city-menu').close();document.body.classList.remove('city-mode');
       $('.brand span').innerHTML='Mufu <small>Choose a place to wander.</small>';$('.brand').setAttribute('aria-label','Mufu home');},
     toggleFlight(){if(state.overview)api.enter(selected.id);if(!active)return;
+      if(world){world.stand();
+        if(state.flying){const h=world.ground(camera.position.x,camera.position.z);
+          if(h===null){const s=world.spawn();camera.position.fromArray(s.position);}else camera.position.y=h+1.65;
+          flying(false);toast('Landed');}
+        else{flying(true);camera.position.y+=25;toast('WASD fly · E / Space up · Q down · Shift faster · K land');}
+        return;}
       if(state.flying){const landing=landingPoint(camera.position.toArray(),routes);camera.position.fromArray(landing.position);
         currentRoute=landing.route;selected=nearestPlace(camera.position,1e9)||selected;flying(false);gameView.cancelRun('Wind run ended');gameView.setCurrent(selected.id);toast('Landed on the nearest path');}
       else{flying(true);camera.position.y=Math.max(camera.position.y+25,ground(camera.position.x,camera.position.z)+25);
         toast('WASD fly · E / Space up · Q down · Shift faster · K land');}},
     frame(dt,t,weather,direction){
       cityDirection.set(direction.x*.9412-direction.z*.3377,direction.y,direction.x*.3377+direction.z*.9412).normalize();
+      if(world)return frameWorld(dt,t,weather);
       sun.position.copy(camera.position).addScaledVector(cityDirection,900);sun.target.position.copy(camera.position);
       sun.intensity=(2.4-weather.storm*1.8-weather.snow*.8)*(1-weather.dawn*.6);
       sun.color.setRGB(1,1-weather.sunset*.3,1-weather.sunset*.55);hemi.intensity=1.35-weather.storm*.45-weather.dawn*.65;
@@ -301,9 +342,22 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       gameView.update(dt,t,{flying:state.flying});
       const footstep=state.moving&&!state.flying&&t-lastFootstep>.52;if(footstep)lastFootstep=t;return footstep;
     },resize:frameMap,
+    // F: sit on the nearest seat (benches, the Music Stage terraces), or stand up again.
+    interact(){if(!world||state.overview||state.flying)return;
+      if(world.seated){world.stand();toast('Standing up');return;}
+      const seat=world.nearestSeat(camera.position);
+      if(!seat){toast('Nothing to sit on here');return;}
+      world.sit(camera,seat);
+      const [lx,ly,lz]=seat.look,dx=lx-seat.position[0],dz=lz-seat.position[2];
+      camera.rotation.set(-.06,Math.atan2(-dx,-dz),0,'YXZ');
+      toast('Sitting · watch the birds · move to stand');},
+    get world(){return world;},
+    // Debug/test seam: stand at a named spawn of the current Blender world (axis, stair, hall, music).
+    worldSpawn(name){if(!world)return null;world.stand();flying(false);const s=world.spawn(name);
+      setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();return s;},
     menu(){controls.unlock();keys.clear();$('#city-menu-title').textContent=selected.zh;
       $('#city-sound').textContent=$('#sound').textContent==='Sound on'?'Mute nature sound':'Enable nature sound';$('#city-menu').showModal();},
-    stats(){return {active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,
+    stats(){return {world:world?.stats()||null,active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,
       art:{style:'gouache-ink',foliageReady:!!foliage.image,meadowReady:!!meadow.image,architectureReady:[tiles,brick,ochre,glass].every(t=>!!t.image),landmarkDesign:'photo-informed-v2',water:'crossing-brush-ripples'},terrain:built.terrain.stats,landscape:{...built.landscape.stats}};},
   };
   $('#city-passport-open').onclick=()=>api.passport(true);$('#city-passport-plan').onclick=()=>api.passport(true);

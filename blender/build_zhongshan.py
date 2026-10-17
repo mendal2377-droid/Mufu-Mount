@@ -160,6 +160,11 @@ def designed_ground(x, y, dem):
         w_along = smoothstep(-90, -62, s) * (1 - smoothstep(S_TERRACE_END, S_TERRACE_END + 30, s))
         w_axis = w_across * w_along
         z_axis = axis_profile(min(max(s, 0), S_TERRACE_END))
+        # Sink the ground under built stone so lawn never pokes through paving or steps; the stair,
+        # landings and terraces are solid down to their own base, so nothing shows the gap.
+        z_axis -= 0.6
+        if S_GATE_PLATFORM[0] - 10 < s < S_TERRACE_END and abs(u) < 34:
+            z_axis -= 2.0
         # Side ground beside the stair rises with it, a touch higher, so the stair sits in a cut.
         if S_STAIR[0] < s < S_STAIR[1] and abs(u) > 24:
             z_axis += 1.2
@@ -590,6 +595,36 @@ def setup_lookdev(scene):
     scene.collection.objects.link(so)
 
 
+def add_point(coll, name, loc, target):
+    """Spawn/seat marker for export_web.py: an empty whose local +Y faces the target."""
+    e = bpy.data.objects.new(name, None)
+    e.empty_display_type = 'SINGLE_ARROW'
+    e.location = loc
+    d = Vector(target) - Vector(loc)
+    e.rotation_euler = (0, 0, math.atan2(-d.x, d.y))
+    coll.objects.link(e)
+    return e
+
+
+def add_markers(coll, ground):
+    """Where visitors arrive and where they can sit. Heights are the walking surface (no eye)."""
+    hall_eye = from_axis(0, S_HALL, Z_HALL + 12)
+    add_point(coll, 'Spawn axis', from_axis(0, -44, 0), from_axis(0, 120, 9))
+    add_point(coll, 'Spawn stair', from_axis(2, LANDINGS[2][0], LANDINGS[2][1]), hall_eye)
+    add_point(coll, 'Spawn hall', from_axis(0, S_STAIR[1] + 8, Z_HALL), from_axis(0, -200, 10))
+    M = Matrix.Translation((MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC)) @ Matrix.Rotation(-MUSIC_FACING, 4, 'Z')
+    stage = M @ Vector((0, 0, 3))
+    add_point(coll, 'Spawn music', M @ Vector((0, 47.7, max(0.0, 47.7 - 16) * 0.16 + 0.05)), stage)
+    # Seats on the lawn terraces, mid-band, either side of the radial aisles.
+    k = 0
+    for r in (24.4, 33.6, 41.8):
+        for a_deg in (30, 60, 90, 120, 150):
+            a = math.radians(a_deg + 15 * (1 if r > 30 else -1) * 0.5)
+            p = M @ Vector((r * math.cos(a), r * math.sin(a), max(0.0, r - 16) * 0.16))
+            add_point(coll, f'Seat music-{k:02d}', p, stage)
+            k += 1
+
+
 def camera(scene, name, loc, target, lens=32):
     cam = bpy.data.cameras.new(name)
     cam.lens = lens
@@ -616,6 +651,7 @@ def main():
     build_axis(c_axis, ground, protos, c_trees)
     build_music_stage(c_music, ground, protos, c_trees)
     n = scatter_forest(ground, protos, c_trees)
+    add_markers(collection('Markers', root), ground)
     setup_lookdev(scene)
 
     cams = {
