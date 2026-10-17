@@ -13,8 +13,9 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
-    "vite": "^7.1.0",
+    "@gltf-transform/cli": "^4.5.1",
     "@playwright/test": "^1.55.0",
-    "vercel": "latest"
+    "vercel": "latest",
+    "vite": "^7.1.0"
   }
 }

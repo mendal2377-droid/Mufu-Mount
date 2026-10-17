@@ -1,0 +1,70 @@
+{
+  "source": "Copernicus GLO-30 DEM (DSM), tile N32 E118. © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA.",
+  "note": "Surface model: includes canopy and roofs. Heights are metres above EGM2008.",
+  "shape_rows_cols": [
+    118,
+    139
+  ],
+  "extent_wgs84": {
+    "north": 32.07222222222222,
+    "south": 32.039722222222224,
+    "west": 118.82777777777778,
+    "east": 118.86611111111111
+  },
+  "origin_wgs84": [
+    32.0587677,
+    118.8486466
+  ],
+  "extent_local_m": {
+    "x_west": -1968.8514681641498,
+    "x_east": 1647.6746016499571,
+    "y_south": -2105.9346597994827,
+    "y_north": 1487.7203402003913
+  },
+  "min_m": 11.5222749710083,
+  "max_m": 441.2144470214844,
+  "anchors": {
+    "boai_arch": {
+      "local_m": [
+        0.0,
+        0.0
+      ],
+      "dsm_m": 87.8
+    },
+    "tomb_gate": {
+      "local_m": [
+        -23.3,
+        383.0
+      ],
+      "dsm_m": 114.5
+    },
+    "stele_pavilion": {
+      "local_m": [
+        -24.3,
+        427.6
+      ],
+      "dsm_m": 119.7
+    },
+    "sacrificial_hall": {
+      "local_m": [
+        -36.4,
+        618.5
+      ],
+      "dsm_m": 158.8
+    },
+    "music_stage": {
+      "local_m": [
+        152.9,
+        -157.7
+      ],
+      "dsm_m": 64.9
+    },
+    "meiling_palace": {
+      "local_m": [
+        -674.3,
+        -1224.7
+      ],
+      "dsm_m": 67.4
+    }
+  }
+}
