@@ -244,7 +244,7 @@
    ]
   }
  },
- "trees": 6774,
- "staticTriangles": 199982,
+ "trees": 23970,
+ "staticTriangles": 240182,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). Architecture modelled from published dimensions; see research/zhongshan/FACTS.md."
 }

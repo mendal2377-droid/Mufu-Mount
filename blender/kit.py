@@ -272,6 +272,7 @@ def tree_prototypes(coll):
     protos['broadleaf_shade'] = blob_tree('proto broadleaf shade', 'leaf_shade', 'bark', 16, 5.5, 7)
     protos['plane_autumn'] = blob_tree('proto plane autumn', 'autumn_plane', 'plane_bark', 18, 5.5, 6)
     protos['maple_autumn'] = blob_tree('proto maple autumn', 'autumn_maple', 'bark', 9, 3.6, 5)
+    protos['far'] = blob_tree('proto far', 'leaf_mid', 'bark', 12, 4.6, 3)
     protos['cedar'] = cone_tree('proto cedar', 18, 4.2, 5)
     protos['cypress'] = cone_tree('proto cypress', 9, 1.6, 4)
     for o in protos.values():

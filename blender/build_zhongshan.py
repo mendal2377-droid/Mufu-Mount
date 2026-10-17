@@ -220,6 +220,59 @@ def build_terrain(coll, dem, x_range=(-420, 520), y_range=(-360, 820), step=4.0)
     return o, ground
 
 
+INNER = ((-420, 520), (-360, 820))   # detailed terrain extent (x range, y range)
+
+
+def build_outer_terrain(coll, dem, step=24.0):
+    """Coarse apron over the rest of the DEM tile crop, so the paraglide descent and long views
+    never reach the edge of the world. Purple Mountain's ridge (DSM ~440 m) rises behind the hall.
+    Quads inside the detailed terrain are skipped; the apron sits 1.5 m lower at the seam so the
+    detailed mesh always wins."""
+    meta = json.loads((DATA / 'terrain.json').read_text(encoding='utf-8'))['extent_local_m']
+    x0, x1 = meta['x_west'] + step, meta['x_east'] - step
+    y0, y1 = meta['y_south'] + step, meta['y_north'] - step
+    nx, ny = int((x1 - x0) / step) + 1, int((y1 - y0) / step) + 1
+    (ix0, ix1), (iy0, iy1) = INNER
+    bm = bmesh.new()
+    grid = []
+    for j in range(ny):
+        y = y0 + j * step
+        row = []
+        for i in range(nx):
+            x = x0 + i * step
+            inside = ix0 + 12 < x < ix1 - 12 and iy0 + 12 < y < iy1 - 12
+            row.append(bm.verts.new((x, y, dem(x, y) - 11.0 - (1.5 if inside else 0.0))))
+        grid.append(row)
+    for j in range(ny - 1):
+        for i in range(nx - 1):
+            xa, ya = x0 + i * step, y0 + j * step
+            if ix0 + step < xa and xa + step < ix1 - step and iy0 + step < ya and ya + step < iy1 - step:
+                continue
+            bm.faces.new((grid[j][i], grid[j][i + 1], grid[j + 1][i + 1], grid[j + 1][i]))
+    o = kit.mesh_object('Terrain outer', bm, coll, ['forest_floor'])
+    for p in o.data.polygons:
+        p.use_smooth = True
+    return o, (x0, x1, y0, y1)
+
+
+def scatter_far_canopy(dem, protos, trees, extent, spacing=26.0):
+    """One soft crown per ~26 m outside the detailed area: reads as continuous forest from the air."""
+    x0, x1, y0, y1 = extent
+    (ix0, ix1), (iy0, iy1) = INNER
+    n = 0
+    y = y0
+    while y < y1:
+        x = x0
+        while x < x1:
+            px, py = x + rnd.uniform(-9, 9), y + rnd.uniform(-9, 9)
+            if not (ix0 - 10 < px < ix1 + 10 and iy0 - 10 < py < iy1 + 10):
+                kit.place(protos['far'], trees, (px, py, dem(px, py) - 12.0), rnd.uniform(0, 6.28), rnd.uniform(1.6, 2.6))
+                n += 1
+            x += spacing
+        y += spacing
+    return n
+
+
 # --- Mausoleum axis -------------------------------------------------------------------------------
 
 def build_boai_arch(bm, M):
@@ -651,6 +704,8 @@ def main():
     build_axis(c_axis, ground, protos, c_trees)
     build_music_stage(c_music, ground, protos, c_trees)
     n = scatter_forest(ground, protos, c_trees)
+    _, outer_extent = build_outer_terrain(c_ground, dem)
+    n_far = scatter_far_canopy(dem, protos, c_trees, outer_extent)
     add_markers(collection('Markers', root), ground)
     setup_lookdev(scene)
 
@@ -670,7 +725,7 @@ def main():
     OUT_RENDERS.mkdir(parents=True, exist_ok=True)
     cam_objs = {k: camera(scene, 'Cam ' + k, *v) for k, v in cams.items()}
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))
-    stats = {'forest_trees': n, 'trees_total': len(c_trees.objects),
+    stats = {'forest_trees': n, 'far_canopy': n_far, 'trees_total': len(c_trees.objects),
              'triangles_static': sum(sum(len(p.vertices) - 2 for p in o.data.polygons)
                                      for o in bpy.data.objects if o.type == 'MESH'
                                      and o.users_collection[0].name in ('Ground', 'Mausoleum axis', 'Music Stage'))}

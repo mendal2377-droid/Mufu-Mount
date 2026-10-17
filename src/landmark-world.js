@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {MeshoptDecoder} from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import {createSkyDome} from './sky.js';
+import {flightStep} from './kite.js';
+import {createTraveller, createMagpie, createGlider} from './traveller.js';
 
 // A landmark scene modelled in Blender (blender/build_<id>.py, exported by blender/export_web.py)
 // and streamed on arrival. Unlike the atlas it is in true metres: the walker's eye is 1.65 m, the
@@ -24,6 +26,8 @@ const TREES = {
   broadleaf_shade: {crown: '#2F5A3A', trunk: '#5A4636', h: 16, r: 5.5, lobes: 6},
   plane_autumn: {crown: '#E2B233', trunk: '#B9B39A', h: 18, r: 5.5, lobes: 5},
   maple_autumn: {crown: '#D0622E', trunk: '#5A4636', h: 9, r: 3.6, lobes: 4},
+  // Far canopy beyond the walkable area: one crown, no trunk, ~20 triangles.
+  far: {crown: '#5A8A3C', trunk: '#5A4636', h: 12, r: 4.6, lobes: 0, far: true},
   cedar: {crown: '#3D5E3F', trunk: '#5A4636', h: 18, r: 4.2, cone: 5},
   cypress: {crown: '#3D5E3F', trunk: '#5A4636', h: 9, r: 1.6, cone: 4},
 };
@@ -37,10 +41,18 @@ function treeGeometry(spec, seed) {
     g.setAttribute('color', new THREE.BufferAttribute(a, 3));
     return g;
   };
-  const trunk = new THREE.CylinderGeometry(spec.r * .06, spec.r * .09, spec.h * .62, 5, 1, true).toNonIndexed();
-  trunk.translate(0, spec.h * .31, 0);
-  parts.push(colour(trunk, spec.trunk));
-  if (spec.cone) {
+  if (!spec.far) {
+    const trunk = new THREE.CylinderGeometry(spec.r * .06, spec.r * .09, spec.h * .62, 5, 1, true).toNonIndexed();
+    trunk.translate(0, spec.h * .31, 0);
+    parts.push(colour(trunk, spec.trunk));
+  }
+  if (spec.far) {
+    const g = new THREE.IcosahedronGeometry(spec.r, 0).toNonIndexed();
+    g.scale(1, .8, 1); g.translate(0, spec.h * .75, 0);
+    const p = g.attributes.position, n = g.attributes.normal, v = new THREE.Vector3(), c = new THREE.Vector3(0, spec.h * .75, 0);
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).sub(c).normalize(); n.setXYZ(i, v.x, v.y, v.z); }
+    parts.push(colour(g, spec.crown));
+  } else if (spec.cone) {
     for (let k = 0; k < spec.cone; k++) {
       const t = k / spec.cone, g = new THREE.ConeGeometry(spec.r * (1 - t * .75), spec.h * .42, 8, 1).toNonIndexed();
       g.translate(0, spec.h * (.32 + .6 * t), 0);
@@ -238,60 +250,160 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     pigeons.flock.instanceMatrix.needsUpdate = true;
   }
 
-  let seated = null;
+  // --- The traveller, the magpie and the glider -------------------------------------------------------
+  const traveller = createTraveller(bands), magpie = createMagpie(bands), glider = createGlider(bands);
+  traveller.root.add(glider); glider.visible = false;
+  scene.add(traveller.root, magpie.root);
+  const body = new THREE.Vector3(), lastBody = new THREE.Vector3();
+  let heading = 0, speed = 0, seated = null, glide = null, view = 'third', mode = 'walk';
+  const camDir = new THREE.Vector3(), tmp = new THREE.Vector3();
+
+  function feetAt(x, z, fallback) { return surface(x, z) ?? fallback; }
+  function glideCurve(feet, look) {
+    // Approach from behind the arrival view: a long descending S-turn that ends running out onto
+    // the spawn. Points are lifted clear of the ground under them.
+    const f = new THREE.Vector3(look[0] - feet.x, 0, look[2] - feet.z).normalize(), side = new THREE.Vector3(-f.z, 0, f.x);
+    const pts = [[-420, 150, 170], [-260, -70, 115], [-140, 40, 62], [-60, -12, 22], [-18, 0, 4], [0, 0, 0]].map(([b, sd, h]) => {
+      const q = feet.clone().addScaledVector(f, b).addScaledVector(side, sd);
+      q.y = Math.max(feet.y + h, (surface(q.x, q.z) ?? feet.y) + Math.min(h, 25));
+      return q;
+    });
+    return new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  }
+
   const world = {
-    id, meta, scene, sky, seats, staticTriangles, treeTriangles,
+    id, meta, scene, sky, seats, staticTriangles, treeTriangles, traveller,
     spawn(name = 'axis') {
       const s = meta.spawns[name] || Object.values(meta.spawns)[0];
       const h = surface(s.position[0], s.position[2]) ?? s.position[1];
-      return {position: [s.position[0], h + EYE, s.position[2]], look: s.look};
+      return {position: [s.position[0], h + EYE, s.position[2]], feet: [s.position[0], h, s.position[2]],
+        look: [s.look[0], h + EYE, s.look[2]]};
     },
     ground: (x, z) => surface(x, z),
+    get body() { return body; },
+    get view() { return view; },
+    get gliding() { return !!glide; },
+    get seated() { return seated; },
+    toggleView() { view = view === 'third' ? 'first' : 'third'; return view; },
+    // Stand at a spawn facing its look point; the caller has already set the camera's rotation.
+    placeAt(s) {
+      body.fromArray(s.feet); lastBody.copy(body); heading = Math.atan2(s.look[0] - s.feet[0], s.look[2] - s.feet[2]);
+      seated = null; glide = null; mode = 'walk';
+    },
+    startGlide(s, seconds = 15) {
+      world.placeAt(s);
+      const curve = glideCurve(body.clone(), s.look);
+      glide = {curve, t: 0, seconds}; body.copy(curve.getPointAt(0)); lastBody.copy(body); mode = 'glide';
+    },
+    endGlide() {
+      if (!glide) return;
+      body.copy(glide.curve.getPointAt(1)); body.y = feetAt(body.x, body.z, body.y);
+      glide = null; mode = 'walk';
+    },
     nearestSeat(p, radius = 3) {
+      const q = p || body;
       let best = null;
-      for (const s of seats) { const d = Math.hypot(s.position[0] - p.x, s.position[2] - p.z); if (d < radius && (!best || d < best.d)) best = {s, d}; }
+      for (const s of seats) { const d = Math.hypot(s.position[0] - q.x, s.position[2] - q.z); if (d < radius && (!best || d < best.d)) best = {s, d}; }
       return best?.s || null;
     },
-    get seated() { return seated; },
-    sit(camera, seat) {
-      seated = {seat, from: camera.position.clone(), t: 0};
-    },
-    stand() { seated = null; },
-    // Free walking: forward/side in the camera's ground plane, sliding along walls.
+    sit(seat) { seated = {seat, from: body.clone(), t: 0}; mode = 'sit'; },
+    stand() { if (seated) { seated = null; mode = 'walk'; } },
+    // Free walking relative to where the camera looks; the traveller turns to face the way they go.
     walk(camera, keys, dt) {
       const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
       const side = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
       const fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
-      const p = camera.position;
+      if (glide) return false;
       if (seated) {
-        if (forward || side) { seated = null; return false; }
+        if (forward || side) { world.stand(); return false; }
         seated.t = Math.min(1, seated.t + dt * .8);
         const s = seated.seat, k = THREE.MathUtils.smootherstep(seated.t, 0, 1);
-        const sh = (heightAt(s.position[0], s.position[2]) ?? s.position[1]) + SIT_EYE;
-        p.lerpVectors(seated.from, new THREE.Vector3(s.position[0], sh, s.position[2]), k);
+        const target = new THREE.Vector3(s.position[0], heightAt(s.position[0], s.position[2]) ?? s.position[1], s.position[2]);
+        body.lerpVectors(seated.from, target, k);
+        heading = Math.atan2(s.look[0] - s.position[0], s.look[2] - s.position[2]);
         return false;
       }
       let moved = false;
       if (forward || side) {
-        const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; dir.normalize();
-        const right = new THREE.Vector3().crossVectors(dir, up);
-        dir.multiplyScalar(forward).addScaledVector(right, side).normalize().multiplyScalar((fast ? RUN : WALK) * dt);
-        const from = {x: p.x, z: p.z};
-        if (canStep(from, p.x + dir.x, p.z + dir.z)) { p.x += dir.x; p.z += dir.z; moved = true; }
-        else if (canStep(from, p.x + dir.x, p.z)) { p.x += dir.x; moved = true; }
-        else if (canStep(from, p.x, p.z + dir.z)) { p.z += dir.z; moved = true; }
+        camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize();
+        const right = new THREE.Vector3().crossVectors(camDir, up);
+        const dir = camDir.clone().multiplyScalar(forward).addScaledVector(right, side).normalize();
+        const want = Math.atan2(dir.x, dir.z);
+        let dh = want - heading; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+        heading += dh * (1 - Math.exp(-dt * 10));
+        dir.multiplyScalar((fast ? RUN : WALK) * dt);
+        const from = {x: body.x, z: body.z};
+        if (canStep(from, body.x + dir.x, body.z + dir.z)) { body.x += dir.x; body.z += dir.z; moved = true; }
+        else if (canStep(from, body.x + dir.x, body.z)) { body.x += dir.x; moved = true; }
+        else if (canStep(from, body.x, body.z + dir.z)) { body.z += dir.z; moved = true; }
       }
-      const h = surface(p.x, p.z);
-      if (h !== null) p.y = THREE.MathUtils.damp(p.y, h + EYE, 14, dt);
+      const h = surface(body.x, body.z);
+      if (h !== null) body.y = THREE.MathUtils.damp(body.y, h, 14, dt);
       return moved;
     },
-    frame(dt, t, weather, direction, camera, state) {
+    // Paraglider free flight (K): the bird-kite controls, now carrying the traveller.
+    fly(camera, keys, dt, bounds) {
+      const forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
+      const side = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
+      const rise = Number(keys.has('KeyE') || keys.has('Space')) - Number(keys.has('KeyQ') || keys.has('ControlLeft') || keys.has('ControlRight'));
+      camera.getWorldDirection(camDir);
+      const next = flightStep(body.toArray(), camDir.toArray(), {forward, side, up: rise, fast: keys.has('ShiftLeft') || keys.has('ShiftRight')}, dt, bounds);
+      next[1] = Math.max(next[1], (surface(next[0], next[2]) ?? 0) + 8);
+      tmp.fromArray(next).sub(body);
+      if (tmp.x * tmp.x + tmp.z * tmp.z > 1e-6) heading = Math.atan2(tmp.x, tmp.z);
+      body.fromArray(next); mode = 'glide';
+      return !!(forward || side || rise);
+    },
+    takeOff() { world.stand(); body.y += 25; mode = 'glide'; },
+    land() {
+      const h = surface(body.x, body.z);
+      if (h === null) return false;
+      body.y = h; mode = 'walk'; return true;
+    },
+    // Camera: chase behind the traveller (third person) or at the eye (first person). The look
+    // direction stays the visitor's (drag to look), except on the arrival glide.
+    placeCamera(camera, dt) {
+      if (glide) {
+        const k = Math.min(glide.t / glide.seconds + .02, 1), tan = glide.curve.getTangentAt(k);
+        camera.position.copy(body).addScaledVector(tan, -10).add(new THREE.Vector3(0, 5.2, 0));
+        camera.lookAt(body.clone().addScaledVector(tan, 18).add(new THREE.Vector3(0, -3, 0)));
+        camera.rotation.z = 0;
+        return;
+      }
+      const sitting = mode === 'sit', flyingNow = mode === 'glide';
+      if (view === 'first') {
+        camera.position.copy(body).add(new THREE.Vector3(0, sitting ? SIT_EYE : EYE, 0));
+        return;
+      }
+      camera.getWorldDirection(camDir);
+      const eye = body.clone().add(new THREE.Vector3(0, sitting ? 1.0 : flyingNow ? 3.2 : 1.55, 0))
+        .addScaledVector(camDir, -(flyingNow ? 11 : sitting ? 3.4 : 4.4));
+      const g = surface(eye.x, eye.z);
+      if (g !== null) eye.y = Math.max(eye.y, g + .45);
+      camera.position.lerp(eye, 1 - Math.exp(-dt * 18));
+    },
+    frame(dt, t, weather, direction, camera) {
+      if (glide) {
+        glide.t += dt;
+        const k = Math.min(glide.t / glide.seconds, 1), e = k * k * (3 - 2 * k) * .25 + k * .75;
+        const tan = glide.curve.getTangentAt(e);
+        body.copy(glide.curve.getPointAt(e)); heading = Math.atan2(tan.x, tan.z);
+        if (k >= 1) world.endGlide();
+      }
+      speed = dt > 0 ? Math.hypot(body.x - lastBody.x, body.z - lastBody.z) / dt : 0;
+      lastBody.copy(body);
+      traveller.root.position.copy(body);
+      traveller.root.rotation.y = heading;
+      traveller.root.visible = view === 'third' || !!glide;
+      glider.visible = mode === 'glide';
+      traveller.update(dt, mode === 'glide' ? 0 : speed, mode, t);
+      magpie.update(dt, t, body, heading, speed, mode, surface);
       sun.position.copy(camera.position).addScaledVector(direction, 600); sun.target.position.copy(camera.position);
       sun.intensity = (2.1 - weather.storm * 1.5 - weather.snow * .6) * (1 - weather.dawn * .6);
       sun.color.setRGB(1, 1 - weather.sunset * .3, 1 - weather.sunset * .55);
       hemi.intensity = 1.05 - weather.storm * .35 - weather.dawn * .55;
       scene.fog.color.setRGB(.66 + weather.sunset * .26 - weather.storm * .30, .80 - weather.sunset * .2 - weather.storm * .36, .93 - weather.sunset * .32 - weather.storm * .40);
-      scene.fog.density = (state.flying ? .0006 : .0011) + weather.storm * .004 + weather.snow * .003;
+      scene.fog.density = (mode === 'glide' ? .0005 : .0011) + weather.storm * .004 + weather.snow * .003;
       sky.position.copy(camera.position);
       worldRain.position.copy(camera.position); worldSnow.position.copy(camera.position);
       worldRain.visible = weather.storm > .02; worldSnow.visible = weather.snow > .02;
@@ -299,7 +411,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     },
     stats() {
       return {id, staticTriangles, treeTriangles, trees: trees.length, walkCells: walk.walkableCells, seats: seats.length,
-        seated: !!seated, materials: cache.size};
+        seated: !!seated, gliding: !!glide, view, mode, body: body.toArray().map(v => +v.toFixed(2)), materials: cache.size};
     },
   };
   return world;

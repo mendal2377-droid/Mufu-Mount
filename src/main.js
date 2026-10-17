@@ -1850,6 +1850,7 @@ window.addEventListener("keydown", (e) => {
   if (city?.active && !e.repeat && state.ready) {
     if (e.code === "KeyG") { city.openPlaces(true); e.preventDefault(); return; }
     if (e.code === "KeyF") { city.interact(); e.preventDefault(); return; }
+    if (e.code === "KeyV") { city.toggleView(); e.preventDefault(); return; }
     if (e.code === "BracketRight" || e.code === "BracketLeft") { city.hop(e.code === "BracketRight" ? 1 : -1); e.preventDefault(); return; }
   }
   if (city && e.code === "KeyJ" && !e.repeat && state.ready) { city.passport(true); e.preventDefault(); return; }

@@ -76,7 +76,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   // Landmarks rebuilt in Blender (true metres, free walking) replace their atlas walk. Each is
   // fetched on first visit and kept; the atlas pin and its stamps stay as they are.
   const WORLDS={zhongshan:{spawn:'axis'}},worlds={};
-  let world=null,worldBounds=null,lastSeatHint=-10;
+  let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false;
   function exitWorld(){if(!world)return;world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
   async function enterWorld(p,opts){
     const id=p.id;
@@ -89,7 +89,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
     const g=w.meta.walk;worldBounds=new THREE.Box3(new THREE.Vector3(g.x0-150,-60,-(g.y0+g.ny*g.cell)-150),new THREE.Vector3(g.x0+g.nx*g.cell+150,700,-g.y0+150));
     const s=w.spawn(opts.spawn||WORLDS[id].spawn);setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
-    toast(`${p.zh} · ${w.meta.title} · WASD walk · Shift run · F sit · K fly`);
+    // Pins and menus arrive by paraglider: the descent shows the whole place and hides any
+    // remaining load. Programmatic entry (tests, debug) lands at once.
+    if(opts.drop){w.startGlide(s);toast(`${p.zh} · ${w.meta.title} · gliding in · any key to land`);}
+    else{w.placeAt(s);toast(`${p.zh} · ${w.meta.title} · WASD walk · Shift run · F sit · V view · K glide`);}
   }
   const bounds=new THREE.Box3().setFromPoints(built.rings.flat().map(p=>new THREE.Vector3(...p))).expandByScalar(500);
   const $=s=>document.querySelector(s),records=[];
@@ -231,17 +234,16 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     $('#passport-run-best').textContent=run.best?`Best ${run.best.toFixed(1)} s${run.medal?' · '+run.medal:''} · ${run.runs} run${run.runs>1?'s':''}`:`${course.rings.length} rings · about ${Math.round(course.length/34)} s at cruising speed`;
   }
   function frameWorld(dt,t,weather){
-    world.frame(dt,t,weather,cityDirection,camera,state);
-    if(state.flying){
-      const forward=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
-      const side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
-      const up=Number(keys.has('KeyE')||keys.has('Space'))-Number(keys.has('KeyQ')||keys.has('ControlLeft')||keys.has('ControlRight'));
-      const dir=new THREE.Vector3();camera.getWorldDirection(dir);
-      const next=flightStep(camera.position.toArray(),dir.toArray(),{forward,side,up,fast:keys.has('ShiftLeft')||keys.has('ShiftRight')},dt,worldBounds);
-      const h=world.ground(next[0],next[2]);next[1]=Math.max(next[1],(h??0)+12);camera.position.fromArray(next);
-      kite.bird.rotation.z=-side*.14+Math.sin(t*1.3)*.04;state.moving=!!(forward||side||up);return false;}
+    if(world.gliding&&(keys.size>0||worldSkip)){world.endGlide();toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);}
+    worldSkip=false;
+    const wasGliding=world.gliding;
+    world.frame(dt,t,weather,cityDirection,camera);
+    if(wasGliding&&!world.gliding)toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);
+    if(world.gliding){world.placeCamera(camera,dt);state.moving=false;return false;}
+    if(state.flying){state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
     state.moving=world.walk(camera,keys,dt);
-    if(t-lastSeatHint>6&&!world.seated&&world.nearestSeat(camera.position,2.5)){lastSeatHint=t;toast('F to sit');}
+    world.placeCamera(camera,dt);
+    if(t-lastSeatHint>6&&!world.seated&&world.nearestSeat(null,2.5)){lastSeatHint=t;toast('F to sit');}
     const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
   }
   const api={...built,data,game,gameView,refreshPins,renderPassport,renderPlaces,
@@ -283,11 +285,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       $('#nanjing-home').hidden=true;$('#city-menu').close();document.body.classList.remove('city-mode');
       $('.brand span').innerHTML='Mufu <small>Choose a place to wander.</small>';$('.brand').setAttribute('aria-label','Mufu home');},
     toggleFlight(){if(state.overview)api.enter(selected.id);if(!active)return;
-      if(world){world.stand();
-        if(state.flying){const h=world.ground(camera.position.x,camera.position.z);
-          if(h===null){const s=world.spawn();camera.position.fromArray(s.position);}else camera.position.y=h+1.65;
+      if(world){if(world.gliding)return;
+        if(state.flying){if(!world.land()){const s=world.spawn();world.placeAt(s);setArrivalCamera(camera,s.position,s.look);}
           flying(false);toast('Landed');}
-        else{flying(true);camera.position.y+=25;toast('WASD fly · E / Space up · Q down · Shift faster · K land');}
+        else{world.takeOff();flying(true);kite.bird.visible=false;toast('Paraglider · WASD steer · E / Space up · Q down · K land');}
         return;}
       if(state.flying){const landing=landingPoint(camera.position.toArray(),routes);camera.position.fromArray(landing.position);
         currentRoute=landing.route;selected=nearestPlace(camera.position,1e9)||selected;flying(false);gameView.cancelRun('Wind run ended');gameView.setCurrent(selected.id);toast('Landed on the nearest path');}
@@ -343,18 +344,21 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       const footstep=state.moving&&!state.flying&&t-lastFootstep>.52;if(footstep)lastFootstep=t;return footstep;
     },resize:frameMap,
     // F: sit on the nearest seat (benches, the Music Stage terraces), or stand up again.
-    interact(){if(!world||state.overview||state.flying)return;
+    interact(){if(!world||state.overview||state.flying||world.gliding)return;
       if(world.seated){world.stand();toast('Standing up');return;}
-      const seat=world.nearestSeat(camera.position);
+      const seat=world.nearestSeat();
       if(!seat){toast('Nothing to sit on here');return;}
-      world.sit(camera,seat);
+      world.sit(seat);
       const [lx,ly,lz]=seat.look,dx=lx-seat.position[0],dz=lz-seat.position[2];
       camera.rotation.set(-.06,Math.atan2(-dx,-dz),0,'YXZ');
       toast('Sitting · watch the birds · move to stand');},
     get world(){return world;},
+    // V: third person (the traveller and the magpie in view) or first person.
+    toggleView(){if(!world||state.overview)return;toast(world.toggleView()==='third'?'Third person':'First person');},
     // Debug/test seam: stand at a named spawn of the current Blender world (axis, stair, hall, music).
-    worldSpawn(name){if(!world)return null;world.stand();flying(false);const s=world.spawn(name);
-      setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();return s;},
+    worldSpawn(name,{glide=false}={}){if(!world)return null;flying(false);const s=world.spawn(name);
+      setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
+      if(glide)world.startGlide(s);else world.placeAt(s);return s;},
     menu(){controls.unlock();keys.clear();$('#city-menu-title').textContent=selected.zh;
       $('#city-sound').textContent=$('#sound').textContent==='Sound on'?'Mute nature sound':'Enable nature sound';$('#city-menu').showModal();},
     stats(){return {world:world?.stats()||null,active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,
@@ -368,7 +372,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   $('#places-map').onclick=()=>{$('#city-places').close();api.showPlan();};
   $('#passport-run').onclick=()=>{api.passport(false);api.startWindRun();};
   $('#passport-reset').onclick=()=>{if(confirm('Clear all lanterns, seals and your best run?'))game.reset();};
-  addEventListener('pointerdown',()=>{if(arrival)arrival.skip=true;},true);
+  addEventListener('pointerdown',()=>{if(arrival)arrival.skip=true;if(world?.gliding)worldSkip=true;},true);
   refreshPins();
   $('#city-scope').onchange=e=>api.showPlan(e.target.value);$('#city-reset').onclick=frameMap;
   $('#city-map-return').onclick=()=>api.showPlan();$('#city-menu-close').onclick=()=>$('#city-menu').close();
