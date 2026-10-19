@@ -32,7 +32,8 @@ try {
   report.arrivals = await page.evaluate(() => {
     const m = window.__mufu, out = [];
     // Mountains are viewed from a ridge on purpose, so the road-facing rule is for the rest.
-    for (const p of m.city.places.filter(q => q.kind !== 'mount')) {
+    // Blender-world pins land in their own scene (tests/worlds-browser.mjs checks those).
+    for (const p of m.city.places.filter(q => q.kind !== 'mount' && !m.city.worldPins.includes(q.id))) {
       m.city.enter(p.id); m.step(3, .1);
       const cam = m.camera, dir = cam.getWorldDirection(cam.position.clone());
       const route = m.city.routes[p.route];

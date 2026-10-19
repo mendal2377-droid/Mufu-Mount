@@ -350,7 +350,42 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   traveller.root.add(glider); glider.visible = false;
   scene.add(traveller.root, magpie.root);
   const body = new THREE.Vector3(), lastBody = new THREE.Vector3();
-  let heading = 0, speed = 0, seated = null, glide = null, view = 'third', mode = 'walk';
+  let heading = 0, speed = 0, seated = null, glide = null, view = 'third', mode = 'walk', ride = null;
+
+  // --- Pleasure boats (画舫) on a river route: gold roofs, red hulls, lit windows ------------------------
+  function pleasureBoat() {
+    const g = new THREE.Group(), skin = (c, e = 0, ei = .6) => new THREE.MeshToonMaterial({color: c, gradientMap: bands, emissive: e, emissiveIntensity: ei});
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 12), skin(0x8c2a1c));
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.8, 8.6), skin(0x5c3326));
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(2.86, .9, 8.0), skin(0xffd28a, 0xffb347, .9));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(3.6, .3, 9.8), skin(0xd9a23a, 0x6b4a10, .35));
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(1.0, .3, 10.2), skin(0xe8b84a, 0x6b4a10, .35));
+    hull.position.y = .3; cabin.position.y = 1.7; glow.position.y = 1.8; roof.position.y = 2.75; ridge.position.y = 3.0;
+    g.add(hull, cabin, glow, roof, ridge);
+    for (const z of [-5.2, 5.2]) { const l = new THREE.Mesh(new THREE.BoxGeometry(.35, .5, .35), skin(0xe8473a, 0xe8473a, .9)); l.position.set(0, 2.3, z); g.add(l); }
+    return g;
+  }
+  const routes = Object.fromEntries(Object.entries(meta.rides || {}).filter(([, pts]) => pts.length > 3).map(([k, pts]) => {
+    const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)));
+    return [k, {curve, length: curve.getLength()}];
+  }));
+  const boats = [];
+  for (const [name, r] of Object.entries(routes)) {
+    const n = Math.max(2, Math.floor(r.length / 160));
+    for (let i = 0; i < n; i++) { const m = pleasureBoat(); scene.add(m); boats.push({route: r, mesh: m, u: i / n, dir: i % 2 ? -1 : 1}); }
+  }
+  const riderBoat = Object.keys(routes).length ? pleasureBoat() : null;
+  if (riderBoat) { riderBoat.visible = false; scene.add(riderBoat); }
+  function placeBoat(mesh, route, u, dir) {
+    const p = route.curve.getPointAt(u), t = route.curve.getTangentAt(u).multiplyScalar(dir);
+    mesh.position.copy(p); mesh.rotation.y = Math.atan2(t.x, t.z);
+    return {p, t};
+  }
+  function closestU(route, x, z) {
+    let best = 0, bd = Infinity;
+    for (let k = 0; k <= 200; k++) { const q = route.curve.getPointAt(k / 200), d = (q.x - x) ** 2 + (q.z - z) ** 2; if (d < bd) { bd = d; best = k / 200; } }
+    return best;
+  }
   const camDir = new THREE.Vector3(), tmp = new THREE.Vector3();
 
   function feetAt(x, z, fallback) { return surface(x, z) ?? fallback; }
@@ -418,6 +453,27 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       }
       return best?.g || null;
     },
+    nearestDock(radius = 5) {
+      for (const [name, d] of Object.entries(meta.docks || {})) if (Math.hypot(d.position[0] - body.x, d.position[2] - body.z) < radius) return {name, ...d};
+      return null;
+    },
+    get riding() { return !!ride; },
+    // Board the pleasure boat at a dock: it sails the route to its far end, turns and brings the
+    // visitor back to the dock. Any walking key steps ashore at once.
+    board(dock) {
+      const route = routes[dock.name] || Object.values(routes)[0];
+      if (!route || !riderBoat) return false;
+      const u0 = closestU(route, dock.position[0], dock.position[2]);
+      ride = {route, u: u0, u0, dir: u0 < .5 ? 1 : -1, turned: false, dock};
+      riderBoat.visible = true; seated = null; mode = 'sit';
+      return true;
+    },
+    leaveBoat() {
+      if (!ride) return;
+      body.set(ride.dock.position[0], heightAt(ride.dock.position[0], ride.dock.position[2] + 1.5) ?? ride.dock.position[1] + 1, ride.dock.position[2]);
+      const h = surface(body.x, body.z); if (h !== null) body.y = h;
+      ride = null; riderBoat.visible = false; mode = 'walk';
+    },
     nearestBell(radius = 3.5) {
       for (const b of Object.values(meta.bells || {})) if (Math.hypot(b.position[0] - body.x, b.position[2] - body.z) < radius) return b;
       return null;
@@ -438,6 +494,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const side = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
       const fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
       if (glide) return false;
+      if (ride) { if (forward || side) world.leaveBoat(); return false; }
       if (seated) {
         if (forward || side) { world.stand(); return false; }
         seated.t = Math.min(1, seated.t + dt * .8);
@@ -496,7 +553,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         camera.rotation.z = 0;
         return;
       }
-      const sitting = mode === 'sit', flyingNow = mode === 'glide';
+      const sitting = mode === 'sit' && !ride, flyingNow = mode === 'glide';
+      if (ride && view === 'third') {
+        // On the boat: a little behind and above the cabin roof, looking down the river.
+        camera.getWorldDirection(camDir);
+        const eye = body.clone().add(new THREE.Vector3(0, 3.4, 0)).addScaledVector(camDir, -7.5);
+        camera.position.lerp(eye, 1 - Math.exp(-dt * 10));
+        return;
+      }
       if (view === 'first') {
         camera.position.copy(body).add(new THREE.Vector3(0, sitting ? SIT_EYE : EYE, 0));
         return;
@@ -537,6 +601,20 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       worldRain.visible = weather.storm > .02; worldSnow.visible = weather.snow > .02;
       updatePigeons(t, dt, !!seated);
       updatePetals(t, dt, body);
+      for (const b of boats) {
+        b.u += b.dir * 1.4 * dt / b.route.length;
+        if (b.u > 1) { b.u = 1; b.dir = -1; } else if (b.u < 0) { b.u = 0; b.dir = 1; }
+        placeBoat(b.mesh, b.route, b.u, b.dir);
+        b.mesh.position.y += Math.sin(t * 1.3 + b.u * 40) * .04;
+      }
+      if (ride) {
+        ride.u += ride.dir * 1.6 * dt / ride.route.length;
+        if (ride.u >= 1 || ride.u <= 0) { ride.u = THREE.MathUtils.clamp(ride.u, 0, 1); ride.dir *= -1; ride.turned = true; }
+        const {p, t: tan} = placeBoat(riderBoat, ride.route, ride.u, ride.dir);
+        body.set(p.x, p.y + 1.2, p.z).addScaledVector(tan, -3.2);
+        heading = Math.atan2(tan.x, tan.z);
+        if (ride.turned && Math.abs(ride.u - ride.u0) < .004) world.leaveBoat();
+      }
     },
     stats() {
       return {id, staticTriangles, treeTriangles, trees: trees.length, walkCells: walk.walkableCells, seats: seats.length,

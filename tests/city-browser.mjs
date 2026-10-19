@@ -33,7 +33,8 @@ try{
   const anchors=await page.evaluate(()=>Array.from(document.querySelectorAll('.city-pin:not([hidden])')).map(b=>{
     const r=b.querySelector('.city-dot').getBoundingClientRect();return Math.hypot(r.x+r.width/2-parseFloat(b.style.left),r.y+r.height/2-parseFloat(b.style.top));}));
   assert.ok(anchors.every(d=>d<1));
-  for(const id of ['qinhuai','bridge','niushou','zhongshan','eye','zijin','qixia','xuanwu']){
+  // Blender-world pins are covered by tests/worlds-browser.mjs.
+  for(const id of await page.evaluate(()=>['qinhuai','bridge','niushou','zhongshan','eye','zijin','qixia','xuanwu'].filter(i=>!window.__mufu.city.worldPins.includes(i)))){
     await page.evaluate(id=>{window.__mufu.city.enter(id);window.__mufu.step(2,.1);},id);
     assert.equal(await page.locator('#walk-environment').isVisible(),true);
     assert.equal(await page.locator('#hud').isVisible(),false);

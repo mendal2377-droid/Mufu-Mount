@@ -52,6 +52,19 @@ SETTINGS = {
                    'music': 'the Music Stage', 'meiling': 'Meiling Palace', 'meiling-terrace': 'the Phoenix Terrace'},
         'zh': '中山陵 · 音乐台',
     },
+    'oldsouth': {
+        'static': ('Ground', 'Water', 'Temple', 'Town', 'Walls', 'City', 'Gates'),
+        'grids': [{'name': 'fuzimiao', 'x0': -315.0, 'x1': 355.0, 'y0': -375.0, 'y1': 135.0},
+                  {'name': 'south', 'x0': -815.0, 'x1': 215.0, 'y0': -1355.0, 'y1': -745.0, 'cell': 1.5}],
+        'title': 'The Qinhuai, Fuzimiao, Laomendong & Zhonghua Gate',
+        'zh': '秦淮河 · 夫子庙 · 老门东 · 中华门',
+        'fog': 0.0007,
+        'labels': {'qinhuai': 'the Qinhuai River', 'fuzimiao': 'the Confucius Temple', 'zhonghua': 'Zhonghua Gate',
+                   'mendong': 'Laomendong', 'baoen': "the Bao'en Pagoda", 'wall': 'the top of Zhonghua Gate'},
+        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). River, banks, bridges, lanes, walls and house '
+                      'footprints: OpenStreetMap contributors (ODbL). Architecture from published descriptions; '
+                      'see research/oldsouth/FACTS.md.',
+    },
     'north': {
         'static': ('Ground', 'Water', 'Temple', 'Walls', 'City', 'Gates'),
         # Jiming hill at 1 m (stairs); the island shore at 1.5 m (flat lawns and paths).
@@ -162,6 +175,15 @@ def named_points(prefix):
     return out
 
 
+def _rides():
+    out = {}
+    for o in sorted(bpy.context.scene.objects, key=lambda o: o.name):
+        if o.name.startswith('Ride '):
+            route = o.name.split(' ')[1]
+            out.setdefault(route, []).append(to_three(o.location))
+    return out
+
+
 def export_static(static):
     bpy.ops.object.select_all(action='DESELECT')
     groups = {}
@@ -233,6 +255,9 @@ def main():
         'spawns': named_points('Spawn'),
         'gates': gates,
         'bells': named_points('Bell'),
+        'docks': named_points('Dock'),
+        # Boat routes: 'Ride <route> NNN' empties in order, as three.js points.
+        'rides': _rides(),
         'seats': named_points('Seat'),
         'trees': len(trees_out),
         'staticTriangles': tris,

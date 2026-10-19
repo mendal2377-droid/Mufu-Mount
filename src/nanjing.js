@@ -78,7 +78,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   // fetched on first visit and kept; the atlas pin and its stamps stay as they are.
   // Pin id -> the Blender world it opens and where it lands. Neighbouring pins share a world.
   const WORLDS={zhongshan:{world:'zhongshan',spawn:'axis'},
-    jiming:{world:'north',spawn:'jiming',weather:'morning'},xuanwu:{world:'north',spawn:'xuanwu',weather:'morning'}},worlds={};
+    jiming:{world:'north',spawn:'jiming',weather:'morning'},xuanwu:{world:'north',spawn:'xuanwu',weather:'morning'},
+    // The old south city is best at dusk, when the lanterns and windows glow.
+    qinhuai:{world:'oldsouth',spawn:'qinhuai',weather:'sunset'},zhonghua:{world:'oldsouth',spawn:'zhonghua',weather:'sunset'},
+    mendong:{world:'oldsouth',spawn:'mendong',weather:'sunset'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
   const music=audio?createMusic(audio):null;
   function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
@@ -239,7 +242,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   }
   function frameWorld(dt,t,weather){
     lastWeather=weather;
-    if(music?.playing&&!world.seated)music.stop();
+    if(music?.playing&&!world.seated&&!world.riding)music.stop();
     music?.update();
     if(world.gliding&&(keys.size>0||worldSkip)){world.endGlide();toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);}
     worldSkip=false;
@@ -256,6 +259,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(t-lastSeatHint>6&&!world.seated){const gate=world.nearestGate();
       if(gate){lastSeatHint=t;toast(`Moon gate · F to glide to ${world.label(gate.target)}`);}
       else if(world.nearestBell()){lastSeatHint=t;toast('Temple bell · F to ring it');}
+      else if(world.nearestDock()){lastSeatHint=t;toast('Pleasure boats · F to go aboard');}
       else if(world.nearestSeat(null,2.5)){lastSeatHint=t;toast('F to sit');}}
     const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
   }
@@ -360,6 +364,11 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // F: sit on the nearest seat (benches, the Music Stage terraces), or stand up again.
     interact(){if(!world||state.overview||state.flying||world.gliding)return;
       if(world.seated){world.stand();music?.stop();toast('Standing up');return;}
+      if(world.riding){world.leaveBoat();music?.stop();toast('Ashore');return;}
+      // The pleasure-boat dock: sail the river and come back here.
+      const dock=world.nearestDock();
+      if(dock&&world.board(dock)){if(audio&&!audio.started&&soundButton)soundButton.click();
+        setTimeout(()=>music?.start(world.id,lastWeather),400);toast('Aboard a painted boat · drag to look · any key to step ashore');return;}
       // A moon gate: take off from here and glide to the scene it leads to.
       const gate=world.nearestGate();
       if(gate){world.startGlide(world.spawn(gate.target),{from:true});toast(`Gliding to ${world.label(gate.target)} · any key to land`);return;}
@@ -374,6 +383,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       camera.rotation.set(-.06,Math.atan2(-dx,-dz),0,'YXZ');
       toast('Sitting · listen · watch the birds · move to stand');},
     get world(){return world;},
+    // Pins that open a Blender world instead of an atlas walk (tests skip the atlas checks for them).
+    get worldPins(){return Object.keys(WORLDS);},
     // V: third person (the traveller and the magpie in view) or first person.
     toggleView(){if(!world||state.overview)return;toast(world.toggleView()==='third'?'Third person':'First person');},
     // Debug/test seam: stand at a named spawn of the current Blender world (axis, stair, hall, music).

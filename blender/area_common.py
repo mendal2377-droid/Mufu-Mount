@@ -318,3 +318,34 @@ def render_views(scene, cams, out_dir, prefix):
         scene.render.filepath = str(out_dir / f'{prefix}-{k}.jpg')
         bpy.ops.render.render(write_still=True)
         print('RENDERED', k, flush=True)
+
+
+def oriented_box(pts):
+    """Minimum-area rectangle of a footprint: (centre, width, depth, angle). Width runs along angle."""
+    pts = pts[:-1] if pts[0] == pts[-1] else pts
+    best = None
+    for i in range(len(pts)):
+        (x0, y0), (x1, y1) = pts[i], pts[(i + 1) % len(pts)]
+        a = math.atan2(y1 - y0, x1 - x0)
+        c, s = math.cos(-a), math.sin(-a)
+        rx = [x * c - y * s for x, y in pts]
+        ry = [x * s + y * c for x, y in pts]
+        w, d = max(rx) - min(rx), max(ry) - min(ry)
+        if best is None or w * d < best[0]:
+            cx, cy = (max(rx) + min(rx)) / 2, (max(ry) + min(ry)) / 2
+            ca, sa = math.cos(a), math.sin(a)
+            best = (w * d, (cx * ca - cy * sa, cx * sa + cy * ca), w, d, a)
+    _, centre, w, d, a = best
+    if d > w:
+        w, d, a = d, w, a + math.pi / 2
+    return centre, w, d, a
+
+
+def polyline_offset(pts, offset):
+    """Offset an open polyline sideways (left positive)."""
+    out = []
+    for i, p in enumerate(pts):
+        a, b = Vector(pts[max(0, i - 1)]), Vector(pts[min(len(pts) - 1, i + 1)])
+        t = (b - a).normalized()
+        out.append(Vector(p) + Vector((-t.y, t.x)) * offset)
+    return out
