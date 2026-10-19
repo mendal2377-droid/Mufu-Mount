@@ -51,7 +51,7 @@ function treeGeometry(spec, seed) {
     g.scale(1, .8, 1); g.translate(0, spec.h * .75, 0);
     const p = g.attributes.position, n = g.attributes.normal, v = new THREE.Vector3(), c = new THREE.Vector3(0, spec.h * .75, 0);
     for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).sub(c).normalize(); n.setXYZ(i, v.x, v.y, v.z); }
-    parts.push(colour(g, spec.crown));
+    parts.push(colour(g, '#ffffff'));
   } else if (spec.cone) {
     for (let k = 0; k < spec.cone; k++) {
       const t = k / spec.cone, g = new THREE.ConeGeometry(spec.r * (1 - t * .75), spec.h * .42, 8, 1).toNonIndexed();
@@ -164,9 +164,17 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   for (const [kind, list] of Object.entries(byKind)) {
     const spec = TREES[kind] || TREES.broadleaf, geo = treeGeometry(spec, 101 + kind.length * 17);
     const inst = new THREE.InstancedMesh(geo, treeMat, list.length);
+    // Per-tree tint: far crowns pick from the canopy palette so the forest reads as painted
+    // patches, near trees vary a little in value.
+    // Far crowns are white in the geometry, so the instance colour is the colour.
+    const tints = spec.far ? ['#5A8A3C', '#6E9B3E', '#47733A', '#86A84A', '#3E6A3E'].map(h => new THREE.Color(h)) : null;
+    const tint = new THREE.Color();
     list.forEach((t, i) => {
       q.setFromAxisAngle(up, t[4]); sc.setScalar(t[5]); pos.set(t[1], t[2], t[3]);
       inst.setMatrixAt(i, m4.compose(pos, q, sc));
+      const r = Math.abs(Math.sin(t[1] * 12.9898 + t[3] * 78.233)) % 1;
+      if (tints) tint.copy(tints[Math.floor(r * tints.length) % tints.length]); else tint.setScalar(.9 + r * .2);
+      inst.setColorAt(i, tint);
     });
     inst.computeBoundingSphere(); inst.name = `trees ${kind}`;
     scene.add(inst);
@@ -281,6 +289,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     },
     ground: (x, z) => surface(x, z),
     get body() { return body; },
+    get heading() { return heading; },
     get view() { return view; },
     get gliding() { return !!glide; },
     get seated() { return seated; },

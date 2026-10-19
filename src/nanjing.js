@@ -9,10 +9,11 @@ import {arrivalFlight} from './city-arrival.js';
 import {createCityGame} from './city-game-view.js';
 import {STAMPS,FACTS,rankFor,MUFU_PHOTOS_NEEDED} from './city-game.js';
 import {loadLandmarkWorld} from './landmark-world.js';
+import {createMusic} from './generative-music.js';
 
 // A separate illustrated atlas: its compressed map coordinates must never be
 // confused with the photo-informed, unregistered Mufu reconstruction.
-export async function createNanjing({camera,orbit,controls,postfx,state,shared,baseScene,kite,keys,reset,onMufu,onWeather,toast,rain,snow}) {
+export async function createNanjing({camera,orbit,controls,postfx,state,shared,baseScene,kite,keys,reset,onMufu,onWeather,toast,rain,snow,audio,soundButton}) {
   const response=await fetch('/city/nanjing.json');
   if(!response.ok)throw Error('Nanjing map unavailable');
   const data=await response.json();
@@ -76,8 +77,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   // Landmarks rebuilt in Blender (true metres, free walking) replace their atlas walk. Each is
   // fetched on first visit and kept; the atlas pin and its stamps stay as they are.
   const WORLDS={zhongshan:{spawn:'axis'}},worlds={};
-  let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false;
-  function exitWorld(){if(!world)return;world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
+  let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
+  const music=audio?createMusic(audio):null;
+  function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
   async function enterWorld(p,opts){
     const id=p.id;
     if(!worlds[id]){toast(`${p.zh} · on the wind…`);
@@ -234,11 +236,17 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     $('#passport-run-best').textContent=run.best?`Best ${run.best.toFixed(1)} s${run.medal?' · '+run.medal:''} · ${run.runs} run${run.runs>1?'s':''}`:`${course.rings.length} rings · about ${Math.round(course.length/34)} s at cruising speed`;
   }
   function frameWorld(dt,t,weather){
+    lastWeather=weather;
+    if(music?.playing&&!world.seated)music.stop();
+    music?.update();
     if(world.gliding&&(keys.size>0||worldSkip)){world.endGlide();toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);}
     worldSkip=false;
     const wasGliding=world.gliding;
     world.frame(dt,t,weather,cityDirection,camera);
-    if(wasGliding&&!world.gliding)toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);
+    if(wasGliding&&!world.gliding){
+      // Touchdown: level the chase camera behind the traveller, looking where they ran out.
+      camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');
+      toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);}
     if(world.gliding){world.placeCamera(camera,dt);state.moving=false;return false;}
     if(state.flying){state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
     state.moving=world.walk(camera,keys,dt);
@@ -345,13 +353,16 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     },resize:frameMap,
     // F: sit on the nearest seat (benches, the Music Stage terraces), or stand up again.
     interact(){if(!world||state.overview||state.flying||world.gliding)return;
-      if(world.seated){world.stand();toast('Standing up');return;}
+      if(world.seated){world.stand();music?.stop();toast('Standing up');return;}
       const seat=world.nearestSeat();
       if(!seat){toast('Nothing to sit on here');return;}
       world.sit(seat);
+      // Sitting is a gesture, so sound may start here; a visitor who muted it keeps it muted.
+      if(audio&&!audio.started&&soundButton)soundButton.click();
+      setTimeout(()=>{if(world?.seated&&music?.start(world.id,lastWeather)&&!audio.enabled)toast('Sound is off · turn it on in the menu to hear the music');},400);
       const [lx,ly,lz]=seat.look,dx=lx-seat.position[0],dz=lz-seat.position[2];
       camera.rotation.set(-.06,Math.atan2(-dx,-dz),0,'YXZ');
-      toast('Sitting · watch the birds · move to stand');},
+      toast('Sitting · listen · watch the birds · move to stand');},
     get world(){return world;},
     // V: third person (the traveller and the magpie in view) or first person.
     toggleView(){if(!world||state.overview)return;toast(world.toggleView()==='third'?'Third person':'First person');},
@@ -361,7 +372,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       if(glide)world.startGlide(s);else world.placeAt(s);return s;},
     menu(){controls.unlock();keys.clear();$('#city-menu-title').textContent=selected.zh;
       $('#city-sound').textContent=$('#sound').textContent==='Sound on'?'Mute nature sound':'Enable nature sound';$('#city-menu').showModal();},
-    stats(){return {world:world?.stats()||null,active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,
+    stats(){return {world:world?{...world.stats(),music:!!music?.playing}:null,active,scope,place:selected.id,landmarks:places.length,triangles:built.triangleCount+(built.landscape.stats.extraTriangles||0),ships:boats.length,illustrated:true,
       art:{style:'gouache-ink',foliageReady:!!foliage.image,meadowReady:!!meadow.image,architectureReady:[tiles,brick,ochre,glass].every(t=>!!t.image),landmarkDesign:'photo-informed-v2',water:'crossing-brush-ripples'},terrain:built.terrain.stats,landscape:{...built.landscape.stats}};},
   };
   $('#city-passport-open').onclick=()=>api.passport(true);$('#city-passport-plan').onclick=()=>api.passport(true);

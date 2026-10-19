@@ -709,7 +709,7 @@ async function load() {
     showPlan();
     city = await createNanjing({camera,orbit,controls,postfx,state,shared:u,baseScene:scene,kite,keys,
       reset:()=>{stopWalks();feel.unapply();feel.reset();drag=null;keys.clear();},onMufu:showPlan,onWeather:setWeather,toast,
-      rain:rainLines,snow:particles});
+      rain:rainLines,snow:particles,audio,soundButton:$("#sound")});
     city.game.noteMufu(foundMemories.length);
     city.showPlan();
     animate();

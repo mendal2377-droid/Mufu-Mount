@@ -726,9 +726,9 @@ def main():
     cam_objs = {k: camera(scene, 'Cam ' + k, *v) for k, v in cams.items()}
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))
     stats = {'forest_trees': n, 'far_canopy': n_far, 'trees_total': len(c_trees.objects),
+             # Iterate the collections: o.users_collection scans them all, per object (minutes at 24k).
              'triangles_static': sum(sum(len(p.vertices) - 2 for p in o.data.polygons)
-                                     for o in bpy.data.objects if o.type == 'MESH'
-                                     and o.users_collection[0].name in ('Ground', 'Mausoleum axis', 'Music Stage'))}
+                                     for c in (c_ground, c_axis, c_music) for o in c.objects if o.type == 'MESH')}
     print('BUILD', json.dumps(stats), flush=True)
     if RENDER:
         scene.eevee.taa_render_samples = 32

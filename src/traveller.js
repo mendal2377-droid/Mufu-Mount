@@ -151,6 +151,9 @@ export function createMagpie(bands) {
       if (vel.lengthSq() > .02) root.rotation.y = THREE.MathUtils.lerp(root.rotation.y, Math.atan2(vel.x, vel.z), 1 - Math.exp(-dt * 6));
       const flap = flying ? Math.sin(t * (mode === 'glide' ? 9 : 16)) * .9 : -.2;
       wingL.rotation.z = flap; wingR.rotation.z = -flap;
+      // Folded along the back when perched, spread only in the air.
+      const fold = THREE.MathUtils.damp(wingL.scale.x, flying ? 1 : .35, 8, dt);
+      wingL.scale.set(fold, 1, 1); wingR.scale.set(-fold, 1, 1);
       tail.rotation.x = flying ? -.1 : -.35 + Math.sin(t * 5) * .05;
     },
   };
