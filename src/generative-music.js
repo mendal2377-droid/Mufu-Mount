@@ -151,5 +151,20 @@ export function createMusic(audio) {
       out.gain.setTargetAtTime(0, ctx.currentTime, .8);
     },
     update() { if (playing && ctx) schedule(); },
+    // A temple bell: inharmonic partials of a struck bronze bell, a slow beating hum underneath.
+    bell() {
+      if (!ensure()) return;
+      const t = ctx.currentTime + .02, f = 98;
+      out.gain.cancelScheduledValues(ctx.currentTime); out.gain.setTargetAtTime(Math.max(out.gain.value, 2.2), ctx.currentTime, .05);
+      [[.5, .5, 9], [1, .9, 7], [2.0, .5, 5], [2.76, .35, 4], [5.4, .18, 2.5], [8.93, .08, 1.2]].forEach(([mul, amp, dec], i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = f * mul * (i === 0 ? 1.004 : 1);
+        g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.06 * amp, t + .01);
+        g.gain.exponentialRampToValueAtTime(.0001, t + dec);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t + dec + .1);
+        o.onended = () => { o.disconnect(); g.disconnect(); };
+      });
+      if (!playing) setTimeout(() => { if (!playing) out.gain.setTargetAtTime(0, ctx.currentTime, 2); }, 9000);
+    },
   };
 }

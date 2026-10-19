@@ -52,6 +52,19 @@ SETTINGS = {
                    'music': 'the Music Stage', 'meiling': 'Meiling Palace', 'meiling-terrace': 'the Phoenix Terrace'},
         'zh': '中山陵 · 音乐台',
     },
+    'north': {
+        'static': ('Ground', 'Water', 'Temple', 'Walls', 'City', 'Gates'),
+        # Jiming hill at 1 m (stairs); the island shore at 1.5 m (flat lawns and paths).
+        'grids': [{'name': 'jiming', 'x0': -255.0, 'x1': 315.0, 'y0': -315.0, 'y1': 315.0},
+                  {'name': 'islands', 'x0': -815.0, 'x1': 135.0, 'y0': 825.0, 'y1': 1495.0, 'cell': 1.5}],
+        'title': 'Jiming Temple, Taicheng & Xuanwu Lake',
+        'fog': 0.00042,
+        'zh': '鸡鸣寺 · 台城 · 玄武湖',
+        'labels': {'jiming': 'Jiming Temple', 'pagoda': 'the Yaoshi Pagoda', 'cherry': 'Jiming Road',
+                   'taicheng': 'the Taicheng wall', 'xuanwu': 'Xuanwu Lake'},
+        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Lake, islands, walls, streets and buildings: '
+                      'OpenStreetMap contributors (ODbL). Architecture modelled from published descriptions; see research/north/FACTS.md.',
+    },
 }
 
 
@@ -59,7 +72,7 @@ def to_three(v):
     return [round(v[0], 3), round(v[2], 3), round(-v[1], 3)]
 
 
-STATIC_COLLECTIONS = ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates')
+STATIC_COLLECTIONS = SETTINGS[SCENE_ID].get('static', ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates'))
 CAST_EXCLUDE = ('Trees', 'Gates')
 
 
@@ -89,15 +102,16 @@ def walk_grid(trees, grid):
     for lc in layers:
         lc.exclude = True
     dg = bpy.context.evaluated_depsgraph_get()
-    nx = int((grid['x1'] - grid['x0']) / CELL)
-    ny = int((grid['y1'] - grid['y0']) / CELL)
+    cell = grid.get('cell', CELL)
+    nx = int((grid['x1'] - grid['x0']) / cell)
+    ny = int((grid['y1'] - grid['y0']) / cell)
     heights = [NO_WALK] * (nx * ny)
     mats_cache = {}
     walk_count = 0
     for j in range(ny):
-        y = grid['y0'] + (j + 0.5) * CELL
+        y = grid['y0'] + (j + 0.5) * cell
         for i in range(nx):
-            x = grid['x0'] + (i + 0.5) * CELL
+            x = grid['x0'] + (i + 0.5) * cell
             hit, loc, normal, index, obj, _ = s.ray_cast(dg, Vector((x, y, 800.0)), Vector((0, 0, -1)))
             if not hit or normal.z < 0.5:
                 continue
@@ -118,11 +132,11 @@ def walk_grid(trees, grid):
         if not (grid['x0'] - 3 < x < grid['x1'] + 3 and grid['y0'] - 3 < y < grid['y1'] + 3):
             continue
         r = TRUNK_RADIUS * max(o.scale.x, 0.6)
-        for jj in range(int((y - r - grid['y0']) / CELL), int((y + r - grid['y0']) / CELL) + 1):
-            for ii in range(int((x - r - grid['x0']) / CELL), int((x + r - grid['x0']) / CELL) + 1):
+        for jj in range(int((y - r - grid['y0']) / cell), int((y + r - grid['y0']) / cell) + 1):
+            for ii in range(int((x - r - grid['x0']) / cell), int((x + r - grid['x0']) / cell) + 1):
                 if 0 <= ii < nx and 0 <= jj < ny:
-                    cx = grid['x0'] + (ii + 0.5) * CELL
-                    cy = grid['y0'] + (jj + 0.5) * CELL
+                    cx = grid['x0'] + (ii + 0.5) * cell
+                    cy = grid['y0'] + (jj + 0.5) * cell
                     if math.hypot(cx - x, cy - y) <= r:
                         heights[jj * nx + ii] = NO_WALK
     for lc in layers:
@@ -194,7 +208,8 @@ def main():
     grids, heights, walk_count = [], [], 0
     for g in cfg['grids']:
         nx, ny, h, n = walk_grid(trees, g)
-        grids.append({'name': g['name'], 'nx': nx, 'ny': ny, 'x0': g['x0'], 'y0': g['y0'], 'offset': len(heights)})
+        grids.append({'name': g['name'], 'nx': nx, 'ny': ny, 'x0': g['x0'], 'y0': g['y0'], 'cell': g.get('cell', CELL),
+                      'offset': len(heights)})
         heights += h
         walk_count += n
     lap('walk grids')
@@ -214,13 +229,15 @@ def main():
         # Grid in three.js terms: column i -> x = x0 + (i + .5) * cell, row j -> z = -(y0 + (j + .5) * cell).
         'walk': {'cell': CELL, 'noWalk': NO_WALK, 'grids': grids, 'walkableCells': walk_count},
         'labels': cfg.get('labels', {}),
+        'fog': cfg.get('fog'),
         'spawns': named_points('Spawn'),
         'gates': gates,
+        'bells': named_points('Bell'),
         'seats': named_points('Seat'),
         'trees': len(trees_out),
         'staticTriangles': tris,
-        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). '
-                      'Architecture modelled from published dimensions; see research/zhongshan/FACTS.md.',
+        'provenance': cfg.get('provenance', 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). '
+                                            'Architecture modelled from published dimensions; see research/zhongshan/FACTS.md.'),
     }
     (OUT / 'scene.json').write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding='utf-8')
     print('EXPORTED', json.dumps({k: meta[k] for k in ('trees', 'staticTriangles')} | {'walk': meta['walk'],

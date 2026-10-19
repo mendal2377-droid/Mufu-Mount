@@ -76,12 +76,14 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   const cityRain=rain.clone(),citySnow=snow.clone();scene.add(cityRain,citySnow);
   // Landmarks rebuilt in Blender (true metres, free walking) replace their atlas walk. Each is
   // fetched on first visit and kept; the atlas pin and its stamps stay as they are.
-  const WORLDS={zhongshan:{spawn:'axis'}},worlds={};
+  // Pin id -> the Blender world it opens and where it lands. Neighbouring pins share a world.
+  const WORLDS={zhongshan:{world:'zhongshan',spawn:'axis'},
+    jiming:{world:'north',spawn:'jiming',weather:'morning'},xuanwu:{world:'north',spawn:'xuanwu',weather:'morning'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
   const music=audio?createMusic(audio):null;
   function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
   async function enterWorld(p,opts){
-    const id=p.id;
+    const id=WORLDS[p.id].world;
     if(!worlds[id]){toast(`${p.zh} · on the wind…`);
       worlds[id]=loadLandmarkWorld(id,{shared,skyShared,bands,rain,snow}).catch(e=>{delete worlds[id];throw e;});}
     let w;
@@ -90,7 +92,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(!active||state.overview||selected!==p)return;
     exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
     const g=w.meta.walk;worldBounds=new THREE.Box3(new THREE.Vector3(g.x0-150,-60,-(g.y0+g.ny*g.cell)-150),new THREE.Vector3(g.x0+g.nx*g.cell+150,700,-g.y0+150));
-    const s=w.spawn(opts.spawn||WORLDS[id].spawn);setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
+    const s=w.spawn(opts.spawn||WORLDS[p.id].spawn);setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
     // Pins and menus arrive by paraglider: the descent shows the whole place and hides any
     // remaining load. Programmatic entry (tests, debug) lands at once.
     if(opts.drop){w.startGlide(s);toast(`${p.zh} · ${w.meta.title} · gliding in · any key to land`);}
@@ -253,6 +255,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     world.placeCamera(camera,dt);
     if(t-lastSeatHint>6&&!world.seated){const gate=world.nearestGate();
       if(gate){lastSeatHint=t;toast(`Moon gate · F to glide to ${world.label(gate.target)}`);}
+      else if(world.nearestBell()){lastSeatHint=t;toast('Temple bell · F to ring it');}
       else if(world.nearestSeat(null,2.5)){lastSeatHint=t;toast('F to sit');}}
     const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
   }
@@ -282,7 +285,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');
       if(id==='mufu'){api.leave();onMufu();return;}
       exitWorld();useScene();reset();clearOrbitMotion(orbit);selected=p;currentRoute=p.route;flying(false);gameView.cancelRun();arrival=null;
-      if(opts.drop&&!userWeather&&p.vista?.weather&&state.weather!==p.vista.weather)onWeather(p.vista.weather);
+      const mood=WORLDS[id]?.weather||p.vista?.weather;
+      if(opts.drop&&!userWeather&&mood&&state.weather!==mood)onWeather(mood);
       state.playing=true;state.overview=false;state.photoMode=false;state.moving=false;
       setArrivalCamera(camera,p.spawn,p.look);gameView.setCurrent(p.id);
       if(opts.drop){const flight=arrivalFlight(p.spawn,p.look);arrival={flight,t:0,p,look:p.look};
@@ -359,6 +363,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       // A moon gate: take off from here and glide to the scene it leads to.
       const gate=world.nearestGate();
       if(gate){world.startGlide(world.spawn(gate.target),{from:true});toast(`Gliding to ${world.label(gate.target)} · any key to land`);return;}
+      if(world.nearestBell()){if(audio&&!audio.started&&soundButton)soundButton.click();setTimeout(()=>music?.bell(),300);world.ringBell();toast('Dong… the bell carries over the lake');return;}
       const seat=world.nearestSeat();
       if(!seat){toast('Nothing to sit on here');return;}
       world.sit(seat);

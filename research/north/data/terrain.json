@@ -1,0 +1,19 @@
+{
+ "source": "Copernicus GLO-30 DEM (DSM), tile N32 E118. \u00a9 DLR e.V. 2010-2014 and \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA.",
+ "shape_rows_cols": [
+  117,
+  125
+ ],
+ "origin_wgs84": [
+  32.0630502,
+  118.79003095
+ ],
+ "extent_local_m": {
+  "x_west": -1155.96,
+  "x_east": 2093.52,
+  "y_south": -798.0,
+  "y_north": 2764.94
+ },
+ "min_m": 3.9292078018188477,
+ "max_m": 71.11335754394531
+}

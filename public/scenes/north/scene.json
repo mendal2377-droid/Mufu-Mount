@@ -1,0 +1,196 @@
+{
+ "id": "north",
+ "title": "Jiming Temple, Taicheng & Xuanwu Lake",
+ "zh": "鸡鸣寺 · 台城 · 玄武湖",
+ "axes": "three.js: x = east, y = up, z = south (Blender x, z, -y); metres",
+ "walk": {
+  "cell": 1.0,
+  "noWalk": -32768,
+  "grids": [
+   {
+    "name": "jiming",
+    "nx": 570,
+    "ny": 630,
+    "x0": -255.0,
+    "y0": -315.0,
+    "cell": 1.0,
+    "offset": 0
+   },
+   {
+    "name": "islands",
+    "nx": 633,
+    "ny": 446,
+    "x0": -815.0,
+    "y0": 825.0,
+    "cell": 1.5,
+    "offset": 359100
+   }
+  ],
+  "walkableCells": 438003
+ },
+ "labels": {
+  "jiming": "Jiming Temple",
+  "pagoda": "the Yaoshi Pagoda",
+  "cherry": "Jiming Road",
+  "taicheng": "the Taicheng wall",
+  "xuanwu": "Xuanwu Lake"
+ },
+ "fog": 0.00042,
+ "spawns": {
+  "jiming": {
+   "position": [
+    41.325,
+    4.817,
+    108.948
+   ],
+   "look": [
+    29.914,
+    4.817,
+    81.202
+   ]
+  },
+  "pagoda": {
+   "position": [
+    1.993,
+    15.817,
+    -2.466
+   ],
+   "look": [
+    -16.635,
+    15.817,
+    -25.982
+   ]
+  },
+  "cherry": {
+   "position": [
+    75.51,
+    5.062,
+    45.47
+   ],
+   "look": [
+    76.759,
+    5.062,
+    15.496
+   ]
+  },
+  "taicheng": {
+   "position": [
+    141.81,
+    20.402,
+    -121.57
+   ],
+   "look": [
+    129.992,
+    20.402,
+    -149.144
+   ]
+  },
+  "xuanwu": {
+   "position": [
+    -69.87,
+    2.179,
+    -864.02
+   ],
+   "look": [
+    -74.832,
+    2.179,
+    -834.433
+   ]
+  }
+ },
+ "gates": [
+  {
+   "target": "xuanwu",
+   "position": [
+    53.08,
+    4.817,
+    95.464
+   ],
+   "look": [
+    80.825,
+    4.817,
+    84.053
+   ]
+  },
+  {
+   "target": "jiming",
+   "position": [
+    -47.87,
+    2.179,
+    -868.02
+   ],
+   "look": [
+    -17.87,
+    2.179,
+    -868.02
+   ]
+  }
+ ],
+ "bells": {
+  "jiming": {
+   "position": [
+    28.409,
+    10.817,
+    40.734
+   ],
+   "look": [
+    2.368,
+    10.817,
+    25.838
+   ]
+  }
+ },
+ "seats": {
+  "xuanwu-0": {
+   "position": [
+    -81.87,
+    2.179,
+    -870.02
+   ],
+   "look": [
+    -86.39,
+    2.179,
+    -840.362
+   ]
+  },
+  "xuanwu-1": {
+   "position": [
+    -69.87,
+    2.179,
+    -870.02
+   ],
+   "look": [
+    -74.798,
+    2.179,
+    -840.427
+   ]
+  },
+  "xuanwu-2": {
+   "position": [
+    -57.87,
+    2.179,
+    -870.02
+   ],
+   "look": [
+    -63.203,
+    2.179,
+    -840.498
+   ]
+  },
+  "pagoda-0": {
+   "position": [
+    -21.933,
+    15.817,
+    -18.577
+   ],
+   "look": [
+    -29.209,
+    15.817,
+    -47.681
+   ]
+  }
+ },
+ "trees": 26421,
+ "staticTriangles": 337873,
+ "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Lake, islands, walls, streets and buildings: OpenStreetMap contributors (ODbL). Architecture modelled from published descriptions; see research/north/FACTS.md."
+}

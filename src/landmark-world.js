@@ -30,6 +30,11 @@ const TREES = {
   far: {crown: '#5A8A3C', trunk: '#5A4636', h: 12, r: 4.6, lobes: 0, far: true},
   cedar: {crown: '#3D5E3F', trunk: '#5A4636', h: 18, r: 4.2, cone: 5},
   cypress: {crown: '#3D5E3F', trunk: '#5A4636', h: 9, r: 1.6, cone: 4},
+  // Old-city kinds (blender/kit_oldcity.py extra_prototypes).
+  cherry: {crown: '#F2B8C6', trunk: '#4A3A34', h: 8, r: 3.8, lobes: 5},
+  willow: {crown: '#9DBF4A', trunk: '#5A4636', h: 10, r: 4.2, lobes: 6, hang: true},
+  lotus: {crown: '#5E9B4A', lotus: true},
+  lotus_flower: {crown: '#F4A6B8', flower: true},
 };
 
 function treeGeometry(spec, seed) {
@@ -41,6 +46,7 @@ function treeGeometry(spec, seed) {
     g.setAttribute('color', new THREE.BufferAttribute(a, 3));
     return g;
   };
+  if (spec.lotus || spec.flower) return lotusGeometry(spec, colour);
   if (!spec.far) {
     const trunk = new THREE.CylinderGeometry(spec.r * .06, spec.r * .09, spec.h * .62, 5, 1, true).toNonIndexed();
     trunk.translate(0, spec.h * .31, 0);
@@ -62,11 +68,14 @@ function treeGeometry(spec, seed) {
     const centre = new THREE.Vector3(0, spec.h * .74, 0);
     for (let k = 0; k <= spec.lobes; k++) {
       const top = k === spec.lobes, a = 6.283 * k / spec.lobes + rand();
+      if (spec.hang && top) continue;
       const rr = top ? spec.r * .72 : spec.r * (.5 + .22 * rand());
       // Detail 0 lobes (20 triangles) under a detail 1 top: ~150 triangles a tree, 6,800 trees.
       const g = new THREE.IcosahedronGeometry(rr, top ? 1 : 0).toNonIndexed();
       const c = top ? new THREE.Vector3(0, spec.h * .82, 0)
         : new THREE.Vector3(Math.cos(a) * spec.r * .45, spec.h * (.62 + .16 * rand()), Math.sin(a) * spec.r * .45);
+      // Willows: long lobes hanging from the crown, like curtains of leaves.
+      if (spec.hang) { g.scale(.55, 2.1, .55); c.y = spec.h * .52; }
       g.translate(c.x, c.y, c.z);
       // Spherical normals about the whole crown: lobes shade as one soft mass.
       const p = g.attributes.position, n = g.attributes.normal, v = new THREE.Vector3();
@@ -80,6 +89,35 @@ function treeGeometry(spec, seed) {
   // Manual merge (all non-indexed, same attributes).
   const total = parts.reduce((n, g) => n + g.attributes.position.count, 0);
   const out = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'color']) {
+    const arr = new Float32Array(total * 3);
+    let o = 0;
+    for (const g of parts) { arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, 3));
+  }
+  return out;
+}
+
+// Lotus: a few cupped round leaves held at different heights above the water (the photographs
+// show a crowd of raised leaves, not flat pads); a flower is a pink cup on its own leaf.
+function lotusGeometry(spec, colour) {
+  const parts = [];
+  const leaf = (r, x, y, z, hex) => {
+    const g = new THREE.ConeGeometry(r, r * .28, 9, 1, true).toNonIndexed();
+    g.rotateX(Math.PI); g.translate(x, y + r * .14, z);
+    const n = g.attributes.normal;
+    for (let i = 0; i < n.count; i++) n.setXYZ(i, n.getX(i) * .3, 1, n.getZ(i) * .3);
+    parts.push(colour(g, hex));
+  };
+  if (spec.flower) {
+    leaf(.5, .1, .05, 0, '#5E9B4A');
+    const cup = new THREE.ConeGeometry(.2, .32, 6, 1, true).toNonIndexed();
+    cup.rotateX(Math.PI); cup.translate(0, .55, 0);
+    parts.push(colour(cup, spec.crown));
+  } else {
+    leaf(.55, 0, .05, 0, spec.crown); leaf(.42, .5, .45, .2, '#6FAE52'); leaf(.38, -.35, .7, -.4, '#4E8A44');
+  }
+  const total = parts.reduce((n, g) => n + g.attributes.position.count, 0), out = new THREE.BufferGeometry();
   for (const name of ['position', 'normal', 'color']) {
     const arr = new Float32Array(total * 3);
     let o = 0;
@@ -111,12 +149,16 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const mat = new THREE.MeshToonMaterial({color: src.color.clone(), gradientMap: bands, side: THREE.FrontSide});
     mat.name = name;
     if (name === 'water') { mat.color.multiplyScalar(1.05); mat.emissive = new THREE.Color(0x0b2f3a); }
+    // Lanterns and lit windows glow; the bloom pass turns them into soft lights at dusk.
+    if (name === 'lantern') { mat.emissive = new THREE.Color(0xe8473a); mat.emissiveIntensity = .9; }
+    if (name === 'lantern_glow') { mat.emissive = new THREE.Color(0xffb347); mat.emissiveIntensity = .75; }
     mat.onBeforeCompile = s => {
       s.uniforms.citySnow = shared.snow; s.uniforms.worldMottle = {value: style.mottle}; s.uniforms.worldScale = {value: style.scale};
-      s.uniforms.worldJoints = {value: style.joints || 0};
+      s.uniforms.worldJoints = {value: style.joints || 0}; s.uniforms.cityTime = shared.time;
+      s.uniforms.worldWater = {value: name === 'water' ? 1 : 0};
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints;varying vec3 vWorldPos;varying float vUp;\n' +
+      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater;varying vec3 vWorldPos;varying float vUp;\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -130,9 +172,18 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           float joint=smoothstep(.46,.49,max(e.x,e.y))*(1.-smoothstep(.08,.4,fw))*smoothstep(.85,.98,vUp);
           diffuseColor.rgb*=1.-joint*.22*worldJoints;
           float tone=lwHash(floor(slab));diffuseColor.rgb*=1.+(tone-.5)*.06*worldJoints*smoothstep(.85,.98,vUp);
-          diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.9,.86),citySnow*.7*smoothstep(.4,.9,vUp));`);
+          diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.9,.86),citySnow*.7*smoothstep(.4,.9,vUp));
+          // Water: drifting brush ripples, and the pale sky at grazing angles.
+          if(worldWater>.5){
+            vec2 w=vWorldPos.xz*.08;
+            float rip=lwNoise(w+vec2(cityTime*.05,cityTime*.03))*.6+lwNoise(w*3.1-vec2(cityTime*.09,0.))*.4;
+            // vNormal, not normal: at color_fragment the latter is not declared yet.
+            float fres=pow(1.-clamp(dot(normalize(vViewPosition),normalize(vNormal)),0.,1.),4.);
+            diffuseColor.rgb=mix(diffuseColor.rgb*(.9+rip*.22),vec3(.78,.88,.96),fres*.35);
+            diffuseColor.rgb+=smoothstep(.78,.86,rip)*.08;
+          }`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v2';
+    mat.customProgramCacheKey = () => 'landmark-paint-v3';
     cache.set(name, mat);
     return mat;
   }
@@ -193,7 +244,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // One grid per scene area (the Mausoleum and Music Stage, Meiling), concatenated in walk.bin.
   function cellOf(x, z) {
     for (const g of walk.grids) {
-      const i = Math.floor((x - g.x0) / walk.cell), j = Math.floor((-z - g.y0) / walk.cell);
+      const c = g.cell || walk.cell, i = Math.floor((x - g.x0) / c), j = Math.floor((-z - g.y0) / c);
       if (i >= 0 && j >= 0 && i < g.nx && j < g.ny) return g.offset + j * g.nx + i;
     }
     return -1;
@@ -238,6 +289,38 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     Object.assign(pigeons, {flock, bowl});
   }
   const dummy = new THREE.Object3D();
+  // Falling cherry petals round the walker wherever cherries grow (Jiming Road, Taicheng).
+  const cherries = trees.filter(t => t[0] === 'cherry').map(t => new THREE.Vector2(t[1], t[3]));
+  const petals = cherries.length ? (() => {
+    const g = new THREE.PlaneGeometry(.07, .05);
+    const m = new THREE.MeshToonMaterial({color: 0xf6c3cf, gradientMap: bands, side: THREE.DoubleSide});
+    const mesh = new THREE.InstancedMesh(g, m, 700); mesh.frustumCulled = false; scene.add(mesh);
+    const ps = Array.from({length: 700}, (_, i) => ({p: new THREE.Vector3(), v: new THREE.Vector3(), spin: i, live: 0}));
+    return {mesh, ps, burst: 0};
+  })() : null;
+  function nearCherry(p, r = 14) { for (const c of cherries) if (Math.abs(c.x - p.x) < r && Math.abs(c.y - p.z) < r) return true; return false; }
+  function updatePetals(t, dt, centre) {
+    if (!petals) return;
+    const active = nearCherry(centre, 22) || petals.burst > 0;
+    petals.burst = Math.max(0, petals.burst - dt);
+    const rate = active ? (petals.burst > 0 ? 400 : 60) : 0;
+    let spawn = rate * dt;
+    petals.ps.forEach((q, i) => {
+      if (q.live <= 0 && spawn > 0 && Math.random() < spawn / 20) {
+        spawn -= 1;
+        q.p.set(centre.x + (Math.random() - .5) * 30, centre.y + 4 + Math.random() * 6, centre.z + (Math.random() - .5) * 30);
+        q.v.set(.4 + Math.random() * .4, -(.5 + Math.random() * .4), .2 * (Math.random() - .5)); q.live = 14;
+      }
+      if (q.live > 0) {
+        q.live -= dt; q.p.addScaledVector(q.v, dt); q.p.x += Math.sin(t * 1.7 + i) * .3 * dt;
+        const g = surface(q.p.x, q.p.z);
+        if (g !== null && q.p.y < g + .03) { q.p.y = g + .03; q.v.set(0, 0, 0); }
+      }
+      dummy.position.copy(q.p); dummy.rotation.set(t * 2 + q.spin, t * 1.3 + q.spin * .7, 0);
+      dummy.scale.setScalar(q.live > 0 ? 1 : 0); dummy.updateMatrix(); petals.mesh.setMatrixAt(i, dummy.matrix);
+    });
+    petals.mesh.instanceMatrix.needsUpdate = true;
+  }
   function updatePigeons(t, dt, calm) {
     if (!pigeons.flock) return;
     pigeons.forEach((p, i) => {
@@ -335,6 +418,12 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       }
       return best?.g || null;
     },
+    nearestBell(radius = 3.5) {
+      for (const b of Object.values(meta.bells || {})) if (Math.hypot(b.position[0] - body.x, b.position[2] - body.z) < radius) return b;
+      return null;
+    },
+    // The bell's shiver shakes petals loose for a few seconds.
+    ringBell() { if (petals) petals.burst = 5; },
     nearestSeat(p, radius = 3) {
       const q = p || body;
       let best = null;
@@ -440,11 +529,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       sun.color.setRGB(1, 1 - weather.sunset * .3, 1 - weather.sunset * .55);
       hemi.intensity = 1.05 - weather.storm * .35 - weather.dawn * .55;
       scene.fog.color.setRGB(.66 + weather.sunset * .26 - weather.storm * .30, .80 - weather.sunset * .2 - weather.storm * .36, .93 - weather.sunset * .32 - weather.storm * .40);
-      scene.fog.density = (mode === 'glide' ? .0005 : .0011) + weather.storm * .004 + weather.snow * .003;
+      // Per-world haze: the lake needs a kilometre of view, the forest slice much less.
+      const haze = meta.fog ?? .0011;
+      scene.fog.density = (mode === 'glide' ? haze * .45 : haze) + weather.storm * .004 + weather.snow * .003;
       sky.position.copy(camera.position);
       worldRain.position.copy(camera.position); worldSnow.position.copy(camera.position);
       worldRain.visible = weather.storm > .02; worldSnow.visible = weather.snow > .02;
       updatePigeons(t, dt, !!seated);
+      updatePetals(t, dt, body);
     },
     stats() {
       return {id, staticTriangles, treeTriangles, trees: trees.length, walkCells: walk.walkableCells, seats: seats.length,
