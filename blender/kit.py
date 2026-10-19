@@ -40,6 +40,8 @@ PALETTE = {
     'autumn_plane': '#E2B233',
     'autumn_maple': '#D0622E',
     'water': '#5FA8B5',
+    'road': '#A39C90',
+    'meiling_wall': '#EBD392',
     'vine': '#6E9A3E',
 }
 
@@ -287,4 +289,51 @@ def place(proto, coll, loc, rot=0.0, scale=1.0, name=None):
     o.rotation_euler = (0, 0, rot)
     o.scale = (scale, scale, scale)
     coll.objects.link(o)
+    return o
+
+
+def moon_gate(name, coll, width=6.4, height=4.6, radius=1.55, depth=0.5, wall='granite', coping='roof_grey'):
+    """月洞门: a short white garden wall pierced by a round opening, grey tile coping on top.
+
+    Built without booleans: the wall face is a fan of quads from the circle out to the rectangle
+    (corner angles included, so the rectangle stays square), mirrored front and back, with the
+    opening's inner band joining them. Local frame: centred on the opening's ground point, wall
+    in the XZ plane, faces +/-Y. The opening's bottom sits 0.15 m above the ground.
+    """
+    bm = bmesh.new()
+    cz = radius + 0.15
+    hw = width / 2
+    corners = [math.atan2(height - cz, hw), math.atan2(height - cz, -hw), math.atan2(-cz, -hw) + 2 * math.pi,
+               math.atan2(-cz, hw) + 2 * math.pi]
+    angles = sorted({round(2 * math.pi * k / 40, 6) for k in range(40)} | {round(a % (2 * math.pi), 6) for a in corners})
+
+    def rect_point(a):
+        dx, dz = math.cos(a), math.sin(a)
+        tx = hw / abs(dx) if abs(dx) > 1e-9 else 1e9
+        tz = ((height - cz) / dz) if dz > 1e-9 else (cz / -dz if dz < -1e-9 else 1e9)
+        t = min(tx, tz)
+        return dx * t, cz + dz * t
+
+    rings = {}
+    for side, y in (('front', -depth / 2), ('back', depth / 2)):
+        inner = [bm.verts.new((radius * math.cos(a), y, cz + radius * math.sin(a))) for a in angles]
+        outer = [bm.verts.new((rect_point(a)[0], y, rect_point(a)[1])) for a in angles]
+        rings[side] = inner
+        n = len(angles)
+        for k in range(n):
+            q = (inner[k], inner[(k + 1) % n], outer[(k + 1) % n], outer[k])
+            bm.faces.new(q if side == 'back' else tuple(reversed(q)))
+    n = len(angles)
+    fi, bi = rings['front'], rings['back']
+    for k in range(n):
+        bm.faces.new((fi[k], fi[(k + 1) % n], bi[(k + 1) % n], bi[k]))
+    # Wall ends and top as boxes (simple closed caps).
+    add_box(bm, (-hw - 0.15, 0, height / 2), (0.3, depth + 0.1, height), mi=0)
+    add_box(bm, (hw + 0.15, 0, height / 2), (0.3, depth + 0.1, height), mi=0)
+    add_box(bm, (0, 0, height + 0.1), (width + 0.6, depth + 0.1, 0.2), mi=0)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    o = mesh_object(name, bm, coll, [wall])
+    roof = curved_roof(name + ' coping', coll, (0, 0, height + 0.2), width / 2 + 0.6, depth / 2 + 0.55, 0.55,
+                       lift=0.25, thickness=0.12, material=coping, ridge_material=coping, res=(24, 6))
+    roof.parent = o
     return o

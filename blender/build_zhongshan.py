@@ -25,6 +25,7 @@ from mathutils import Matrix, Vector
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kit  # noqa: E402
+import zhongshan_meiling as ml  # noqa: E402
 
 DATA = ROOT / 'research' / 'zhongshan' / 'data'
 OUT_BLEND = ROOT / 'art-src' / 'zhongshan.blend'
@@ -187,7 +188,8 @@ def designed_ground(x, y, dem):
     return z, open_w
 
 
-def build_terrain(coll, dem, x_range=(-420, 520), y_range=(-360, 820), step=4.0):
+def build_terrain(coll, dem, x_range=(-420, 520), y_range=(-360, 820), step=4.0, fn=None, name='Terrain'):
+    fn = fn or (lambda x, y: designed_ground(x, y, dem))
     nx = int((x_range[1] - x_range[0]) / step) + 1
     ny = int((y_range[1] - y_range[0]) / step) + 1
     bm = bmesh.new()
@@ -198,7 +200,7 @@ def build_terrain(coll, dem, x_range=(-420, 520), y_range=(-360, 820), step=4.0)
         y = y_range[0] + j * step
         for i in range(nx):
             x = x_range[0] + i * step
-            z, w = designed_ground(x, y, dem)
+            z, w = fn(x, y)
             # Tiny noise keeps forest floor from looking ironed (deterministic).
             z += (math.sin(x * 0.11) * math.cos(y * 0.13) + math.sin((x + y) * 0.07)) * 0.6 * (1 - w)
             row.append(bm.verts.new((x, y, z)))
@@ -210,7 +212,7 @@ def build_terrain(coll, dem, x_range=(-420, 520), y_range=(-360, 820), step=4.0)
             f = bm.faces.new((verts[j][i], verts[j][i + 1], verts[j + 1][i + 1], verts[j + 1][i]))
             w = (heights[(i, j)][1] + heights[(i + 1, j + 1)][1]) / 2
             f.material_index = lawn if w > 0.5 else floor
-    o = kit.mesh_object('Terrain', bm, coll, ['lawn', 'forest_floor'])
+    o = kit.mesh_object(name, bm, coll, ['lawn', 'forest_floor'])
     for p in o.data.polygons:
         p.use_smooth = True
 
@@ -220,7 +222,12 @@ def build_terrain(coll, dem, x_range=(-420, 520), y_range=(-360, 820), step=4.0)
     return o, ground
 
 
-INNER = ((-420, 520), (-360, 820))   # detailed terrain extent (x range, y range)
+# Detailed terrain patches (x range, y range): the Mausoleum/Music Stage slice and Meiling.
+INNERS = (((-420, 520), (-360, 820)), ml.PATCH)
+
+
+def in_inner(x, y, margin):
+    return any(ix0 + margin < x < ix1 - margin and iy0 + margin < y < iy1 - margin for (ix0, ix1), (iy0, iy1) in INNERS)
 
 
 def build_outer_terrain(coll, dem, step=24.0):
@@ -232,7 +239,6 @@ def build_outer_terrain(coll, dem, step=24.0):
     x0, x1 = meta['x_west'] + step, meta['x_east'] - step
     y0, y1 = meta['y_south'] + step, meta['y_north'] - step
     nx, ny = int((x1 - x0) / step) + 1, int((y1 - y0) / step) + 1
-    (ix0, ix1), (iy0, iy1) = INNER
     bm = bmesh.new()
     grid = []
     for j in range(ny):
@@ -240,13 +246,13 @@ def build_outer_terrain(coll, dem, step=24.0):
         row = []
         for i in range(nx):
             x = x0 + i * step
-            inside = ix0 + 12 < x < ix1 - 12 and iy0 + 12 < y < iy1 - 12
+            inside = in_inner(x, y, 12)
             row.append(bm.verts.new((x, y, dem(x, y) - 11.0 - (1.5 if inside else 0.0))))
         grid.append(row)
     for j in range(ny - 1):
         for i in range(nx - 1):
             xa, ya = x0 + i * step, y0 + j * step
-            if ix0 + step < xa and xa + step < ix1 - step and iy0 + step < ya and ya + step < iy1 - step:
+            if all(in_inner(px, py, step) for px, py in ((xa, ya), (xa + step, ya), (xa, ya + step), (xa + step, ya + step))):
                 continue
             bm.faces.new((grid[j][i], grid[j][i + 1], grid[j + 1][i + 1], grid[j + 1][i]))
     o = kit.mesh_object('Terrain outer', bm, coll, ['forest_floor'])
@@ -258,14 +264,13 @@ def build_outer_terrain(coll, dem, step=24.0):
 def scatter_far_canopy(dem, protos, trees, extent, spacing=26.0):
     """One soft crown per ~26 m outside the detailed area: reads as continuous forest from the air."""
     x0, x1, y0, y1 = extent
-    (ix0, ix1), (iy0, iy1) = INNER
     n = 0
     y = y0
     while y < y1:
         x = x0
         while x < x1:
             px, py = x + rnd.uniform(-9, 9), y + rnd.uniform(-9, 9)
-            if not (ix0 - 10 < px < ix1 + 10 and iy0 - 10 < py < iy1 + 10):
+            if not in_inner(px, py, -10):
                 kit.place(protos['far'], trees, (px, py, dem(px, py) - 12.0), rnd.uniform(0, 6.28), rnd.uniform(1.6, 2.6))
                 n += 1
             x += spacing
@@ -678,6 +683,31 @@ def add_markers(coll, ground):
             k += 1
 
 
+def build_gates(coll, markers, meiling):
+    """Moon gates between the three scenes. Walking up to one offers a glide to its target."""
+    M = Matrix.Translation((MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC)) @ Matrix.Rotation(-MUSIC_FACING, 4, 'Z')
+    sp = meiling.spawn_points()
+    gates = [
+        ('meiling', from_axis(-38, 6, 0), from_axis(-60, 6, 0)),      # west side of the arch plaza
+        ('music', from_axis(38, 6, 0), from_axis(60, 6, 0)),          # east side of the arch plaza
+        ('axis', M @ Vector((0, 57.5, max(0.0, 57.5 - 16) * 0.16)), M @ Vector((0, 70, 0))),
+        ('axis', Vector(sp['gate']), Vector(sp['gate']) + Vector((14, -14, 0))),
+    ]
+    for n, (target, loc, toward) in enumerate(gates):
+        d = (Vector(toward) - Vector(loc)).normalized()
+        g = kit.moon_gate(f'Moon gate {n}', coll)
+        g.matrix_world = Matrix.Translation(loc) @ Matrix.Rotation(math.atan2(-d.x, d.y), 4, 'Z')
+        add_point(markers, f'Gate {target}@{n}', loc, Vector(loc) + d * 10)
+
+
+def add_meiling_markers(coll, meiling, seats):
+    sp = meiling.spawn_points()
+    add_point(coll, 'Spawn meiling', sp['front'], sp['palace'])
+    add_point(coll, 'Spawn meiling-terrace', sp['terrace'], (sp['terrace'][0], sp['terrace'][1] - 100, sp['terrace'][2]))
+    for k, (pos, look) in enumerate(seats):
+        add_point(coll, f'Seat meiling-{k}', pos, look)
+
+
 def camera(scene, name, loc, target, lens=32):
     cam = bpy.data.cameras.new(name)
     cam.lens = lens
@@ -696,6 +726,8 @@ def main():
     c_ground = collection('Ground', root)
     c_axis = collection('Mausoleum axis', root)
     c_music = collection('Music Stage', root)
+    c_meiling = collection('Meiling', root)
+    c_gates = collection('Gates', root)
     c_trees = collection('Trees', root)
     c_protos = collection('Prototypes', root)
     protos = kit.tree_prototypes(c_protos)
@@ -704,9 +736,21 @@ def main():
     build_axis(c_axis, ground, protos, c_trees)
     build_music_stage(c_music, ground, protos, c_trees)
     n = scatter_forest(ground, protos, c_trees)
+    meiling = ml.Meiling(dem, rnd)
+    (mx0, mx1), (my0, my1) = ml.PATCH
+    build_terrain(c_ground, dem, (mx0, mx1), (my0, my1), fn=meiling.ground, name='Terrain Meiling')
     _, outer_extent = build_outer_terrain(c_ground, dem)
+    outer_height = lambda x, y: dem(x, y) - 11.0  # noqa: E731
+    meiling.build_roads(c_meiling, outer_height)
+    meiling.build_palace(c_meiling)
+    seats = meiling.benches(c_meiling)
+    n_necklace = meiling.plant_necklace(protos, c_trees, outer_height)
+    n += meiling.scatter_forest(protos, c_trees)
     n_far = scatter_far_canopy(dem, protos, c_trees, outer_extent)
-    add_markers(collection('Markers', root), ground)
+    c_markers = collection('Markers', root)
+    add_markers(c_markers, ground)
+    add_meiling_markers(c_markers, meiling, seats)
+    build_gates(c_gates, c_markers, meiling)
     setup_lookdev(scene)
 
     cams = {
@@ -717,6 +761,11 @@ def main():
         'axis-aerial': ((from_axis(0, -140, 190))[:], (from_axis(0, 420, 30))[:], 30),
         'music-aerial': ((MUSIC_CENTER.x - 30, MUSIC_CENTER.y + 110, Z_MUSIC + 70),
                          (MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC), 28),
+        # The necklace from the paraglider's height, and the palace from its forecourt.
+        'meiling-aerial': ((ml.PALACE.x + 260, ml.PALACE.y - 380, meiling.pad_z + 230),
+                           (ml.PALACE.x - 20, ml.PALACE.y + 40, meiling.pad_z), 30),
+        'meiling-front': ((ml.PALACE.x + 8, ml.PALACE.y - 52, meiling.pad_z + 1.7),
+                          (ml.PALACE.x, ml.PALACE.y, meiling.pad_z + 9), 32),
         'music-from-seats': ((Matrix.Translation((MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC))
                               @ Matrix.Rotation(-MUSIC_FACING, 4, 'Z') @ Vector((6, 34, 4.6)))[:],
                              (MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC + 4), 30),
@@ -725,10 +774,10 @@ def main():
     OUT_RENDERS.mkdir(parents=True, exist_ok=True)
     cam_objs = {k: camera(scene, 'Cam ' + k, *v) for k, v in cams.items()}
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))
-    stats = {'forest_trees': n, 'far_canopy': n_far, 'trees_total': len(c_trees.objects),
+    stats = {'forest_trees': n, 'far_canopy': n_far, 'necklace': n_necklace, 'trees_total': len(c_trees.objects),
              # Iterate the collections: o.users_collection scans them all, per object (minutes at 24k).
              'triangles_static': sum(sum(len(p.vertices) - 2 for p in o.data.polygons)
-                                     for c in (c_ground, c_axis, c_music) for o in c.objects if o.type == 'MESH')}
+                                     for c in (c_ground, c_axis, c_music, c_meiling, c_gates) for o in c.objects if o.type == 'MESH')}
     print('BUILD', json.dumps(stats), flush=True)
     if RENDER:
         scene.eevee.taa_render_samples = 32

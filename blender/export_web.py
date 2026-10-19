@@ -10,10 +10,12 @@ Then compress (meshopt + quantisation):
 Writes public/scenes/<id>/:
   static.raw.glb  architecture and ground, joined per collection so each material is one draw
   trees.json      [kind, x, y, z, rotY, scale] per tree in three.js axes (x, z, -y)
-  walk.bin        Int16 heights in centimetres on a 1 m grid; -32768 = not walkable
-  scene.json      grid header, spawns, seats, bounds, provenance
+  walk.bin        Int16 heights in centimetres on 1 m grids (one per scene area, concatenated);
+                  -32768 = not walkable
+  scene.json      grid headers, spawns, seats, gates, provenance
 
-The walk grid is ray-cast from above against everything except trees, so whatever is on top
+The walk grid is ray-cast from above against everything except trees and gates (so the moon
+gates' round openings can be walked through), so whatever is on top
 decides: paving, steps, lawn and forest floor are walkable; roofs, hedges, water and openings
 are not. Balustrades and walls are walkable on top but sit more than STEP_UP above their
 neighbours, so the browser treats them as walls.
@@ -42,8 +44,12 @@ TRUNK_RADIUS = 0.9
 # Spawns are filled from named cameras/empties when present, else from these.
 SETTINGS = {
     'zhongshan': {
-        'grid': {'x0': -95.0, 'x1': 225.0, 'y0': -255.0, 'y1': 675.0},
-        'title': 'Sun Yat-sen Mausoleum & the Music Stage',
+        'grids': [{'name': 'axis', 'x0': -95.0, 'x1': 225.0, 'y0': -255.0, 'y1': 675.0},
+                  {'name': 'meiling', 'x0': -905.0, 'x1': -455.0, 'y0': -1405.0, 'y1': -995.0}],
+        'title': 'Sun Yat-sen Mausoleum, the Music Stage & Meiling Palace',
+        # What the gates and the places menu call each spawn.
+        'labels': {'axis': 'the Mausoleum', 'stair': 'the great stair', 'hall': 'the Sacrificial Hall',
+                   'music': 'the Music Stage', 'meiling': 'Meiling Palace', 'meiling-terrace': 'the Phoenix Terrace'},
         'zh': '中山陵 · 音乐台',
     },
 }
@@ -53,7 +59,8 @@ def to_three(v):
     return [round(v[0], 3), round(v[2], 3), round(-v[1], 3)]
 
 
-STATIC_COLLECTIONS = ('Ground', 'Mausoleum axis', 'Music Stage')
+STATIC_COLLECTIONS = ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates')
+CAST_EXCLUDE = ('Trees', 'Gates')
 
 
 def collect():
@@ -74,14 +81,13 @@ def tree_records(trees):
     return out
 
 
-def walk_grid(static, trees, grid):
-    """Ray-cast the 1 m grid. Trees are hidden from the cast, then trunks are stamped out."""
+def walk_grid(trees, grid):
+    """Ray-cast one 1 m grid. Trees and gates are excluded from the cast, then trunks are stamped out."""
     s = bpy.context.scene
-    # Exclude the whole Trees collection in one step: hiding ~24,000 objects one by one is minutes.
-    tree_layer = bpy.context.view_layer.layer_collection.children['Zhongshan'].children['Trees']         if 'Zhongshan' in bpy.context.view_layer.layer_collection.children else None
-    if tree_layer is None:
-        tree_layer = next(lc for lc in _walk_layers(bpy.context.view_layer.layer_collection) if lc.name == 'Trees')
-    tree_layer.exclude = True
+    # Exclude whole collections in one step: hiding ~24,000 objects one by one is minutes.
+    layers = [lc for lc in _walk_layers(bpy.context.view_layer.layer_collection) if lc.name in CAST_EXCLUDE]
+    for lc in layers:
+        lc.exclude = True
     dg = bpy.context.evaluated_depsgraph_get()
     nx = int((grid['x1'] - grid['x0']) / CELL)
     ny = int((grid['y1'] - grid['y0']) / CELL)
@@ -92,7 +98,7 @@ def walk_grid(static, trees, grid):
         y = grid['y0'] + (j + 0.5) * CELL
         for i in range(nx):
             x = grid['x0'] + (i + 0.5) * CELL
-            hit, loc, normal, index, obj, _ = s.ray_cast(dg, Vector((x, y, 500.0)), Vector((0, 0, -1)))
+            hit, loc, normal, index, obj, _ = s.ray_cast(dg, Vector((x, y, 800.0)), Vector((0, 0, -1)))
             if not hit or normal.z < 0.5:
                 continue
             key = (obj.name, index)
@@ -119,7 +125,8 @@ def walk_grid(static, trees, grid):
                     cy = grid['y0'] + (jj + 0.5) * CELL
                     if math.hypot(cx - x, cy - y) <= r:
                         heights[jj * nx + ii] = NO_WALK
-    tree_layer.exclude = False
+    for lc in layers:
+        lc.exclude = False
     return nx, ny, heights, walk_count
 
 
@@ -184,8 +191,13 @@ def main():
     static, trees = collect()
     trees_out = tree_records(trees)
     lap('collect')
-    nx, ny, heights, walk_count = walk_grid(static, trees, cfg['grid'])
-    lap('walk grid')
+    grids, heights, walk_count = [], [], 0
+    for g in cfg['grids']:
+        nx, ny, h, n = walk_grid(trees, g)
+        grids.append({'name': g['name'], 'nx': nx, 'ny': ny, 'x0': g['x0'], 'y0': g['y0'], 'offset': len(heights)})
+        heights += h
+        walk_count += n
+    lap('walk grids')
     (OUT / 'walk.bin').write_bytes(struct.pack(f'<{len(heights)}h', *heights))
     (OUT / 'trees.json').write_text(json.dumps(trees_out, separators=(',', ':')), encoding='utf-8')
     # Trees are recorded; drop them so join/export operators don't walk ~24,000 objects.
@@ -193,16 +205,17 @@ def main():
     lap('remove trees')
     glb, tris = export_static(static)
     lap('export static')
-    g = cfg['grid']
+    gates = [{'target': k.split('@')[0], **v} for k, v in named_points('Gate').items()]
     meta = {
         'id': SCENE_ID,
         'title': cfg['title'],
         'zh': cfg['zh'],
         'axes': 'three.js: x = east, y = up, z = south (Blender x, z, -y); metres',
         # Grid in three.js terms: column i -> x = x0 + (i + .5) * cell, row j -> z = -(y0 + (j + .5) * cell).
-        'walk': {'nx': nx, 'ny': ny, 'cell': CELL, 'x0': g['x0'], 'y0': g['y0'], 'noWalk': NO_WALK,
-                 'walkableCells': walk_count},
+        'walk': {'cell': CELL, 'noWalk': NO_WALK, 'grids': grids, 'walkableCells': walk_count},
+        'labels': cfg.get('labels', {}),
         'spawns': named_points('Spawn'),
+        'gates': gates,
         'seats': named_points('Seat'),
         'trees': len(trees_out),
         'staticTriangles': tris,
@@ -211,7 +224,7 @@ def main():
     }
     (OUT / 'scene.json').write_text(json.dumps(meta, indent=1, ensure_ascii=False), encoding='utf-8')
     print('EXPORTED', json.dumps({k: meta[k] for k in ('trees', 'staticTriangles')} | {'walk': meta['walk'],
-          'spawns': list(meta['spawns']), 'seats': len(meta['seats']), 'glb': glb.stat().st_size}), flush=True)
+          'spawns': list(meta['spawns']), 'seats': len(meta['seats']), 'gates': len(gates), 'glb': glb.stat().st_size}), flush=True)
 
 
 main()

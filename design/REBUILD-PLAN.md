@@ -171,6 +171,16 @@ Phases 3 and 4 can run partly in parallel (separate landmarks, separate `.blend`
 
 ---
 
+## Progress (19 October 2026)
+
+Phase 1, the Zhongshan vertical slice, is playable on branch `rebuild/blender-city`:
+
+- **Scenes:** the Mausoleum axis (Bo'ai arch, avenue, gate, stele pavilion, 392-step stair, hall), the Music Stage, and Meiling Palace with its plane-tree necklace, all in one streamed world (~1.2 MB GLB, two walk grids).
+- **Arrival and travel:** a paraglide arrival from the atlas pin, and four moon gates that glide you between the scenes.
+- **Traveller:** a traveller with a magpie companion; third person by default, V for first person; K for paraglider free flight.
+- **Sitting:** F sits on the Music Stage terraces and the Meiling benches, with pigeons overhead and new generative music each time.
+- **Not yet done:** real-phone benchmark, the season dial, the illustrated floor-plan map, and the other nine landmarks.
+
 ## 9. Decisions (agreed 17 October 2026)
 
 - **Audience:** a gift for the owner's friend, a US citizen who visited Nanjing around 2016 and loved it. English-first UI with Chinese names alongside; mainland-China hosting is not a concern, Vercel stays.

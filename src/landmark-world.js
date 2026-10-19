@@ -190,9 +190,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   scene.add(worldRain, worldSnow);
 
   // --- Walk grid ------------------------------------------------------------------------------------
+  // One grid per scene area (the Mausoleum and Music Stage, Meiling), concatenated in walk.bin.
   function cellOf(x, z) {
-    const i = Math.floor((x - walk.x0) / walk.cell), j = Math.floor((-z - walk.y0) / walk.cell);
-    return (i < 0 || j < 0 || i >= walk.nx || j >= walk.ny) ? -1 : j * walk.nx + i;
+    for (const g of walk.grids) {
+      const i = Math.floor((x - g.x0) / walk.cell), j = Math.floor((-z - g.y0) / walk.cell);
+      if (i >= 0 && j >= 0 && i < g.nx && j < g.ny) return g.offset + j * g.nx + i;
+    }
+    return -1;
   }
   function heightAt(x, z) {
     const c = cellOf(x, z);
@@ -267,15 +271,25 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   const camDir = new THREE.Vector3(), tmp = new THREE.Vector3();
 
   function feetAt(x, z, fallback) { return surface(x, z) ?? fallback; }
-  function glideCurve(feet, look) {
+  function glideCurve(feet, look, from = null) {
     // Approach from behind the arrival view: a long descending S-turn that ends running out onto
-    // the spawn. Points are lifted clear of the ground under them.
+    // the spawn. Points are lifted clear of the ground under them. From a gate, the traveller
+    // launches where they stand, climbs well clear of the hills between, then joins the approach.
     const f = new THREE.Vector3(look[0] - feet.x, 0, look[2] - feet.z).normalize(), side = new THREE.Vector3(-f.z, 0, f.x);
-    const pts = [[-420, 150, 170], [-260, -70, 115], [-140, 40, 62], [-60, -12, 22], [-18, 0, 4], [0, 0, 0]].map(([b, sd, h]) => {
+    const approach = from ? [[-140, 40, 62], [-60, -12, 22], [-18, 0, 4], [0, 0, 0]]
+      : [[-420, 150, 170], [-260, -70, 115], [-140, 40, 62], [-60, -12, 22], [-18, 0, 4], [0, 0, 0]];
+    const pts = approach.map(([b, sd, h]) => {
       const q = feet.clone().addScaledVector(f, b).addScaledVector(side, sd);
       q.y = Math.max(feet.y + h, (surface(q.x, q.z) ?? feet.y) + Math.min(h, 25));
       return q;
     });
+    if (from) {
+      const out = new THREE.Vector3(pts[0].x - from.x, 0, pts[0].z - from.z).normalize();
+      const top = Math.max(from.y, feet.y) + 110;
+      const lift = from.clone().addScaledVector(out, 30); lift.y = from.y + 22;
+      const mid = from.clone().lerp(pts[0], .5); mid.y = top;
+      pts.unshift(from.clone(), lift, mid);
+    }
     return new THREE.CatmullRomCurve3(pts, false, 'centripetal');
   }
 
@@ -299,15 +313,27 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       body.fromArray(s.feet); lastBody.copy(body); heading = Math.atan2(s.look[0] - s.feet[0], s.look[2] - s.feet[2]);
       seated = null; glide = null; mode = 'walk';
     },
-    startGlide(s, seconds = 15) {
+    // from: glide from where the traveller stands (a moon gate) instead of the arrival approach.
+    startGlide(s, {from = null, seconds = from ? 18 : 15} = {}) {
+      const start = from ? body.clone() : null;
       world.placeAt(s);
-      const curve = glideCurve(body.clone(), s.look);
-      glide = {curve, t: 0, seconds}; body.copy(curve.getPointAt(0)); lastBody.copy(body); mode = 'glide';
+      const curve = glideCurve(body.clone(), s.look, start);
+      // Focus: what the approach turns the camera towards (the spawn's view: hall, stage, palace).
+      glide = {curve, t: 0, seconds, focus: new THREE.Vector3(...s.look)}; body.copy(curve.getPointAt(0)); lastBody.copy(body); mode = 'glide';
     },
     endGlide() {
       if (!glide) return;
       body.copy(glide.curve.getPointAt(1)); body.y = feetAt(body.x, body.z, body.y);
       glide = null; mode = 'walk';
+    },
+    label: name => meta.labels?.[name] || name,
+    nearestGate(radius = 3) {
+      let best = null;
+      for (const g of meta.gates || []) {
+        const d = Math.hypot(g.position[0] - body.x, g.position[2] - body.z);
+        if (d < radius && (!best || d < best.d)) best = {g, d};
+      }
+      return best?.g || null;
     },
     nearestSeat(p, radius = 3) {
       const q = p || body;
@@ -375,7 +401,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       if (glide) {
         const k = Math.min(glide.t / glide.seconds + .02, 1), tan = glide.curve.getTangentAt(k);
         camera.position.copy(body).addScaledVector(tan, -10).add(new THREE.Vector3(0, 5.2, 0));
-        camera.lookAt(body.clone().addScaledVector(tan, 18).add(new THREE.Vector3(0, -3, 0)));
+        // Ahead along the line at first, then onto the destination as it comes into view.
+        const ahead = body.clone().addScaledVector(tan, 18).add(new THREE.Vector3(0, -3, 0));
+        camera.lookAt(ahead.lerp(glide.focus, THREE.MathUtils.smoothstep(k, .45, .85) * .85));
         camera.rotation.z = 0;
         return;
       }

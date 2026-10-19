@@ -1,16 +1,38 @@
 {
  "id": "zhongshan",
- "title": "Sun Yat-sen Mausoleum & the Music Stage",
+ "title": "Sun Yat-sen Mausoleum, the Music Stage & Meiling Palace",
  "zh": "中山陵 · 音乐台",
  "axes": "three.js: x = east, y = up, z = south (Blender x, z, -y); metres",
  "walk": {
-  "nx": 320,
-  "ny": 930,
   "cell": 1.0,
-  "x0": -95.0,
-  "y0": -255.0,
   "noWalk": -32768,
-  "walkableCells": 291349
+  "grids": [
+   {
+    "name": "axis",
+    "nx": 320,
+    "ny": 930,
+    "x0": -95.0,
+    "y0": -255.0,
+    "offset": 0
+   },
+   {
+    "name": "meiling",
+    "nx": 450,
+    "ny": 410,
+    "x0": -905.0,
+    "y0": -1405.0,
+    "offset": 297600
+   }
+  ],
+  "walkableCells": 470076
+ },
+ "labels": {
+  "axis": "the Mausoleum",
+  "stair": "the great stair",
+  "hall": "the Sacrificial Hall",
+  "music": "the Music Stage",
+  "meiling": "Meiling Palace",
+  "meiling-terrace": "the Phoenix Terrace"
  },
  "spawns": {
   "axis": {
@@ -60,8 +82,86 @@
     -17.778,
     160.372
    ]
+  },
+  "meiling": {
+   "position": [
+    -677.0,
+    -33.212,
+    1265.1
+   ],
+   "look": [
+    -677.0,
+    -33.212,
+    1235.1
+   ]
+  },
+  "meiling-terrace": {
+   "position": [
+    -677.0,
+    -31.612,
+    1244.5
+   ],
+   "look": [
+    -677.0,
+    -31.612,
+    1274.5
+   ]
   }
  },
+ "gates": [
+  {
+   "target": "meiling",
+   "position": [
+    -38.27,
+    0.0,
+    -3.923
+   ],
+   "look": [
+    -68.226,
+    0.0,
+    -2.29
+   ]
+  },
+  {
+   "target": "music",
+   "position": [
+    37.617,
+    0.0,
+    -8.059
+   ],
+   "look": [
+    67.573,
+    0.0,
+    -9.692
+   ]
+  },
+  {
+   "target": "axis",
+   "position": [
+    173.995,
+    -16.26,
+    125.231
+   ],
+   "look": [
+    188.079,
+    -16.26,
+    98.742
+   ]
+  },
+  {
+   "target": "axis",
+   "position": [
+    -652.0,
+    -33.212,
+    1247.0
+   ],
+   "look": [
+    -630.787,
+    -33.212,
+    1268.213
+   ]
+  }
+ ],
  "seats": {
   "music-00": {
    "position": [
@@ -242,9 +342,45 @@
     -18.772,
     166.895
    ]
+  },
+  "meiling-0": {
+   "position": [
+    -695.0,
+    -33.212,
+    1260.5
+   ],
+   "look": [
+    -681.123,
+    -33.212,
+    1233.902
+   ]
+  },
+  "meiling-1": {
+   "position": [
+    -677.0,
+    -33.212,
+    1260.5
+   ],
+   "look": [
+    -677.0,
+    -33.212,
+    1230.5
+   ]
+  },
+  "meiling-2": {
+   "position": [
+    -659.0,
+    -33.212,
+    1260.5
+   ],
+   "look": [
+    -672.877,
+    -33.212,
+    1233.902
+   ]
   }
  },
- "trees": 23970,
- "staticTriangles": 240182,
+ "trees": 26944,
+ "staticTriangles": 283974,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). Architecture modelled from published dimensions; see research/zhongshan/FACTS.md."
 }

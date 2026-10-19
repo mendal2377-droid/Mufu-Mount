@@ -251,7 +251,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(state.flying){state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
     state.moving=world.walk(camera,keys,dt);
     world.placeCamera(camera,dt);
-    if(t-lastSeatHint>6&&!world.seated&&world.nearestSeat(null,2.5)){lastSeatHint=t;toast('F to sit');}
+    if(t-lastSeatHint>6&&!world.seated){const gate=world.nearestGate();
+      if(gate){lastSeatHint=t;toast(`Moon gate · F to glide to ${world.label(gate.target)}`);}
+      else if(world.nearestSeat(null,2.5)){lastSeatHint=t;toast('F to sit');}}
     const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
   }
   const api={...built,data,game,gameView,refreshPins,renderPassport,renderPlaces,
@@ -354,6 +356,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // F: sit on the nearest seat (benches, the Music Stage terraces), or stand up again.
     interact(){if(!world||state.overview||state.flying||world.gliding)return;
       if(world.seated){world.stand();music?.stop();toast('Standing up');return;}
+      // A moon gate: take off from here and glide to the scene it leads to.
+      const gate=world.nearestGate();
+      if(gate){world.startGlide(world.spawn(gate.target),{from:true});toast(`Gliding to ${world.label(gate.target)} · any key to land`);return;}
       const seat=world.nearestSeat();
       if(!seat){toast('Nothing to sit on here');return;}
       world.sit(seat);
