@@ -444,8 +444,12 @@ def main():
             u, s = to_axis(cx, cy)
             return not (-20 < s < AX_LEN + 40 and abs(u) < 60) and Vector((cx, cy)).length > 140 and not island_mask.at(cx, cy)
         return not water_mask.at(cx, cy)
-    _, blocks = ac.city_blocks('City blocks', c['City'], F['buildings'], lambda x, y: A.bare_at(x, y), keep)
-    build_zifeng(c['City'])
+    # Towers of 60 m and more come from the shared skyline (blender/build_skyline.py): skip them here.
+    sky = ac.Mask(ac.skyline_polys(A.meta['origin_wgs84']), A.extent, 6.0)
+    keep_low = lambda x, y: keep(x, y) and not sky.at(x, y)  # noqa: E731
+    _, blocks = ac.city_blocks('City blocks', c['City'], F['buildings'], lambda x, y: A.bare_at(x, y), keep_low)
+    scene['origin_wgs84'] = list(A.meta['origin_wgs84'])
+    scene['base_z'] = A.base
     markers(c['Markers'], c['Gates'])
     ac.lookdev(scene)
     hz = next(w for w in F['islands'] if w['name'] == '环洲')['pts']

@@ -13,6 +13,7 @@
     "ny": 930,
     "x0": -95.0,
     "y0": -255.0,
+    "cell": 1.0,
     "offset": 0
    },
    {
@@ -21,10 +22,11 @@
     "ny": 410,
     "x0": -905.0,
     "y0": -1405.0,
+    "cell": 1.0,
     "offset": 297600
    }
   ],
-  "walkableCells": 470076
+  "walkableCells": 473531
  },
  "labels": {
   "axis": "the Mausoleum",
@@ -34,6 +36,12 @@
   "meiling": "Meiling Palace",
   "meiling-terrace": "the Phoenix Terrace"
  },
+ "origin_wgs84": [
+  32.0587677,
+  118.8486466
+ ],
+ "base_z": 87.8,
+ "fog": null,
  "spawns": {
   "axis": {
    "position": [
@@ -162,6 +170,9 @@
    ]
   }
  ],
+ "bells": {},
+ "docks": {},
+ "rides": {},
  "seats": {
   "music-00": {
    "position": [
@@ -345,42 +356,42 @@
   },
   "meiling-0": {
    "position": [
-    -695.0,
+    -699.0,
     -33.212,
-    1260.5
+    1242.4
    ],
    "look": [
-    -681.123,
+    -674.948,
     -33.212,
-    1233.902
+    1224.47
    ]
   },
   "meiling-1": {
    "position": [
-    -677.0,
+    -655.0,
     -33.212,
-    1260.5
+    1242.4
    ],
    "look": [
-    -677.0,
+    -679.052,
     -33.212,
-    1230.5
+    1224.47
    ]
   },
   "meiling-2": {
    "position": [
-    -659.0,
+    -699.0,
     -33.212,
-    1260.5
+    1248.4
    ],
    "look": [
-    -672.877,
+    -677.979,
     -33.212,
-    1233.902
+    1226.997
    ]
   }
  },
  "trees": 26944,
- "staticTriangles": 283974,
+ "staticTriangles": 285078,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). Architecture modelled from published dimensions; see research/zhongshan/FACTS.md."
 }

@@ -86,14 +86,21 @@ def mesh_object(name, bm, coll, material_names):
 
 
 def add_box(bm, center, size, mi=0, matrix=None):
-    """Axis-aligned box into an existing bmesh; returns the new faces."""
-    r = bmesh.ops.create_cube(bm, size=1.0)
-    verts = r['verts']
+    """Axis-aligned box into an existing bmesh; returns the new faces.
+
+    Built vertex by vertex: bmesh.ops.create_cube slows down as the target mesh grows, which made
+    a district of houses (tens of thousands of boxes in one bmesh) quadratic: minutes, not seconds.
+    """
     m = Matrix.Translation(Vector(center)) @ Matrix.Diagonal((size[0], size[1], size[2], 1))
     if matrix is not None:
         m = matrix @ m
-    bmesh.ops.transform(bm, matrix=m, verts=verts)
-    faces = list({f for v in verts for f in v.link_faces})
+    v = [bm.verts.new(m @ Vector((x, y, z))) for x in (-.5, .5) for y in (-.5, .5) for z in (-.5, .5)]
+    # Corners indexed by (x, y, z) bits: 0 = (-,-,-) ... 7 = (+,+,+). Faces wound outwards.
+    quads = ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3))
+    faces = [bm.faces.new((v[a], v[b], v[c], v[d])) for a, b, c, d in quads]
+    if m.determinant() < 0:   # a mirrored matrix turns the winding inside out
+        for f in faces:
+            f.normal_flip()
     for f in faces:
         f.material_index = mi
     return faces
@@ -106,28 +113,36 @@ def box(name, center, size, coll, material):
 
 
 def curved_roof(name, coll, center, half_x, half_y, height, *, ridge_ratio=0.45, lift=0.9,
-                thickness=0.35, material='roof_cobalt', ridge_material='roof_cobalt_ridge', res=(36, 22)):
+                thickness=0.35, material='roof_cobalt', ridge_material='roof_cobalt_ridge', res=(36, 22), gable=0.0):
     """Chinese hip roof: concave slopes, a level ridge and lifted corners.
 
     The slope profile h = H * t**1.7 (t = inset from the eave over the half-depth) is steep at the
     ridge and nearly flat at the eave, which is what makes the curve read from below.
     ridge_ratio sets the ridge length as a fraction of the long side; 1.0 is close to a gable.
+    gable > 0 makes a hip-and-gable roof (歇山): the end hips stop at that fraction of the rise,
+    and above it the long slopes run on to the ridge, leaving a vertical triangular gable (山花)
+    at each end. Extra grid columns either side of the gable line keep its face crisp.
     """
     nx, ny = res
     bm = bmesh.new()
     a, b = half_x, half_y
     inset_max = b
     ridge_half =(a - b) + b * ridge_ratio * 0.5 if a > b else a * ridge_ratio
+    xs = [-a + 2 * a * i / nx for i in range(nx + 1)]
+    if gable > 0:
+        xg = a - gable * (a - ridge_half)
+        xs = sorted(set(xs + [s * (xg + e) for s in (-1, 1) for e in (-0.02, 0.02)]))
     grid = []
     for j in range(ny + 1):
         row = []
         y = -b + 2 * b * j / ny
-        for i in range(nx + 1):
-            x = -a + 2 * a * i / nx
+        for x in xs:
             # Distance from the eave line, measuring the end slopes against the shorter hip.
             dy = b - abs(y)
             dx = (a - abs(x)) * (b / max(a - ridge_half, 1e-3))
             d = min(dx, dy)
+            if gable > 0 and dx / inset_max >= gable:
+                d = dy                          # inside the gable line only the long slopes rise
             t = min(max(d / inset_max, 0.0), 1.0)  # grid edges can round to -1e-16
             z = height * t ** 1.7
             # Corner lift: strongest at the eave corners, fading inward and along the eave.
@@ -137,7 +152,7 @@ def curved_roof(name, coll, center, half_x, half_y, height, *, ridge_ratio=0.45,
             row.append(bm.verts.new((center[0] + x, center[1] + y, center[2] + z)))
         grid.append(row)
     for j in range(ny):
-        for i in range(nx):
+        for i in range(len(xs) - 1):
             bm.faces.new((grid[j][i], grid[j][i + 1], grid[j + 1][i + 1], grid[j + 1][i]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     # Thickness downwards so eaves read as a slab from below.
@@ -147,6 +162,8 @@ def curved_roof(name, coll, center, half_x, half_y, height, *, ridge_ratio=0.45,
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     # Ridge beam with raised ends.
     rz = center[2] + height
+    if gable > 0:
+        ridge_half = xg                       # the ridge runs between the gables
     ridge_faces = add_box(bm, (center[0], center[1], rz + 0.35), (2 * ridge_half + 0.6, 0.6, 0.8), mi=1)
     for sx in (-1, 1):
         add_box(bm, (center[0] + sx * (ridge_half + 0.2), center[1], rz + 0.9), (0.7, 0.6, 1.4), mi=1)

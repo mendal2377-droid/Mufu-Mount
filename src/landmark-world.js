@@ -16,7 +16,20 @@ const PAINT = {
   lawn: {mottle: .10, scale: .18}, forest_floor: {mottle: .14, scale: .09}, paving: {mottle: .05, scale: .7, joints: 1},
   paving_joint: {mottle: .05, scale: .7}, granite: {mottle: .04, scale: .5, joints: .6}, granite_shade: {mottle: .05, scale: .5},
   hedge: {mottle: .12, scale: 1.2}, vine: {mottle: .16, scale: 1.4}, water: {mottle: 0, scale: 1},
+  // Skyline towers: painted floor bands and mullions, windows that light up at dusk.
+  tower_glass: {mottle: .03, scale: .3, windows: 1}, tower_glass_dark: {mottle: .03, scale: .3, windows: 1},
+  tower_stone: {mottle: .04, scale: .3, windows: .7}, city_glass: {mottle: .03, scale: .3, windows: 1},
 };
+
+// The shared skyline (blender/build_skyline.py), fetched once and placed in every world by origin.
+let skylinePromise = null;
+function loadSkyline(loader) {
+  skylinePromise ||= Promise.all([
+    fetch('/scenes/skyline/skyline.json').then(r => r.ok ? r.json() : null),
+    loader.loadAsync('/scenes/skyline/skyline.glb'),
+  ]).then(([meta, gltf]) => (meta ? {meta, scene: gltf.scene} : null)).catch(e => { console.warn('skyline', e); return null; });
+  return skylinePromise;
+}
 
 // Look-dev tree kinds (blender/kit.py tree_prototypes) drawn as soft painted balls: a few crown
 // lobes with normals pointing out of the crown's centre, so banded toon light reads as gouache.
@@ -141,24 +154,33 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   const walk = meta.walk, heights = new Int16Array(walkBuf);
 
   // --- Painted toon materials keyed on palette names ---------------------------------------------
-  const cache = new Map();
-  function paint(src) {
+  const cache = new Map(), hazeColor = {value: new THREE.Color(0xa8d0ea)};
+  // far: skyline materials skip the scene fog (it would swallow towers kilometres away) and take a
+  // gentler haze of their own, so the city stays recognisable on the horizon.
+  function paint(src, far = false) {
     const name = (src.name || 'granite').replace(/\.\d+$/, '');
-    if (cache.has(name)) return cache.get(name);
+    const key = (far ? 'far:' : '') + name;
+    if (cache.has(key)) return cache.get(key);
     const style = PAINT[name] || {mottle: .05, scale: .6};
     const mat = new THREE.MeshToonMaterial({color: src.color.clone(), gradientMap: bands, side: THREE.FrontSide});
     mat.name = name;
+    if (far) mat.fog = false;
     if (name === 'water') { mat.color.multiplyScalar(1.05); mat.emissive = new THREE.Color(0x0b2f3a); }
     // Lanterns and lit windows glow; the bloom pass turns them into soft lights at dusk.
     if (name === 'lantern') { mat.emissive = new THREE.Color(0xe8473a); mat.emissiveIntensity = .9; }
     if (name === 'lantern_glow') { mat.emissive = new THREE.Color(0xffb347); mat.emissiveIntensity = .75; }
+    // The Bao'en tower's glass: a pale green-white glow, as it is lit at night.
+    if (name === 'glass_glow') { mat.emissive = new THREE.Color(0xbfe8d2); mat.emissiveIntensity = .55; }
     mat.onBeforeCompile = s => {
       s.uniforms.citySnow = shared.snow; s.uniforms.worldMottle = {value: style.mottle}; s.uniforms.worldScale = {value: style.scale};
       s.uniforms.worldJoints = {value: style.joints || 0}; s.uniforms.cityTime = shared.time;
       s.uniforms.worldWater = {value: name === 'water' ? 1 : 0};
+      s.uniforms.worldWindows = {value: style.windows || 0};
+      s.uniforms.citySunset = shared.sunset || {value: 0}; s.uniforms.cityDawn = shared.dawn || {value: 0};
+      s.uniforms.worldFar = {value: far ? 1 : 0}; s.uniforms.hazeColor = hazeColor;
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater;varying vec3 vWorldPos;varying float vUp;\n' +
+      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar;uniform vec3 hazeColor;varying vec3 vWorldPos;varying float vUp;\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -181,9 +203,24 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             float fres=pow(1.-clamp(dot(normalize(vViewPosition),normalize(vNormal)),0.,1.),4.);
             diffuseColor.rgb=mix(diffuseColor.rgb*(.9+rip*.22),vec3(.78,.88,.96),fres*.35);
             diffuseColor.rgb+=smoothstep(.78,.86,rip)*.08;
-          }`);
+          }
+          // Towers: 3.8 m floor bands and 2.4 m mullions on the walls.
+          float winLit=0.;
+          if(worldWindows>0.){
+            float side=1.-smoothstep(.2,.4,abs(vUp));
+            vec2 cell=vec2((vWorldPos.x+vWorldPos.z)/2.4,vWorldPos.y/3.8);
+            vec2 f=fract(cell);float fw2=max(fwidth(cell.x),fwidth(cell.y));
+            float frame=max(smoothstep(.82,.9,f.y),smoothstep(.9,.96,f.x))*(1.-smoothstep(.2,.6,fw2));
+            diffuseColor.rgb*=1.-frame*.18*side*worldWindows;
+            winLit=step(.62,lwHash(floor(cell)))*side*(1.-frame);
+          }`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          // At dusk and dawn a third of the windows glow warm.
+          totalEmissiveRadiance+=winLit*worldWindows*clamp(citySunset+cityDawn,0.,1.)*vec3(1.,.74,.42)*.9;`)
+        .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+          // Skyline haze: towers fade toward the sky colour with distance, never to nothing.
+          if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.62);}`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v3';
+    mat.customProgramCacheKey = () => 'landmark-paint-v5';
     cache.set(name, mat);
     return mat;
   }
@@ -195,6 +232,18 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     staticTriangles += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
   });
   scene.add(gltf.scene);
+
+  // The city's towers on the horizon, wherever this world is.
+  const skyline = await loadSkyline(loader);
+  if (skyline && meta.origin_wgs84?.length === 2) {
+    const [olat, olon] = meta.origin_wgs84, [clat, clon] = skyline.meta.origin_wgs84;
+    const sx = (clon - olon) * 111320 * Math.cos(olat * Math.PI / 180), sy = (clat - olat) * 110574;
+    const g = skyline.scene.clone(true);
+    g.position.set(sx, -(meta.base_z || 0), -sy);
+    g.traverse(o => { if (o.isMesh) { o.material = Array.isArray(o.material) ? o.material.map(m => paint(m, true)) : paint(o.material, true); o.castShadow = o.receiveShadow = false; o.frustumCulled = false; } });
+    g.name = 'skyline';
+    scene.add(g);
+  }
 
   // --- Trees: one instanced draw per kind, swaying with the shared clock --------------------------
   const byKind = {};
@@ -453,7 +502,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       }
       return best?.g || null;
     },
-    nearestDock(radius = 5) {
+    nearestDock(radius = 8) {   // the dock is at the water's edge; the walkable bank is a few metres back
       for (const [name, d] of Object.entries(meta.docks || {})) if (Math.hypot(d.position[0] - body.x, d.position[2] - body.z) < radius) return {name, ...d};
       return null;
     },
@@ -465,6 +514,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       if (!route || !riderBoat) return false;
       const u0 = closestU(route, dock.position[0], dock.position[2]);
       ride = {route, u: u0, u0, dir: u0 < .5 ? 1 : -1, turned: false, dock};
+      const tan = route.curve.getTangentAt(u0).multiplyScalar(ride.dir);
+      heading = Math.atan2(tan.x, tan.z);
       riderBoat.visible = true; seated = null; mode = 'sit';
       return true;
     },
@@ -597,6 +648,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const haze = meta.fog ?? .0011;
       scene.fog.density = (mode === 'glide' ? haze * .45 : haze) + weather.storm * .004 + weather.snow * .003;
       sky.position.copy(camera.position);
+      hazeColor.value.copy(scene.fog.color);
       worldRain.position.copy(camera.position); worldSnow.position.copy(camera.position);
       worldRain.visible = weather.storm > .02; worldSnow.visible = weather.snow > .02;
       updatePigeons(t, dt, !!seated);

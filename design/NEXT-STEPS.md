@@ -1,23 +1,22 @@
-# Where the rebuild stopped (19 October 2026, 23:40)
+# Where the rebuild stands (20 October 2026)
 
-Branch `rebuild/blender-city`. Plan: [REBUILD-PLAN.md](REBUILD-PLAN.md). Art: [ART-BIBLE.md](ART-BIBLE.md).
+Branch `rebuild/blender-city`. Plan: [REBUILD-PLAN.md](REBUILD-PLAN.md). Art: [ART-BIBLE.md](ART-BIBLE.md). Shapes: [SHAPE-AUDIT.md](SHAPE-AUDIT.md).
 
-## Done and committed
+## Worlds (public/scenes/*)
 
-- **Zhongshan** (`blender/build_zhongshan.py` + `zhongshan_meiling.py` → `public/scenes/zhongshan/`): Mausoleum axis, Music Stage, Meiling Palace with its necklace, moon gates, paraglide arrival, traveller and magpie, seats with generative music. Verified in the browser.
-- **North** (`blender/build_north.py` → `public/scenes/north/`): Jiming Temple, Taicheng, Xuanwu Lake, lotus, cherry road, temple bell, petals. Exported and loaded in the browser; spawns checked by screenshot.
-- **Shared tooling:** `tools/research/area-prep.py <area>` (DEM crop + OSM to local metres); `blender/area_common.py`; `blender/kit_oldcity.py`; `tools/export-scene.sh <id> [--render]`.
+| World | Pins | Build | State |
+| --- | --- | --- | --- |
+| zhongshan | zhongshan | `blender/build_zhongshan.py` (+ `zhongshan_meiling.py`) | Done: Mausoleum, Music Stage, Meiling necklace, gates, music |
+| north | jiming, xuanwu | `blender/build_north.py` | Done: temple, Taicheng, lake, lotus, cherries, bell |
+| oldsouth | qinhuai, zhonghua, mendong | `blender/build_oldsouth.py` | Built: Fuzimiao, Qinhuai boats and ride, Laomendong, Zhonghua Gate, Bao'en |
+| skyline | (all worlds) | `tools/research/skyline-prep.py` + `blender/build_skyline.py` | OSM 3D parts of every 60 m+ tower; loaded into each world by origin |
 
-## In progress (code written, not yet built or tested)
+Rebuild one world: `./tools/export-scene.sh <id> [--render]`. The skyline: run its two commands, then gltf-transform (see the build_skyline.py docstring).
 
-1. **Old South** (`blender/build_oldsouth.py`): Fuzimiao, the Qinhuai with embankments, lanterns and bridges, OSM-footprint houses with horse-head walls, Laomendong, Zhonghua Gate, Bao'en, boat route markers.
-   - **The first build ran more than 13 minutes and was stopped.** Next: add `time` laps to `main()` and run `blender -b --factory-startup --python blender/build_oldsouth.py -- --no-render` to find the slow step. Suspects: `build_houses` (many `add_box` calls per house), `river_line()`, or `plant()` over all water polygons.
-   - Then run `./tools/export-scene.sh oldsouth --render`, review `design/oldsouth/lookdev-*.jpg`, and fix what looks wrong.
-2. **Web, written but untested:** pleasure boats and the boat ride in `src/landmark-world.js` (`board`, `leaveBoat`, `rides`, `docks`); the Old South pins in `src/nanjing.js` `WORLDS` (qinhuai, zhonghua, mendong → `oldsouth`, sunset). **Entering those pins fails until `public/scenes/oldsouth/` exists.**
-3. **Tests:** `tests/worlds-browser.mjs` (new) is not run yet. `tests/city-browser.mjs` and `city-game-browser.mjs` now skip world pins via `city.worldPins`.
+## Next
 
-## After that
+- Batch B landmarks: Presidential Palace, Yangtze Bridge, Ming Xiaoling, Niushou, Qixia.
+- The illustrated floor-plan map, the season dial, the 2016 / today skyline toggle, and a real-phone benchmark.
+- `tests/worlds-browser.mjs`: raise its load timeout. Software WebGL needs more than 4 minutes for the first world.
 
-- The remaining batch B landmarks: Ming Xiaoling, Presidential Palace, Yangtze Bridge, Niushou, Qixia.
-- The illustrated floor-plan map, the season dial, and a real-phone benchmark.
-- Nothing is pushed. `main` (production) is untouched.
+Nothing is pushed. `main` (production) is untouched.

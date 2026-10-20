@@ -118,9 +118,12 @@ def pagoda(name, coll, base, levels=7, r0=5.2, r_top=3.4, level_h=4.6, sides=8, 
 # --- Halls -------------------------------------------------------------------------------------------
 
 def hall(name, coll, center, w, d, h, *, walls='vermilion', roof='tile_dark', yaw=0.0, double=False,
-         plinth=0.9, columns=True, lift=0.8, roof_h=None):
+         plinth=0.9, columns=True, lift=0.8, roof_h=None, gable=None):
     """A timber hall: stone plinth, coloured walls with a red colonnade on the front, lattice
-    doors, and a curved hip roof (double eave when asked). Front faces local -Y."""
+    doors, and a curved hip roof (double eave when asked). Front faces local -Y.
+    gable: hip-and-gable (歇山) top roof; on by default for double-eave halls, where it is the norm."""
+    if gable is None:
+        gable = 0.45 if double else 0.0
     bm = bmesh.new()
     M = Matrix.Translation(center) @ Matrix.Rotation(yaw, 4, 'Z')
     add_box(bm, (0, 0, plinth / 2), (w + 2.4, d + 2.4, plinth), mi=3, matrix=M)
@@ -147,13 +150,13 @@ def hall(name, coll, center, w, d, h, *, walls='vermilion', roof='tile_dark', ya
         roofs[-1].matrix_world = M @ Matrix.Translation((0, 0, rz)) @ roofs[-1].matrix_world
         rz += 1.6
         roofs.append(kit.curved_roof(name + ' roof', coll, (0, 0, 0), w / 2 + 0.6, d / 2 + 0.6, rh, lift=lift,
-                                     ridge_ratio=0.6, thickness=0.35, material=roof, ridge_material=roof))
+                                     ridge_ratio=0.6, thickness=0.35, material=roof, ridge_material=roof, gable=gable))
         ring = bmesh.new()
         add_box(ring, (0, 0, plinth + h + 0.8), (w - 1.6, d - 1.6, 1.6), mi=0, matrix=M)
         mesh_object(name + ' clerestory', ring, coll, [walls])
     else:
         roofs.append(kit.curved_roof(name + ' roof', coll, (0, 0, 0), w / 2 + 1.4, d / 2 + 1.4, rh, lift=lift,
-                                     ridge_ratio=0.62, thickness=0.35, material=roof, ridge_material=roof))
+                                     ridge_ratio=0.62, thickness=0.35, material=roof, ridge_material=roof, gable=gable))
     roofs[-1].matrix_world = M @ Matrix.Translation((0, 0, rz)) @ roofs[-1].matrix_world
     return o
 
@@ -315,3 +318,29 @@ def extra_prototypes(coll, protos):
     make('lotus', 'lotus', 0, 0.55, flat=True)
     make('lotus_flower', 'lotus_flower', 0, 0.25, flat=True)
     return protos
+
+
+def glass_tower(name, coll, base, levels=9, r0=9.0, r1=6.0, level_h=7.8, sides=8, body='glass_glow', ledge='granite',
+                spire=8.0):
+    """The Bao'en protective tower: a slim, nearly straight octagonal glass shaft with a thin flat
+    ledge at every storey, a small pointed cap and a tall spire (Commons photograph, at night)."""
+    bm = bmesh.new()
+    x, y, z = base
+    prism(bm, (x, y, z), r0 + 3.5, 1.4, sides, mi=1)
+    zc = z + 1.4
+    for k in range(levels):
+        r = r0 + (r1 - r0) * k / max(levels - 1, 1)
+        prism(bm, (x, y, zc), r, level_h, sides, mi=0)
+        prism(bm, (x, y, zc + level_h - 0.25), r + 1.3, 0.35, sides, mi=1)
+        zc += level_h
+    c = bmesh.ops.create_cone(bm, cap_ends=True, segments=sides, radius1=r1 + 0.8, radius2=0.6, depth=4.0)
+    bmesh.ops.translate(bm, vec=(x, y, zc + 2.0), verts=c['verts'])
+    for f in {f for v in c['verts'] for f in v.link_faces}:
+        f.material_index = 1
+    s = bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=0.5, radius2=0.1, depth=spire)
+    bmesh.ops.translate(bm, vec=(x, y, zc + 4.0 + spire / 2), verts=s['verts'])
+    for f in {f for v in s['verts'] for f in v.link_faces}:
+        f.material_index = 2
+    kit.PALETTE.setdefault('glass_glow', '#DCEFE4')
+    o = mesh_object(name, bm, coll, [body, ledge, 'gold'])
+    return o, zc + 4.0 + spire - z

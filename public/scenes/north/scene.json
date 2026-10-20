@@ -35,6 +35,11 @@
   "taicheng": "the Taicheng wall",
   "xuanwu": "Xuanwu Lake"
  },
+ "origin_wgs84": [
+  32.0630502,
+  118.79003095
+ ],
+ "base_z": 7.220760822296143,
  "fog": 0.00042,
  "spawns": {
   "jiming": {
@@ -140,6 +145,8 @@
    ]
   }
  },
+ "docks": {},
+ "rides": {},
  "seats": {
   "xuanwu-0": {
    "position": [
@@ -191,6 +198,6 @@
   }
  },
  "trees": 26421,
- "staticTriangles": 337873,
+ "staticTriangles": 336845,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Lake, islands, walls, streets and buildings: OpenStreetMap contributors (ODbL). Architecture modelled from published descriptions; see research/north/FACTS.md."
 }

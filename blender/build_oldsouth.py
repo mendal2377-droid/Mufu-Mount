@@ -118,7 +118,7 @@ def build_river(coll):
     for x in range(-120, 330, 24):
         ys = [y for y in range(-300, 60, 2) if water_mask.at(x, y)]
         if len(ys) > 4:
-            oc.lantern_string(ls, (x, ys[0] - 3, STREET + 7.5), (x + 4, ys[-1] + 3, STREET + 7.5), 9, mi=0)
+            oc.lantern_string(ls, (x, ys[0] - 3, STREET + 5.2), (x + 4, ys[-1] + 3, STREET + 5.2), 12, mi=0, sag=0.9)
     kit.mesh_object('Lantern strings', ls, coll, ['lantern'])
 
 
@@ -169,10 +169,16 @@ def build_fuzimiao(coll):
     zb_y = -196.0
     kit.add_box(bm, (AXIS_X, zb_y, z + 5.0), (110.0, 2.2, 10.0), mi=0)
     kit.add_box(bm, (AXIS_X, zb_y, z + 0.6), (111.0, 2.8, 1.2), mi=3)
+    # The two long gold dragons in relief on the face toward the river (Commons photograph).
+    for sx in (-1, 1):
+        kit.add_box(bm, (AXIS_X + sx * 26, zb_y + 1.2, z + 6.4), (40.0, 0.3, 2.2), mi=2)
+        kit.add_box(bm, (AXIS_X + sx * 10, zb_y + 1.25, z + 7.6), (8.0, 0.3, 1.6), mi=2)
+    kit.add_box(bm, (AXIS_X, zb_y + 1.25, z + 3.2), (100.0, 0.25, 0.8), mi=3)   # wave band below
     kit.mesh_object('Zhaobi', bm, coll, ['vermilion', 'tile_dark', 'gold', 'granite_shade'])
     r = kit.curved_roof('Zhaobi coping', coll, (AXIS_X, zb_y, z + 10.0), 56.0, 1.8, 1.0, lift=0.4, thickness=0.2,
                         material='tile_dark', ridge_material='tile_dark', res=(60, 6))
-    # 天下文枢 paifang on the north bank, then 棂星门, 聚星亭, 大成门, 大成殿 up the axis.
+    # 天下文枢 paifang on the north bank (dark timber, grey tile roofs), then 棂星门, 聚星亭,
+    # 大成门, 大成殿 up the axis.
     pf = bmesh.new()
     for x in (-6.0, -2.2, 2.2, 6.0):
         kit.add_box(pf, (AXIS_X + x, -116.0, z + 3.6), (0.7, 0.7, 7.2), mi=0)
@@ -180,16 +186,48 @@ def build_fuzimiao(coll):
     kit.add_box(pf, (AXIS_X, -116.0, z + 5.6), (3.8, 0.4, 1.1), mi=1)
     kit.mesh_object('Tianxia Wenshu gate', pf, coll, ['timber_dark', 'gold'])
     for x, w in ((0, 3.0), (-4.1, 2.4), (4.1, 2.4)):
-        rr = kit.curved_roof('Wenshu roof', coll, (AXIS_X + x, -116.0, z + 7.3), w, 1.4, 1.1, lift=0.4, thickness=0.2,
-                             material='gold_roof', ridge_material='gold_roof')
-    oc.hall('Lingxing Gate', coll, (AXIS_X, -96.0, z), 18, 6, 4.5, walls='vermilion', columns=True)
-    _, _ = oc.pagoda('Juxing Pavilion', coll, (44.5, -82.5, z), levels=1, r0=3.2, r_top=3.2, level_h=4.0, sides=6,
-                     walls='vermilion', trim='gold', roof='gold_roof', podium_r=4.4, spire=1.5)
-    oc.hall('Dacheng Gate', coll, (AXIS_X - 2, -64.0, z), 22, 9, 5.0, walls='vermilion', columns=True)
-    oc.hall('Dacheng Hall', coll, (35.0, -38.0, z + 1.2), 30, 18, 8.0, walls='vermilion', double=True, roof='tile_dark')
-    # 魁星阁: three-tier golden-roofed pavilion at the river's edge west of the axis (photographs).
-    oc.pagoda('Kuixing Pavilion', coll, (-6.0, -128.0, z), levels=3, r0=4.2, r_top=3.0, level_h=3.4, sides=8,
-              walls='lantern_glow', trim='vermilion', roof='gold_roof', podium_r=5.6, spire=2.2)
+        kit.curved_roof('Wenshu roof', coll, (AXIS_X + x, -116.0, z + 7.3), w, 1.4, 1.1, lift=0.4, thickness=0.2,
+                        material='tile_dark', ridge_material='tile_dark')
+    # 棂星门: a stone gateway, not a hall: four white posts with cloud caps rising above the
+    # beams, carved panels in the side bays, the centre open (Commons photograph).
+    lx = bmesh.new()
+    for x in (-8.0, -3.2, 3.2, 8.0):
+        kit.add_box(lx, (AXIS_X + x, -96.0, z + 3.4), (0.75, 0.75, 6.8), mi=0)
+        kit.add_box(lx, (AXIS_X + x, -96.0, z + 7.1), (1.0, 1.0, 0.6), mi=0)          # cloud cap
+        kit.add_box(lx, (AXIS_X + x, -96.0, z + 0.5), (1.3, 1.3, 1.0), mi=0)          # base
+    for x0, x1 in ((-8.0, -3.2), (-3.2, 3.2), (3.2, 8.0)):
+        kit.add_box(lx, (AXIS_X + (x0 + x1) / 2, -96.0, z + 5.6), (x1 - x0, 0.5, 0.6), mi=0)
+    for sx in (-1, 1):
+        kit.add_box(lx, (AXIS_X + sx * 5.6, -96.0, z + 1.6), (4.0, 0.35, 2.6), mi=0)   # carved panel
+    kit.mesh_object('Lingxing Gate', lx, coll, ['granite'])
+    # 聚星亭: hexagonal double-eave pavilion, red timber, grey tile, gold finial (Commons).
+    oc.pagoda('Juxing Pavilion', coll, (44.5, -82.5, z), levels=1, r0=3.2, r_top=3.2, level_h=4.2, sides=6,
+              walls='vermilion', trim='vermilion', roof='tile_dark', podium_r=4.4, spire=1.6)
+    oc.hall('Dacheng Gate', coll, (AXIS_X - 2, -64.0, z), 22, 9, 5.0, walls='timber_dark', columns=True)
+    # 大成殿: 45.7 x 24.9 m, 24.8 m to the ridge on a 2.1 m base; double-eave hip-and-gable in dark
+    # grey tile, dark timber front, a white stone terrace with balustrade and stair, the bronze
+    # Confucius in front (ctrip figures; Commons photograph).
+    dz = z + 2.1
+    tb = bmesh.new()
+    kit.add_box(tb, (35.0, -38.0, z + 1.05), (49.0, 28.0, 2.1), mi=0)                   # base
+    kit.add_box(tb, (35.0, -57.0, z + 0.8), (30.0, 10.0, 1.6), mi=0)                    # front terrace 月台
+    for sx in (-1, 1):
+        kit.balustrade(tb, (35.0 + sx * 15.0, -62.0), (35.0 + sx * 15.0, -52.0), z + 1.6, z + 1.6, mi=0)
+    kit.balustrade(tb, (20.0, -62.0), (31.0, -62.0), z + 1.6, z + 1.6, mi=0)
+    kit.balustrade(tb, (39.0, -62.0), (50.0, -62.0), z + 1.6, z + 1.6, mi=0)
+    kit.stair_flight(tb, (35.0, -66.0, z), 8.0, 8, 1.6 / 8, 0.5, mi=0)
+    kit.add_box(tb, (35.0, -70.0, z + 1.2), (1.6, 1.6, 2.4), mi=1)                      # pedestal
+    kit.add_box(tb, (35.0, -70.0, z + 3.6), (1.0, 0.8, 2.4), mi=2)                      # bronze figure
+    kit.mesh_object('Dacheng terrace', tb, coll, ['granite', 'granite_shade', 'bronze'])
+    oc.hall('Dacheng Hall', coll, (35.0, -38.0, dz), 44.0, 23.5, 9.5, walls='timber_dark', double=True,
+            roof='tile_dark', plinth=0.4, roof_h=8.6)
+    # 魁光阁 (Kuiguang Pavilion): three storeys, octagonal, red timber, dark grey roofs (the gold
+    # in dusk photographs is lamplight), a pointed top with a tall finial, rising behind a long
+    # single-storey riverside hall (Commons photograph).
+    kz = dry(-6.0, -128.0)
+    oc.hall('Kuiguang riverside hall', coll, (-6.0, kz + 3.0, z), 38.0, 7.0, 4.0, walls='whitewash', columns=True)
+    oc.pagoda('Kuiguang Pavilion', coll, (-6.0, kz + 12.0, z + 4.0), levels=2, r0=4.4, r_top=3.6, level_h=4.2, sides=8,
+              walls='vermilion', trim='vermilion', roof='tile_dark', podium_r=5.2, spire=3.2)
     # 江南贡院: a hall on the examination-hall site.
     oc.hall('Jiangnan Examination Hall', coll, (176.0, 68.0, z), 24, 14, 7.0, walls='whitewash', double=True)
     # Forecourt paving and the dock for the pleasure boats.
@@ -213,6 +251,8 @@ def build_zhonghua(coll):
         y = y0 + off + th / 2
         kit.add_box(bm, (cx, y, z + GATE_H / 2), (GATE_W, th, GATE_H), mi=0)
         kit.add_box(bm, (cx, y, z + GATE_H + 0.05), (GATE_W - 2, th - 1.2, 0.1), mi=1)
+        # Pale stone ashlar on the lower two-thirds, brick above (Commons photograph of the gate).
+        kit.add_box(bm, (cx, y, z + GATE_H * 0.32), (GATE_W + 0.12, th + 0.12, GATE_H * 0.64), mi=3)
         for side in (-1, 1):
             kit.arch_panel(bm, (cx, y + side * (th / 2 + 0.02), z), 7.0, 10.5, depth=0.4, mi=2,
                            facing='+Y' if side > 0 else '-Y')
@@ -224,15 +264,20 @@ def build_zhonghua(coll):
     for sx in (-1, 1):
         kit.add_box(bm, (cx + sx * (GATE_W / 2 - 6), cy, z + GATE_H / 2), (12.0, GATE_D, GATE_H), mi=0)
         kit.add_box(bm, (cx + sx * (GATE_W / 2 - 6), cy, z + GATE_H + 0.05), (10.8, GATE_D - 1, 0.1), mi=1)
-    # 27 vaults in three rows across the south face.
-    for row in range(3):
-        for k in range(9):
-            kit.arch_panel(bm, (cx - 40 + k * 10.0, y0 - 0.03, z + 1.2 + row * 6.4), 3.4, 4.4, depth=0.3, mi=2)
+    # 27 vaults (藏兵洞): inside, along the side walls' court faces. The outer south face stays
+    # plain brick with its one great arch, as photographed.
+    for sx in (-1, 1):
+        for k in range(14 if sx < 0 else 13):
+            yy = y0 + 26 + k * 7.0
+            if any(off - 3 < yy - y0 < off + th + 3 for off, th in walls):
+                continue
+            R = Matrix.Translation((cx + sx * (GATE_W / 2 - 12.02), yy, z)) @ Matrix.Rotation(-sx * math.pi / 2, 4, 'Z')
+            kit.arch_panel(bm, (0, 0, 0), 3.4, 4.6, depth=0.3, mi=2, matrix=R)
     # Horse ramp (马道) outside the east wall, climbing south from the city side to the wall top.
     steps = 100
     kit.stair_flight(bm, (0, 0, 0), 5.0, steps, GATE_H / steps, 1.0, mi=1,
                      matrix=Matrix.Translation((cx + GATE_W / 2 + 2.6, y0 + GATE_D + steps * 1.0, z)) @ Matrix.Rotation(math.pi, 4, 'Z'))
-    kit.mesh_object('Zhonghua Gate', bm, coll, ['ming_brick', 'paving', 'opening'])
+    kit.mesh_object('Zhonghua Gate', bm, coll, ['ming_brick', 'paving', 'opening', 'granite_shade'])
     # The city wall running east from the gate past Laomendong (OSM way 91997603).
     wb = bmesh.new()
     for w in F['wall']:
@@ -243,8 +288,7 @@ def build_zhonghua(coll):
 
 def build_baoen(coll):
     """The Bao'en protective tower: a nine-storey lantern of a pagoda that glows white-gold at dusk."""
-    oc.pagoda("Bao'en Pagoda", coll, (BAOEN.x, BAOEN.y, zground(*BAOEN)), levels=9, r0=8.0, r_top=5.0, level_h=7.0, sides=8,
-              walls='lantern_glow', trim='whitewash', roof='whitewash', podium_r=12.0, spire=6.0)
+    oc.glass_tower("Bao'en Pagoda", coll, (BAOEN.x, BAOEN.y, zground(*BAOEN)), levels=9, r0=8.5, r1=6.2, level_h=7.4)
 
 
 def build_laomendong_gate(coll):
@@ -278,7 +322,9 @@ def plant(protos, trees):
                 p = a + t * k
                 for side in (-1, 1):
                     q = p + nrm * side * 5.0
-                    if in_patch(q.x, q.y) and not water_mask.at(q.x, q.y) and rnd.random() < 0.35:
+                    # Keep Fuzimiao's axis, its screen wall and the bank benches open.
+                    axis_open = -70 < q.x < 150 and -240 < q.y < -95
+                    if in_patch(q.x, q.y) and not water_mask.at(q.x, q.y) and not axis_open and rnd.random() < 0.25:
                         kit.place(protos['willow' if rnd.random() < 0.6 else 'broadleaf_shade'], trees,
                                   (q.x, q.y, zground(q.x, q.y)), rnd.uniform(0, 6.28), rnd.uniform(0.9, 1.25))
                         n += 1
@@ -286,26 +332,38 @@ def plant(protos, trees):
     return n
 
 
+def dry(x, y, dy=1.0):
+    """Step a marker inland (along y) until it is 6 m clear of the river: bank tops are
+    balustrade and embankment, which the walk grid treats as walls."""
+    for _ in range(80):
+        if water_mask.distance_ok(x, y, 6.0):
+            return y
+        y += dy
+    return y
+
+
 def markers(coll, gates_coll, ride_line):
     z = STREET
-    ac.add_point(coll, 'Spawn qinhuai', (AXIS_X + 18, -132.0, z), (AXIS_X - 30, -200.0, z + 4))
+    bank = dry(AXIS_X + 18, -132.0)
+    ac.add_point(coll, 'Spawn qinhuai', (AXIS_X + 18, bank, z), (AXIS_X - 30, -200.0, z + 4))
     ac.add_point(coll, 'Spawn fuzimiao', (AXIS_X, -104.0, z), (35.0, -38.0, z + 8))
     ac.add_point(coll, 'Spawn zhonghua', (GATE_C.x, GATE_C.y - GATE_D / 2 - 30, z), (GATE_C.x, GATE_C.y, z + 12))
     ac.add_point(coll, 'Spawn mendong', (-60.0, -860.0, zground(-60, -860)), (-30.0, -760.0, zground(-30, -760) + 4))
-    ac.add_point(coll, 'Spawn baoen', (BAOEN.x + 40, BAOEN.y - 60, zground(BAOEN.x + 40, BAOEN.y - 60)), (BAOEN.x, BAOEN.y, 40))
+    ac.add_point(coll, 'Spawn baoen', (BAOEN.x + 45, BAOEN.y + 55, zground(BAOEN.x + 45, BAOEN.y + 55)), (BAOEN.x, BAOEN.y, 40))
     ac.add_point(coll, 'Spawn wall', (GATE_C.x, GATE_C.y - GATE_D / 2 + 11, z + GATE_H + 0.1), (GATE_C.x, GATE_C.y - 600, z))
     # Benches on the north bank facing the river and the screen wall.
-    for k, x in enumerate((AXIS_X - 30, AXIS_X - 12, AXIS_X + 24)):
-        ac.add_point(coll, f'Seat qinhuai-{k}', (x, -136.0, z), (x, -200.0, z + 3))
+    for k, x in enumerate((AXIS_X - 18, AXIS_X + 6, AXIS_X + 24)):   # x = 10 lands on the Kuixing podium
+        ac.add_point(coll, f'Seat qinhuai-{k}', (x, dry(x, -136.0), z), (x, -200.0, z + 3))
     ac.add_point(coll, 'Dock fuzimiao', (78.0, -99.5, WATER + 0.7), (78.0, -110, WATER))
     # Boat path: the river centreline through the Fuzimiao stretch, as a marker chain.
     for k, p in enumerate(ride_line):
         e = bpy.data.objects.new(f'Ride qinhuai {k:03d}', None)
         e.location = (p.x, p.y, WATER + 0.15)
         coll.objects.link(e)
-    gates = [('zhonghua', Vector((AXIS_X + 60, -132.0, z)), Vector((AXIS_X + 80, -132.0, z))),
+    gy = dry(AXIS_X + 60, -132.0)
+    gates = [('zhonghua', Vector((AXIS_X + 60, gy, z)), Vector((AXIS_X + 80, gy, z))),
              ('qinhuai', Vector((GATE_C.x + 40, GATE_C.y - GATE_D / 2 - 30, z)), Vector((GATE_C.x + 60, GATE_C.y - GATE_D / 2 - 30, z))),
-             ('mendong', Vector((AXIS_X - 60, -132.0, z)), Vector((AXIS_X - 80, -132.0, z)))]
+             ('mendong', Vector((AXIS_X - 60, dry(AXIS_X - 60, -132.0), z)), Vector((AXIS_X - 80, dry(AXIS_X - 60, -132.0), z)))]
     for n, (target, loc, toward) in enumerate(gates):
         d = (toward - loc).normalized()
         g = kit.moon_gate(f'Moon gate {n}', gates_coll)
@@ -335,21 +393,37 @@ def river_line():
 
 
 def main():
+    import time
+    clock = [time.time()]
+
+    def lap(label):
+        print(f'  {label}: {time.time() - clock[0]:.1f} s', flush=True)
+        clock[0] = time.time()
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     root = bpy.data.collections.new('OldSouth')
     scene.collection.children.link(root)
     c = {n: collection(n, root) for n in ('Ground', 'Water', 'Temple', 'Town', 'Walls', 'City', 'Gates', 'Trees', 'Prototypes', 'Markers')}
     protos = oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes']))
+    lap('protos')
     (fx, fy), (sx, sy) = P_F, P_S
     ac.terrain_patch('Terrain Fuzimiao', c['Ground'], fx, fy, ground, ['paving', 'canal_stone', 'paving'])
+    lap('ac.terrain_patch')
     ac.terrain_patch('Terrain south', c['Ground'], sx, sy, ground, ['paving', 'canal_stone', 'paving'])
-    ac.outer_apron('Terrain outer', c['Ground'], A, PATCHES, zground, material='paving')
+    lap('ac.terrain_patch')
+    kit.PALETTE.setdefault('city_ground', '#A8A68C')
+    ac.outer_apron('Terrain outer', c['Ground'], A, PATCHES, zground, material='city_ground')
+    lap('ac.outer_apron')
     build_river(c['Water'])
+    lap('build_river')
     build_fuzimiao(c['Temple'])
+    lap('build_fuzimiao')
     build_zhonghua(c['Walls'])
+    lap('build_zhonghua')
     build_baoen(c['Temple'])
+    lap('build_baoen')
     build_laomendong_gate(c['Town'])
+    lap('build_laomendong_gate')
 
     def keep_house(x, y):
         if not in_patch(x, y, -4):
@@ -362,18 +436,48 @@ def main():
             return False
         return not water_mask.at(x, y)
     houses = build_houses(c['Town'], keep_house)
+    lap('houses')
+    sky = ac.Mask(ac.skyline_polys(A.meta['origin_wgs84']), A.extent, 6.0)   # towers come from the shared skyline
     _, blocks = ac.city_blocks('City blocks', c['City'], F['buildings'], lambda x, y: max(A.bare_at(x, y), STREET),
-                               lambda x, y: not in_patch(x, y, 10) and not water_mask.at(x, y))
+                               lambda x, y: not in_patch(x, y, 10) and not water_mask.at(x, y) and not sky.at(x, y))
+    scene['origin_wgs84'] = list(A.meta['origin_wgs84'])
+    scene['base_z'] = A.base
     trees = plant(protos, c['Trees'])
+    # Street and courtyard trees between the city blocks: the green that Nanjing's plane trees give
+    # the city from the air (wherever OSM has no building within 12 m and no water).
+    bmask = ac.Mask([b['pts'] for b in F['buildings']], A.extent, 6.0)
+    x0, x1, y0, y1 = A.extent
+    y = y0 + 20
+    while y < y1 - 20:
+        x = x0 + 20
+        while x < x1 - 20:
+            px, py = x + rnd.uniform(-9, 9), y + rnd.uniform(-9, 9)
+            if not in_patch(px, py, 6) and not water_mask.at(px, py) and bmask.distance_ok(px, py, 12):
+                kit.place(protos['far'], c['Trees'], (px, py, max(A.bare_at(px, py), STREET) - 1.0), rnd.uniform(0, 6.28), rnd.uniform(1.2, 1.9))
+                trees += 1
+            x += 26
+        y += 26
+    lap('trees')
     line = river_line()
+    lap('line')
     markers(c['Markers'], c['Gates'], line)
+    lap('markers')
     ac.lookdev(scene, sky='#E9A27A', sun_az=250, sun_el=9, energy=3.2)
+    lap('ac.lookdev')
     cams = {
         'qinhuai-dusk': ac.camera(scene, 'Cam qinhuai', (AXIS_X + 70, -140.0, STREET + 3), (AXIS_X - 60, -150.0, STREET + 2), 30),
         'fuzimiao': ac.camera(scene, 'Cam fuzimiao', (AXIS_X, -190.0, STREET + 12), (35.0, -40.0, STREET + 6), 32),
         'zhonghua': ac.camera(scene, 'Cam zhonghua', (GATE_C.x + 60, GATE_C.y - 160, STREET + 30), (GATE_C.x, GATE_C.y, STREET + 8), 30),
-        'mendong': ac.camera(scene, 'Cam mendong', (-40.0, -820.0, STREET + 1.7), (-25.0, -700.0, STREET + 3), 32),
+        'mendong': ac.camera(scene, 'Cam mendong', (-40.0, -820.0, zground(-40, -820) + 1.7), (-25.0, -700.0, zground(-25, -700) + 3), 32),
         'aerial': ac.camera(scene, 'Cam aerial', (300, -1500, 420), (-200, -500, 0), 28),
+        # Shape audit close-ups, framed like the reference photographs.
+        'audit-dacheng': ac.camera(scene, 'Cam audit-dacheng', (35.0, -98.0, STREET + 3.0), (35.0, -38.0, STREET + 10), 30),
+        'audit-kuiguang': ac.camera(scene, 'Cam audit-kuiguang', (-40.0, -165.0, STREET + 3.0), (-6.0, -110.0, STREET + 9), 34),
+        'audit-lingxing': ac.camera(scene, 'Cam audit-lingxing', (58.0, -112.0, STREET + 1.7), (40.0, -94.0, STREET + 3), 32),
+        'audit-baoen': ac.camera(scene, 'Cam audit-baoen', (BAOEN.x + 20, BAOEN.y + 150, max(zground(BAOEN.x, BAOEN.y + 150), STREET) + 2),
+                                 (BAOEN.x, BAOEN.y, 40), 30),
+        'audit-zhonghua': ac.camera(scene, 'Cam audit-zhonghua', (GATE_C.x, GATE_C.y - GATE_D / 2 - 40, STREET + 1.7),
+                                    (GATE_C.x, GATE_C.y, STREET + 8), 32),
     }
     OUT_BLEND.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))

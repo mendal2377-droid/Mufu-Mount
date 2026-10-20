@@ -126,7 +126,8 @@ def walk_grid(trees, grid):
         for i in range(nx):
             x = grid['x0'] + (i + 0.5) * cell
             hit, loc, normal, index, obj, _ = s.ray_cast(dg, Vector((x, y, 800.0)), Vector((0, 0, -1)))
-            if not hit or normal.z < 0.5:
+            # Either winding: some ring and fan meshes face down, and only the surface's height matters.
+            if not hit or abs(normal.z) < 0.5:
                 continue
             key = (obj.name, index)
             name = mats_cache.get(key)
@@ -251,6 +252,8 @@ def main():
         # Grid in three.js terms: column i -> x = x0 + (i + .5) * cell, row j -> z = -(y0 + (j + .5) * cell).
         'walk': {'cell': CELL, 'noWalk': NO_WALK, 'grids': grids, 'walkableCells': walk_count},
         'labels': cfg.get('labels', {}),
+        'origin_wgs84': list(bpy.context.scene.get('origin_wgs84', [])),
+        'base_z': bpy.context.scene.get('base_z'),
         'fog': cfg.get('fog'),
         'spawns': named_points('Spawn'),
         'gates': gates,

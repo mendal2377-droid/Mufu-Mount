@@ -367,7 +367,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       if(world.riding){world.leaveBoat();music?.stop();toast('Ashore');return;}
       // The pleasure-boat dock: sail the river and come back here.
       const dock=world.nearestDock();
-      if(dock&&world.board(dock)){if(audio&&!audio.started&&soundButton)soundButton.click();
+      if(dock&&world.board(dock)){camera.rotation.set(-.1,world.heading+Math.PI,0,'YXZ');   // look down the riverif(audio&&!audio.started&&soundButton)soundButton.click();
         setTimeout(()=>music?.start(world.id,lastWeather),400);toast('Aboard a painted boat · drag to look · any key to step ashore');return;}
       // A moon gate: take off from here and glide to the scene it leads to.
       const gate=world.nearestGate();

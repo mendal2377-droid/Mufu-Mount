@@ -186,7 +186,8 @@ class Meiling:
                                 lift=0.6, ridge_ratio=0.9, thickness=0.3, material='roof_green', ridge_material='roof_green')
         lower.matrix_world = Matrix.Translation((PALACE.x, PALACE.y, z0 + 1.6 + 2 * H)) @ lower.matrix_world
         upper = kit.curved_roof('Meiling upper roof', coll, (0, 0, 0), (W - 8) / 2 + 2.2, (D - 8) / 2 + 2.2, 5.4,
-                                lift=0.9, ridge_ratio=0.6, thickness=0.35, material='roof_green', ridge_material='roof_green')
+                                lift=0.9, ridge_ratio=0.6, thickness=0.35, material='roof_green', ridge_material='roof_green',
+                                gable=0.45)   # 重檐歇山: double-eave hip-and-gable
         upper.matrix_world = Matrix.Translation((PALACE.x, PALACE.y, z0 + 1.6 + 3 * H)) @ upper.matrix_world
         porch = kit.curved_roof('Meiling portico roof', coll, (0, 0, 0), 8.4, 2.4, 1.3, lift=0.3, ridge_ratio=0.9,
                                 thickness=0.25, material='roof_green', ridge_material='roof_green')
@@ -197,8 +198,8 @@ class Meiling:
         """Three stone benches at the forecourt edge, facing the palace. Returns seat records."""
         bm = bmesh.new()
         seats = []
-        for x in (-18.0, 0.0, 18.0):
-            y = -D / 2 - 9.0 - 3.6 - 9.0
+        # On the levelled pad either side of the terrace stair (south of the stair is off the pad).
+        for x, y in ((-22.0, -16.0), (22.0, -16.0), (-22.0, -22.0)):
             p = Vector((PALACE.x + x, PALACE.y + y))
             M = Matrix.Translation((p.x, p.y, self.pad_z))
             kit.add_box(bm, (0, 0, 0.42), (2.2, 0.5, 0.12), mi=0, matrix=M)

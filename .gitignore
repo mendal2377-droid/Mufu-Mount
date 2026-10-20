@@ -16,3 +16,6 @@ art-src/
 
 # Uncompressed Blender exports; the meshopt GLB beside each is what ships
 public/scenes/*/*.raw.glb
+
+# Uncompressed skyline export
+public/scenes/skyline/*.raw.glb

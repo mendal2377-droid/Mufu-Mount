@@ -349,3 +349,15 @@ def polyline_offset(pts, offset):
         t = (b - a).normalized()
         out.append(Vector(p) + Vector((-t.y, t.x)) * offset)
     return out
+
+
+def skyline_polys(origin):
+    """Skyline tower footprints (research/skyline/data/solids.json) in an area's local frame."""
+    p = ROOT / 'research' / 'skyline' / 'data' / 'solids.json'
+    if not p.exists():
+        return []
+    data = json.loads(p.read_text(encoding='utf-8'))
+    (clat, clon), (olat, olon) = data['origin_wgs84'], origin
+    dx = (clon - olon) * 111_320.0 * math.cos(math.radians(olat))
+    dy = (clat - olat) * 110_574.0
+    return [[(x + dx, y + dy) for x, y in s['pts']] for s in data['solids']]

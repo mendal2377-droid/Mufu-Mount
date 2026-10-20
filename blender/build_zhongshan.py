@@ -442,7 +442,7 @@ def build_axis(coll, ground, protos, trees):
                0, S_GATE, Z_GATE + 10.8)
     place_axis(kit.curved_roof('Stele roof lower', coll, (0, 0, 0), 9.4, 8.6, 1.8, lift=0.6, thickness=0.3),
                0, S_STELE, Z_COURT + 11.0)
-    place_axis(kit.curved_roof('Stele roof upper', coll, (0, 0, 0), 7.6, 6.6, 3.6, lift=0.7, ridge_ratio=0.55),
+    place_axis(kit.curved_roof('Stele roof upper', coll, (0, 0, 0), 7.6, 6.6, 3.6, lift=0.7, ridge_ratio=0.55, gable=0.45),
                0, S_STELE, Z_COURT + 13.3)
     # Lower eave: a lean-to blue roof across the facade between the bastions, front and back (it
     # reads as a strong band in every photograph). Its upper half is buried in the core.
@@ -451,7 +451,7 @@ def build_axis(coll, ground, protos, trees):
                                    thickness=0.35, ridge_ratio=0.95),
                    0, S_HALL + sy * ((HD - 2) / 2 - 0.4), Z_HALL + 11.2)
     # Upper roof sits on the frieze; its eaves reach out over the bastion caps, as photographed.
-    place_axis(kit.curved_roof('Hall upper roof', coll, (0, 0, 0), 14.4, 12.4, 7.4, lift=1.1, ridge_ratio=0.62,
+    place_axis(kit.curved_roof('Hall upper roof', coll, (0, 0, 0), 14.4, 12.4, 7.4, lift=1.1, ridge_ratio=0.62, gable=0.45,
                                thickness=0.45),
                0, S_HALL, Z_HALL + 20.2)
     place_axis(kit.box('Stele pavilion core cap', (0, 0, 0), (12.0, 10.5, 2.4), coll, 'granite'),
@@ -772,6 +772,9 @@ def main():
     }
     OUT_BLEND.parent.mkdir(parents=True, exist_ok=True)
     OUT_RENDERS.mkdir(parents=True, exist_ok=True)
+    # Where this world sits on the globe, for the shared skyline (src/landmark-world.js).
+    scene['origin_wgs84'] = [32.0587677, 118.8486466]
+    scene['base_z'] = BASE_Z
     cam_objs = {k: camera(scene, 'Cam ' + k, *v) for k, v in cams.items()}
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))
     stats = {'forest_trees': n, 'far_canopy': n_far, 'necklace': n_necklace, 'trees_total': len(c_trees.objects),

@@ -25,7 +25,7 @@ try {
 
   for (const [pin, id] of PINS) {
     await page.evaluate(p => window.__mufu.city.enter(p), pin);
-    await page.waitForFunction(w => window.__mufu.city.world?.id === w, id, {timeout: 240000});
+    await page.waitForFunction(w => window.__mufu.city.world?.id === w, id, {timeout: 600000});   // software WebGL is slow
     const r = await page.evaluate(() => {
       const m = window.__mufu, w = m.city.world, meta = w.meta, bad = [];
       const onGround = (kind, name, p) => { const h = w.ground(p[0], p[2]); if (h === null || Math.abs(h - p[1]) > 2.5) bad.push(`${kind} ${name} ${h}`); };
@@ -33,7 +33,7 @@ try {
       for (const s of w.seats) onGround('seat', s.id, s.position);
       (meta.gates || []).forEach((g, i) => onGround('gate', `${i}->${g.target}`, g.position));
       for (const [k, b] of Object.entries(meta.bells || {})) onGround('bell', k, b.position);
-      for (const [k, d] of Object.entries(meta.docks || {})) { const h = w.ground(d.position[0], d.position[2] + 2); if (h === null) bad.push(`dock ${k}`); }
+      for (const [k, d] of Object.entries(meta.docks || {})) { const h = w.ground(d.position[0], d.position[2] - 6); if (h === null) bad.push(`dock ${k}`); }
       // Glide through the first gate and check the landing is on its target's ground.
       let glide = null;
       if (meta.gates?.length) {
@@ -57,7 +57,7 @@ try {
   // The Qinhuai boat ride: board at the dock, sail out and back, step ashore at the dock.
   report.boat = await page.evaluate(() => {
     const m = window.__mufu, w = m.city.world, d = Object.values(w.meta.docks)[0];
-    w.placeAt({feet: [d.position[0], w.ground(d.position[0], d.position[2] + 2) ?? d.position[1], d.position[2] + 2], look: [d.position[0], 0, d.position[2] + 20]});
+    w.placeAt({feet: [d.position[0], w.ground(d.position[0], d.position[2] - 6), d.position[2] - 6], look: [d.position[0], 0, d.position[2] + 20]});
     m.step(2, .05); m.city.interact();
     const aboard = w.riding;
     m.step(400, .05);
