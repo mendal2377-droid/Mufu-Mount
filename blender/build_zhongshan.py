@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kit  # noqa: E402
 import zhongshan_meiling as ml  # noqa: E402
+import zhongshan_xiaoling as xl  # noqa: E402
 
 DATA = ROOT / 'research' / 'zhongshan' / 'data'
 OUT_BLEND = ROOT / 'art-src' / 'zhongshan.blend'
@@ -223,7 +224,7 @@ def build_terrain(coll, dem, x_range=(-420, 520), y_range=(-360, 820), step=4.0,
 
 
 # Detailed terrain patches (x range, y range): the Mausoleum/Music Stage slice and Meiling.
-INNERS = (((-420, 520), (-360, 820)), ml.PATCH)
+INNERS = (((-420, 520), (-360, 820)), ml.PATCH, xl.PATCH)
 
 
 def in_inner(x, y, margin):
@@ -683,7 +684,7 @@ def add_markers(coll, ground):
             k += 1
 
 
-def build_gates(coll, markers, meiling):
+def build_gates(coll, markers, meiling, xiao=None):
     """Moon gates between the three scenes. Walking up to one offers a glide to its target."""
     M = Matrix.Translation((MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC)) @ Matrix.Rotation(-MUSIC_FACING, 4, 'Z')
     sp = meiling.spawn_points()
@@ -693,6 +694,15 @@ def build_gates(coll, markers, meiling):
         ('axis', M @ Vector((0, 57.5, max(0.0, 57.5 - 16) * 0.16)), M @ Vector((0, 70, 0))),
         ('axis', Vector(sp['gate']), Vector(sp['gate']) + Vector((14, -14, 0))),
     ]
+    if xiao is not None:
+        # Meiling <-> Ming Xiaoling (the Sacred Way), a short glide west over the hill.
+        g = Vector(sp['gate']) + Vector((-58, 0, 0))
+        gates.append(('xiaoling', g, g + Vector((-14, 0, 0))))
+        s0 = xiao.sacred[len(xiao.sacred) // 3]
+        t = (xiao.sacred[len(xiao.sacred) // 3 + 4] - s0).normalized()
+        q = s0 - t * 18
+        q3 = Vector((q.x, q.y, xiao.ground(q.x, q.y)[0]))
+        gates.append(('meiling', q3, q3 - Vector((t.x, t.y, 0)) * 10))
     for n, (target, loc, toward) in enumerate(gates):
         d = (Vector(toward) - Vector(loc)).normalized()
         g = kit.moon_gate(f'Moon gate {n}', coll)
@@ -728,6 +738,7 @@ def main():
     c_music = collection('Music Stage', root)
     c_meiling = collection('Meiling', root)
     c_gates = collection('Gates', root)
+    c_xiaoling = collection('Xiaoling', root)
     c_trees = collection('Trees', root)
     c_protos = collection('Prototypes', root)
     protos = kit.tree_prototypes(c_protos)
@@ -739,18 +750,30 @@ def main():
     meiling = ml.Meiling(dem, rnd)
     (mx0, mx1), (my0, my1) = ml.PATCH
     build_terrain(c_ground, dem, (mx0, mx1), (my0, my1), fn=meiling.ground, name='Terrain Meiling')
+    anchors = json.loads((DATA / 'anchors-local.json').read_text(encoding='utf-8'))
+    xiao = xl.Xiaoling(dem, rnd, {'sacred': anchors['xiaoling_sacred'], 'wengzhong': anchors['xiaoling_wengzhong']})
+    (qx0, qx1), (qy0, qy1) = xl.PATCH
+    build_terrain(c_ground, dem, (qx0, qx1), (qy0, qy1), fn=xiao.ground, name='Terrain Xiaoling')
     _, outer_extent = build_outer_terrain(c_ground, dem)
-    outer_height = lambda x, y: dem(x, y) - 11.0  # noqa: E731
+    # Roads leaving Meiling cross the Xiaoling patch: there they lie on its graded ground.
+    outer_height = lambda x, y: (xiao.ground(x, y)[0], 0.12) if xiao.inside(x, y) else (dem(x, y) - 11.0, 1.0)  # noqa: E731
     meiling.build_roads(c_meiling, outer_height)
     meiling.build_palace(c_meiling)
     seats = meiling.benches(c_meiling)
     n_necklace = meiling.plant_necklace(protos, c_trees, outer_height)
     n += meiling.scatter_forest(protos, c_trees)
+    xiao.build_paths(c_xiaoling)
+    n_statues = xiao.build_statues(c_xiaoling)
+    xiao.build_gates_and_precinct(c_xiaoling)
+    n += xiao.scatter_trees(protos, c_trees)
     n_far = scatter_far_canopy(dem, protos, c_trees, outer_extent)
     c_markers = collection('Markers', root)
     add_markers(c_markers, ground)
     add_meiling_markers(c_markers, meiling, seats)
-    build_gates(c_gates, c_markers, meiling)
+    build_gates(c_gates, c_markers, meiling, xiao)
+    for name, (p, look) in xiao.spawn_points().items():
+        z = xiao.ground(p.x, p.y)[0]
+        add_point(c_markers, f'Spawn {name}', (p.x, p.y, z), (look.x, look.y, z + 3))
     setup_lookdev(scene)
 
     cams = {
@@ -766,6 +789,12 @@ def main():
                            (ml.PALACE.x - 20, ml.PALACE.y + 40, meiling.pad_z), 30),
         'meiling-front': ((ml.PALACE.x + 8, ml.PALACE.y - 52, meiling.pad_z + 1.7),
                           (ml.PALACE.x, ml.PALACE.y, meiling.pad_z + 9), 32),
+        # Ming Xiaoling: the Sacred Way framed like the owner's photographs, and the Ming Tower.
+        'xiaoling-sacred': ((xiao.sacred[len(xiao.sacred) // 3] - (xiao.sacred[len(xiao.sacred) // 3 + 4] - xiao.sacred[len(xiao.sacred) // 3]).normalized() * 12).to_3d()
+                            + Vector((0, 0, xiao.ground(*xiao.sacred[len(xiao.sacred) // 3])[0] + 1.7)),
+                            (xiao.sacred[len(xiao.sacred) // 3 + 10]).to_3d() + Vector((0, 0, xiao.ground(*xiao.sacred[len(xiao.sacred) // 3 + 10])[0] + 2)), 32),
+        'xiaoling-tower': ((xl.MING_TOWER - Vector((0, 90))).to_3d() + Vector((0, 0, xiao.tower_z + 2)),
+                           xl.MING_TOWER.to_3d() + Vector((0, 0, xiao.tower_z + 18)), 32),
         'music-from-seats': ((Matrix.Translation((MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC))
                               @ Matrix.Rotation(-MUSIC_FACING, 4, 'Z') @ Vector((6, 34, 4.6)))[:],
                              (MUSIC_CENTER.x, MUSIC_CENTER.y, Z_MUSIC + 4), 30),
@@ -777,10 +806,10 @@ def main():
     scene['base_z'] = BASE_Z
     cam_objs = {k: camera(scene, 'Cam ' + k, *v) for k, v in cams.items()}
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))
-    stats = {'forest_trees': n, 'far_canopy': n_far, 'necklace': n_necklace, 'trees_total': len(c_trees.objects),
+    stats = {'forest_trees': n, 'far_canopy': n_far, 'necklace': n_necklace, 'statues': n_statues, 'trees_total': len(c_trees.objects),
              # Iterate the collections: o.users_collection scans them all, per object (minutes at 24k).
              'triangles_static': sum(sum(len(p.vertices) - 2 for p in o.data.polygons)
-                                     for c in (c_ground, c_axis, c_music, c_meiling, c_gates) for o in c.objects if o.type == 'MESH')}
+                                     for c in (c_ground, c_axis, c_music, c_meiling, c_gates, c_xiaoling) for o in c.objects if o.type == 'MESH')}
     print('BUILD', json.dumps(stats), flush=True)
     if RENDER:
         scene.eevee.taa_render_samples = 32

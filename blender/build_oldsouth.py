@@ -352,8 +352,9 @@ def markers(coll, gates_coll, ride_line):
     ac.add_point(coll, 'Spawn baoen', (BAOEN.x + 45, BAOEN.y + 55, zground(BAOEN.x + 45, BAOEN.y + 55)), (BAOEN.x, BAOEN.y, 40))
     ac.add_point(coll, 'Spawn wall', (GATE_C.x, GATE_C.y - GATE_D / 2 + 11, z + GATE_H + 0.1), (GATE_C.x, GATE_C.y - 600, z))
     # Benches on the north bank facing the river and the screen wall.
-    for k, x in enumerate((AXIS_X - 18, AXIS_X + 6, AXIS_X + 24)):   # x = 10 lands on the Kuixing podium
-        ac.add_point(coll, f'Seat qinhuai-{k}', (x, dry(x, -136.0), z), (x, -200.0, z + 3))
+    # On the paved forecourt between the Wenshu gateway and the river, facing the screen wall.
+    for k, x in enumerate((AXIS_X - 22, AXIS_X + 18, AXIS_X + 28)):
+        ac.add_point(coll, f'Seat qinhuai-{k}', (x, -110.0, z), (x, -200.0, z + 3))
     ac.add_point(coll, 'Dock fuzimiao', (78.0, -99.5, WATER + 0.7), (78.0, -110, WATER))
     # Boat path: the river centreline through the Fuzimiao stretch, as a marker chain.
     for k, p in enumerate(ride_line):
@@ -363,7 +364,8 @@ def markers(coll, gates_coll, ride_line):
     gy = dry(AXIS_X + 60, -132.0)
     gates = [('zhonghua', Vector((AXIS_X + 60, gy, z)), Vector((AXIS_X + 80, gy, z))),
              ('qinhuai', Vector((GATE_C.x + 40, GATE_C.y - GATE_D / 2 - 30, z)), Vector((GATE_C.x + 60, GATE_C.y - GATE_D / 2 - 30, z))),
-             ('mendong', Vector((AXIS_X - 60, dry(AXIS_X - 60, -132.0), z)), Vector((AXIS_X - 80, dry(AXIS_X - 60, -132.0), z)))]
+             # East along the bank: west of the axis is the Kuiguang riverside hall.
+             ('mendong', Vector((AXIS_X + 120, dry(AXIS_X + 120, -132.0), z)), Vector((AXIS_X + 140, dry(AXIS_X + 120, -132.0), z)))]
     for n, (target, loc, toward) in enumerate(gates):
         d = (toward - loc).normalized()
         g = kit.moon_gate(f'Moon gate {n}', gates_coll)

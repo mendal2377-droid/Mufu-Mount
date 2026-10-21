@@ -116,7 +116,10 @@ class Meiling:
                     if self.inside(q.x, q.y):
                         zq = self.ground(q.x, q.y)[0] + 0.12
                     else:
-                        zq = outer_height(q.x, q.y) + 1.0
+                        # outer_height may return (z, lift): lie on another detailed patch's graded
+                        # ground, or float 1 m over the coarse apron so the road is never buried.
+                        zo = outer_height(q.x, q.y)
+                        zq = zo[0] + zo[1] if isinstance(zo, tuple) else zo + 1.0
                     lst.append(bm.verts.new((q.x, q.y, zq)))
             for i in range(len(pts) - 1):
                 f = bm.faces.new((left[i], right[i], right[i + 1], left[i + 1]))
@@ -223,7 +226,8 @@ class Meiling:
                     dx, dy = abs(s.x - PALACE.x), abs(s.y - PALACE.y)
                     if dx < PAD[0] + 2 and dy < PAD[1] + 2:
                         continue
-                    z = self.ground(s.x, s.y)[0] if self.inside(s.x, s.y) else outer_height(s.x, s.y)
+                    zo = outer_height(s.x, s.y)
+                    z = self.ground(s.x, s.y)[0] if self.inside(s.x, s.y) else (zo[0] if isinstance(zo, tuple) else zo)
                     kit.place(protos['plane_autumn'], trees, (s.x, s.y, z - 0.2), self.rnd.uniform(0, 6.28),
                               self.rnd.uniform(1.05, 1.3))
                     n += 1

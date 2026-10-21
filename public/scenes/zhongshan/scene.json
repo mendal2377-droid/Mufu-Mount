@@ -1,6 +1,6 @@
 {
  "id": "zhongshan",
- "title": "Sun Yat-sen Mausoleum, the Music Stage & Meiling Palace",
+ "title": "Sun Yat-sen Mausoleum, the Music Stage, Meiling Palace & Ming Xiaoling",
  "zh": "中山陵 · 音乐台",
  "axes": "three.js: x = east, y = up, z = south (Blender x, z, -y); metres",
  "walk": {
@@ -24,9 +24,18 @@
     "y0": -1405.0,
     "cell": 1.0,
     "offset": 297600
+   },
+   {
+    "name": "xiaoling",
+    "nx": 405,
+    "ny": 975,
+    "x0": -1695.0,
+    "y0": -1315.0,
+    "cell": 2.0,
+    "offset": 482100
    }
   ],
-  "walkableCells": 473531
+  "walkableCells": 866777
  },
  "labels": {
   "axis": "the Mausoleum",
@@ -34,7 +43,10 @@
   "hall": "the Sacrificial Hall",
   "music": "the Music Stage",
   "meiling": "Meiling Palace",
-  "meiling-terrace": "the Phoenix Terrace"
+  "meiling-terrace": "the Phoenix Terrace",
+  "xiaoling": "the Sacred Way of Ming Xiaoling",
+  "wengzhong": "the Wengzhong Road",
+  "mingtower": "the Ming Tower"
  },
  "origin_wgs84": [
   32.0587677,
@@ -114,6 +126,42 @@
     -31.612,
     1274.5
    ]
+  },
+  "xiaoling": {
+   "position": [
+    -1226.273,
+    -51.137,
+    941.718
+   ],
+   "look": [
+    -1254.489,
+    -51.137,
+    931.529
+   ]
+  },
+  "wengzhong": {
+   "position": [
+    -1611.4,
+    -63.353,
+    780.5
+   ],
+   "look": [
+    -1610.127,
+    -63.353,
+    750.527
+   ]
+  },
+  "mingtower": {
+   "position": [
+    -1323.0,
+    -24.102,
+    -133.0
+   ],
+   "look": [
+    -1323.0,
+    -24.102,
+    -163.0
+   ]
   }
  },
  "gates": [
@@ -167,6 +215,32 @@
     -630.787,
     -33.212,
     1268.213
+   ]
+  },
+  {
+   "target": "xiaoling",
+   "position": [
+    -710.0,
+    -33.212,
+    1247.0
+   ],
+   "look": [
+    -740.0,
+    -33.212,
+    1247.0
+   ]
+  },
+  {
+   "target": "meiling",
+   "position": [
+    -1209.343,
+    -51.207,
+    947.832
+   ],
+   "look": [
+    -1181.126,
+    -51.207,
+    958.021
    ]
   }
  ],
@@ -391,7 +465,7 @@
    ]
   }
  },
- "trees": 26944,
- "staticTriangles": 285078,
+ "trees": 27703,
+ "staticTriangles": 525930,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). Architecture modelled from published dimensions; see research/zhongshan/FACTS.md."
 }

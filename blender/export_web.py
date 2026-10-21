@@ -44,12 +44,15 @@ TRUNK_RADIUS = 0.9
 # Spawns are filled from named cameras/empties when present, else from these.
 SETTINGS = {
     'zhongshan': {
+        'static': ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates', 'Xiaoling'),
         'grids': [{'name': 'axis', 'x0': -95.0, 'x1': 225.0, 'y0': -255.0, 'y1': 675.0},
-                  {'name': 'meiling', 'x0': -905.0, 'x1': -455.0, 'y0': -1405.0, 'y1': -995.0}],
-        'title': 'Sun Yat-sen Mausoleum, the Music Stage & Meiling Palace',
+                  {'name': 'meiling', 'x0': -905.0, 'x1': -455.0, 'y0': -1405.0, 'y1': -995.0},
+                  {'name': 'xiaoling', 'x0': -1695.0, 'x1': -885.0, 'y0': -1315.0, 'y1': 635.0, 'cell': 2.0}],
+        'title': 'Sun Yat-sen Mausoleum, the Music Stage, Meiling Palace & Ming Xiaoling',
         # What the gates and the places menu call each spawn.
         'labels': {'axis': 'the Mausoleum', 'stair': 'the great stair', 'hall': 'the Sacrificial Hall',
-                   'music': 'the Music Stage', 'meiling': 'Meiling Palace', 'meiling-terrace': 'the Phoenix Terrace'},
+                   'music': 'the Music Stage', 'meiling': 'Meiling Palace', 'meiling-terrace': 'the Phoenix Terrace',
+                   'xiaoling': 'the Sacred Way of Ming Xiaoling', 'wengzhong': 'the Wengzhong Road', 'mingtower': 'the Ming Tower'},
         'zh': '中山陵 · 音乐台',
     },
     'oldsouth': {
