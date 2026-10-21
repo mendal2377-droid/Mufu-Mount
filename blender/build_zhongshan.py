@@ -697,6 +697,7 @@ def build_gates(coll, markers, meiling, xiao=None):
     if xiao is not None:
         # Meiling <-> Ming Xiaoling (the Sacred Way), a short glide west over the hill.
         g = Vector(sp['gate']) + Vector((-58, 0, 0))
+        g.z = meiling.ground(g.x, g.y)[0]          # off the levelled pad: take the ground's own height
         gates.append(('xiaoling', g, g + Vector((-14, 0, 0))))
         s0 = xiao.sacred[len(xiao.sacred) // 3]
         t = (xiao.sacred[len(xiao.sacred) // 3 + 4] - s0).normalized()

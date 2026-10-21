@@ -13,6 +13,12 @@ Branch `rebuild/blender-city`. Plan: [REBUILD-PLAN.md](REBUILD-PLAN.md). Art: [A
 
 Rebuild one world: `./tools/export-scene.sh <id> [--render]`. The skyline: run its two commands, then gltf-transform (see the build_skyline.py docstring).
 
+## Resume here (21 October 2026)
+
+1. Run `./tools/export-scene.sh zhongshan`. The Meiling→Xiaoling gate's height fix is in code but not yet exported; the worlds test flagged it, `gate 4->xiaoling`.
+2. Run `tests/worlds-browser.mjs` against the dev server. Zhongshan and North passed before that gate was added; recheck Old South after its marker fixes.
+3. Presidential Palace world: the OSM extract is downloaded (`research/palace/data/osm-palace.json`); run `tools/research/area-prep.py` after adding a `palace` entry.
+
 ## Next
 
 - Batch B landmarks: Presidential Palace, Yangtze Bridge, Ming Xiaoling, Niushou, Qixia.
