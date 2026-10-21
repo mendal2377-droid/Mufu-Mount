@@ -23,6 +23,8 @@ AREAS = {
     # Origin: Jiming's Yaoshi Pagoda (atlas anchor, OSM way 319055520).
     'north': {'bbox': (32.056, 118.778, 32.088, 118.812), 'origin': (32.0630502, 118.79003095)},
     # Origin: the Qinhuai/Fuzimiao atlas anchor (OSM way 1531638749).
+    # Origin: the Presidential Palace atlas anchor (OSM way 62353727).
+    'palace': {'bbox': (32.038, 118.784, 32.054, 118.800), 'origin': (32.04622025, 118.79225685)},
     'oldsouth': {'bbox': (32.006, 118.766, 32.028, 118.794), 'origin': (32.02273535, 118.7836028)},
 }
 

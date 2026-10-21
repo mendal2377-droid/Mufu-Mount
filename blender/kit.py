@@ -164,9 +164,11 @@ def curved_roof(name, coll, center, half_x, half_y, height, *, ridge_ratio=0.45,
     rz = center[2] + height
     if gable > 0:
         ridge_half = xg                       # the ridge runs between the gables
-    ridge_faces = add_box(bm, (center[0], center[1], rz + 0.35), (2 * ridge_half + 0.6, 0.6, 0.8), mi=1)
+    # Ridge and end ornaments scale with the roof: full size on a great hall, small on a boat or gateway.
+    k = min(1.0, max(0.3, half_y / 6.0))
+    ridge_faces = add_box(bm, (center[0], center[1], rz + 0.35 * k), (2 * ridge_half + 0.6 * k, 0.6 * k, 0.8 * k), mi=1)
     for sx in (-1, 1):
-        add_box(bm, (center[0] + sx * (ridge_half + 0.2), center[1], rz + 0.9), (0.7, 0.6, 1.4), mi=1)
+        add_box(bm, (center[0] + sx * (ridge_half + 0.2 * k), center[1], rz + 0.9 * k), (0.7 * k, 0.6 * k, 1.4 * k), mi=1)
     del ridge_faces
     return mesh_object(name, bm, coll, [material, ridge_material])
 

@@ -81,7 +81,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     jiming:{world:'north',spawn:'jiming',weather:'morning'},xuanwu:{world:'north',spawn:'xuanwu',weather:'morning'},
     // The old south city is best at dusk, when the lanterns and windows glow.
     qinhuai:{world:'oldsouth',spawn:'qinhuai',weather:'sunset'},zhonghua:{world:'oldsouth',spawn:'zhonghua',weather:'sunset'},
-    mendong:{world:'oldsouth',spawn:'mendong',weather:'sunset'}},worlds={};
+    mendong:{world:'oldsouth',spawn:'mendong',weather:'sunset'},
+    palace:{world:'palace',spawn:'palace',weather:'morning'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
   const music=audio?createMusic(audio):null;
   function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}

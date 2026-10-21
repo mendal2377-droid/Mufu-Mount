@@ -1,0 +1,104 @@
+{
+ "id": "palace",
+ "title": "The Presidential Palace",
+ "zh": "总统府",
+ "axes": "three.js: x = east, y = up, z = south (Blender x, z, -y); metres",
+ "walk": {
+  "cell": 1.0,
+  "noWalk": -32768,
+  "grids": [
+   {
+    "name": "palace",
+    "nx": 590,
+    "ny": 520,
+    "x0": -325.0,
+    "y0": -265.0,
+    "cell": 1.0,
+    "offset": 0
+   }
+  ],
+  "walkableCells": 256050
+ },
+ "labels": {
+  "palace": "the Presidential Palace gate",
+  "garden": "the West Garden and the marble boat",
+  "zichao": "the Zichao Building"
+ },
+ "origin_wgs84": [
+  32.04622025,
+  118.79225685
+ ],
+ "base_z": 1.4899451732635498,
+ "fog": 0.0006,
+ "spawns": {
+  "palace": {
+   "position": [
+    9.5,
+    0.0,
+    200.0
+   ],
+   "look": [
+    9.5,
+    0.0,
+    170.0
+   ]
+  },
+  "garden": {
+   "position": [
+    -67.93,
+    0.0,
+    57.47
+   ],
+   "look": [
+    -84.571,
+    0.0,
+    32.508
+   ]
+  },
+  "zichao": {
+   "position": [
+    15.5,
+    0.0,
+    -20.0
+   ],
+   "look": [
+    15.5,
+    0.0,
+    -50.0
+   ]
+  }
+ },
+ "gates": [],
+ "bells": {},
+ "docks": {},
+ "rides": {},
+ "seats": {
+  "garden-0": {
+   "position": [
+    -66.93,
+    0.0,
+    41.47
+   ],
+   "look": [
+    -94.344,
+    0.0,
+    53.654
+   ]
+  },
+  "garden-1": {
+   "position": [
+    -66.93,
+    0.0,
+    23.47
+   ],
+   "look": [
+    -92.48,
+    0.0,
+    7.747
+   ]
+  }
+ },
+ "trees": 293,
+ "staticTriangles": 117457,
+ "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md."
+}

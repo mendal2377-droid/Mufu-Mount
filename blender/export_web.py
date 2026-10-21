@@ -68,6 +68,17 @@ SETTINGS = {
                       'footprints: OpenStreetMap contributors (ODbL). Architecture from published descriptions; '
                       'see research/oldsouth/FACTS.md.',
     },
+    'palace': {
+        'static': ('Ground', 'Water', 'Buildings', 'Overhead', 'Garden', 'City', 'Gates'),   # not 'Palace': the root's name
+        'grids': [{'name': 'palace', 'x0': -325.0, 'x1': 265.0, 'y0': -265.0, 'y1': 255.0}],
+        'title': 'The Presidential Palace',
+        'zh': '总统府',
+        'fog': 0.0006,
+        'labels': {'palace': 'the Presidential Palace gate', 'garden': 'the West Garden and the marble boat',
+                   'zichao': 'the Zichao Building'},
+        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap '
+                      'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
+    },
     'north': {
         'static': ('Ground', 'Water', 'Temple', 'Walls', 'City', 'Gates'),
         # Jiming hill at 1 m (stairs); the island shore at 1.5 m (flat lawns and paths).
@@ -89,7 +100,9 @@ def to_three(v):
 
 
 STATIC_COLLECTIONS = SETTINGS[SCENE_ID].get('static', ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates'))
-CAST_EXCLUDE = ('Trees', 'Gates')
+# Left out of the walk-grid ray cast: trees, moon gates, and anything overhead that people walk under
+# (gate lintels and attics), so the ground beneath stays walkable.
+CAST_EXCLUDE = ('Trees', 'Gates', 'Overhead')
 
 
 def collect():
