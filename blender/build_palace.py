@@ -207,7 +207,7 @@ def build_garden(coll, protos, trees):
             if lake_mask.at(q.x, q.y):
                 q = p - Vector((-(b2 - a2).y, (b2 - a2).x)).normalized() * 3.0
             # Keep the boat, its viewing spot and the benches open (willows once hid the boat).
-            if not lake_mask.at(q.x, q.y) and (q - Vector((bx, by))).length > 9 and                     all((q - Vector((bx + dx, by + dy))).length > 11 for dx, dy in ((8, -12), (9, 4), (9, 22), (12, -16))):
+            if not lake_mask.at(q.x, q.y) and (q - Vector((bx, by))).length > 9 and                     all((q - Vector((bx + dx, by + dy))).length > 11 for dx, dy in ((8, -12), (9, 4), (12, 22), (12, -16))):
                 kit.place(protos['willow' if rnd.random() < 0.6 else 'broadleaf'], trees, (q.x, q.y, Z), rnd.uniform(0, 6.28),
                           rnd.uniform(0.85, 1.15))
                 n += 1
@@ -246,7 +246,7 @@ def main():
     ac.add_point(c['Markers'], 'Spawn garden', (boat[0] + 8, boat[1] - 12, Z), (boat[0], boat[1], Z + 2))
     ac.add_point(c['Markers'], 'Spawn zichao', (15.5, 20.0, Z), (15.5, 68.5, Z + 12))
     ac.add_point(c['Markers'], 'Seat garden-0', (boat[0] + 9, boat[1] + 4, Z), (boat[0], boat[1], Z + 1))
-    ac.add_point(c['Markers'], 'Seat garden-1', (boat[0] + 9, boat[1] + 22, Z), (boat[0] - 4, boat[1] + 30, Z + 1))
+    ac.add_point(c['Markers'], 'Seat garden-1', (boat[0] + 12, boat[1] + 22, Z), (boat[0] - 4, boat[1] + 30, Z + 1))
     scene['origin_wgs84'] = list(A.meta['origin_wgs84'])
     scene['base_z'] = A.base
     ac.lookdev(scene)

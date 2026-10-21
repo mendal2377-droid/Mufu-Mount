@@ -87,17 +87,18 @@
   },
   "garden-1": {
    "position": [
-    -66.93,
+    -63.93,
     0.0,
     23.47
    ],
    "look": [
-    -92.48,
+    -90.763,
     0.0,
-    7.747
+    10.054
    ]
   }
  },
+ "traffic": [],
  "trees": 293,
  "staticTriangles": 117457,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md."
