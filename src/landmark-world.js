@@ -535,11 +535,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     } else if (t.kind === 'ship') {
       for (let i = 0; i < (t.n || 3); i++) { const m = barge(); scene.add(m); r.units.push({u: (i + (t.phase || 0)) / (t.n || 3), mesh: m}); }
     } else {
-      const n = t.n || 30, geo = new THREE.BoxGeometry(1.9, 1.5, 4.6);
-      geo.translate(0, .75, 0);
-      r.inst = new THREE.InstancedMesh(geo, skin(0xffffff), n);
+      // A painted body and a dark glass cabin: two instanced draws sharing each car's matrix.
+      const n = t.n || 30, body = new THREE.BoxGeometry(1.85, .95, 4.5), cabin = new THREE.BoxGeometry(1.6, .7, 2.4);
+      body.translate(0, .62, 0); cabin.translate(0, 1.43, -.2);
+      r.inst = new THREE.InstancedMesh(body, skin(0xffffff), n);
+      r.cabin = new THREE.InstancedMesh(cabin, skin(0x2e3a44, 0xffd28a, .08), n);
       for (let i = 0; i < n; i++) { r.inst.setColorAt(i, new THREE.Color(carPaint[i % carPaint.length])); r.units.push({u: (i + Math.random() * .6) / n}); }
-      r.inst.frustumCulled = false; scene.add(r.inst);
+      r.inst.frustumCulled = r.cabin.frustumCulled = false; scene.add(r.inst, r.cabin);
     }
     traffic.push(r);
   }
@@ -573,9 +575,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           c.u = (c.u + r.speed * dt / r.length) % 1;
           const p = r.curve.getPointAt(c.u), tan = r.curve.getTangentAt(c.u);
           trafficDummy.position.copy(p); trafficDummy.rotation.set(0, Math.atan2(tan.x, tan.z), 0);
-          trafficDummy.updateMatrix(); r.inst.setMatrixAt(i, trafficDummy.matrix);
+          trafficDummy.updateMatrix(); r.inst.setMatrixAt(i, trafficDummy.matrix); r.cabin.setMatrixAt(i, trafficDummy.matrix);
         });
-        r.inst.instanceMatrix.needsUpdate = true;
+        r.inst.instanceMatrix.needsUpdate = r.cabin.instanceMatrix.needsUpdate = true;
       }
     }
   }

@@ -28,7 +28,7 @@
     "yaw": 2.6089525
    }
   ],
-  "walkableCells": 74997
+  "walkableCells": 75146
  },
  "labels": {
   "bridge": "the South Bridgehead",
@@ -3537,6 +3537,6 @@
   }
  ],
  "trees": 1644,
- "staticTriangles": 301548,
+ "staticTriangles": 316561,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Bridge outline, roads, railway, river, park and buildings: OpenStreetMap contributors (ODbL). Structure from published figures; see research/bridge/FACTS.md."
 }

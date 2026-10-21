@@ -171,8 +171,8 @@ def build_deck(coll, s_from, s_to):
     kit.add_box(bm, (mid, 0, ROAD - 0.6), (L, 15.0, 1.2), mi=0, matrix=MB)
     for side in (-1, 1):
         kit.add_box(bm, (mid, side * 8.625, WALK - 0.7), (L, 2.25, 1.4), mi=1, matrix=MB)           # walkway
-        kit.add_box(bm, (mid, side * 9.95, WALK + 0.55), (L, 0.4, 1.1), mi=1, matrix=MB)            # parapet
-        kit.add_box(bm, (mid, side * 10.16, WALK + 0.45), (L, 0.06, 0.7), mi=3, matrix=MB)          # relief panels
+        kit.add_box(bm, (mid, side * 9.95, WALK + 0.475), (L, 0.4, 0.95), mi=1, matrix=MB)          # parapet, low enough to see the river over
+        kit.add_box(bm, (mid, side * 10.16, WALK + 0.4), (L, 0.06, 0.6), mi=3, matrix=MB)           # relief panels
         kit.add_box(bm, (mid, side * 9.95, WALK - 1.6), (L, 0.5, 0.8), mi=4, matrix=MB)             # edge beam
         for k in range(int(L / 8.0) + 1):                                                            # brackets
             kit.add_box(bm, (s_from + k * 8.0, side * 8.6, WALK - 2.3), (0.5, 2.4, 1.2), mi=4, matrix=MB)
@@ -376,14 +376,25 @@ def main():
     scene = bpy.context.scene
     root = bpy.data.collections.new('Yangtze')
     scene.collection.children.link(root)
-    c = {n: collection(n, root) for n in ('Ground', 'Water', 'Bridge', 'Overhead', 'City', 'Gates', 'Trees', 'Prototypes', 'Markers')}
+    c = {n: collection(n, root) for n in ('Ground', 'Water', 'Far', 'Bridge', 'Overhead', 'City', 'Gates', 'Trees', 'Prototypes', 'Markers')}
     protos = oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes']))
     x0, x1, y0, y1 = A.extent
     patch = ((max(x0 + 30, -2100.0), min(x1 - 30, 700.0)), (max(y0 + 30, -700.0), min(y1 - 30, 1500.0)))
     ac.terrain_patch('Terrain bridge', c['Ground'], patch[0], patch[1], ground, ['lawn', 'paving', 'city_ground', 'river_bed'], step=8.0)
     ac.outer_apron('Terrain outer', c['Ground'], A, (patch,), lambda x, y: ground(x, y)[0], material='city_ground')
-    # One sheet of river over the whole crop; the terrain dips below it wherever OSM says river.
-    ac.polygon_mesh('Yangtze', c['Water'], [[(x0, y0), (x1, y0), (x1, y1), (x0, y1)]], WATER, 'water')
+    # The river is OSM's whole Yangtze (it runs on for tens of kilometres), so from the deck it
+    # reaches the horizon; the terrain dips below it wherever OSM says river. Beyond the DEM crop a
+    # flat frame of land, just under the water, stops the world ending in a visible edge. It is
+    # its own export group: meshopt quantises positions over each mesh's bounds, and 80 km of
+    # far land in the Ground mesh shifted the deck's paving by metres.
+    ac.polygon_mesh('Yangtze', c['Water'], river, WATER, 'water')
+    ac.polygon_mesh('Islands far', c['Far'], islands, WATER + 0.25, 'city_ground')
+    far = 40000.0
+    x0, x1, y0, y1 = x0 + 24, x1 - 24, y0 + 24, y1 - 24     # where outer_apron stops
+    ac.polygon_mesh('Land far', c['Far'], [[(-far, -far), (far, -far), (far, y0), (-far, y0)],
+                                              [(-far, y1), (far, y1), (far, far), (-far, far)],
+                                              [(-far, y0), (x0, y0), (x0, y1), (-far, y1)],
+                                              [(x1, y0), (far, y0), (far, y1), (x1, y1)]], WATER - 0.4, 'city_ground')
     build_truss(c['Bridge'])
     build_piers(c['Bridge'])
     build_deck(c['Bridge'], -2.0, LENGTH + 2.0)

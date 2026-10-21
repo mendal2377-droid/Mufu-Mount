@@ -80,7 +80,7 @@ SETTINGS = {
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
     },
     'bridge': {
-        'static': ('Ground', 'Water', 'Bridge', 'Overhead', 'City', 'Gates'),
+        'static': ('Ground', 'Water', 'Far', 'Bridge', 'Overhead', 'City', 'Gates'),
         # The deck's walkways on a grid laid along the bridge (yaw = the OSM outline's axis), fine
         # enough for 2.25 m walkways; the South Bridgehead Park beside it, on the downstream side.
         'grids': [{'name': 'deck', 'yaw': 2.6089525, 'x0': -40.0, 'x1': 1710.0, 'y0': -12.0, 'y1': 12.0, 'cell': 0.75},
