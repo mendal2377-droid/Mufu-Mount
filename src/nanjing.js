@@ -84,7 +84,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     mendong:{world:'oldsouth',spawn:'mendong',weather:'sunset'},
     palace:{world:'palace',spawn:'palace',weather:'morning'},
     // The bridge at dusk: the magnolia lamps lit, the city's towers glowing downriver.
-    bridge:{world:'bridge',spawn:'bridge',weather:'sunset'}},worlds={};
+    bridge:{world:'bridge',spawn:'bridge',weather:'sunset'},
+    niushou:{world:'niushou',spawn:'niushou',weather:'morning'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
   const music=audio?createMusic(audio):null;
   function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}

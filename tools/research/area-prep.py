@@ -28,6 +28,11 @@ AREAS = {
     'oldsouth': {'bbox': (32.006, 118.766, 32.028, 118.794), 'origin': (32.02273535, 118.7836028)},
     # Origin: the south end of the main bridge's OSM outline (man_made=bridge, way 756599299), on
     # its centreline; the road ways are mapped some 20 m off it, the railway runs true.
+    # Origin: the Usnisha Palace (OSM way 1160624650), in the old quarry between Niushou's peaks.
+    'niushou': {'bbox': (31.898, 118.720, 31.930, 118.754), 'origin': (31.91524, 118.73634),
+                'tile': ROOT / 'research' / 'niushou' / 'data' / 'cop30_N31_E118.tif'},
+    # Origin: Qixia Temple (OSM way 1243073749); the relic pagoda and Thousand Buddha Cliff are just east.
+    'qixia': {'bbox': (32.142, 118.938, 32.166, 118.970), 'origin': (32.15386, 118.95302)},
     'bridge': {'bbox': (32.100, 118.722, 32.130, 118.758), 'origin': (32.1117707, 118.7461623)},
 }
 
@@ -67,7 +72,8 @@ def main(area):
     kx = 111_320.0 * math.cos(math.radians(o_lat))
     local = lambda lat, lon: (round((lon - o_lon) * kx, 2), round((lat - o_lat) * 110_574.0, 2))  # noqa: E731
 
-    with tifffile.TiffFile(TILE) as tif:
+    # Niushou lies south of 32 N, on the next tile down (downloaded beside its OSM extract).
+    with tifffile.TiffFile(cfg.get('tile', TILE)) as tif:
         page = tif.pages[0]
         z = page.asarray().astype(np.float32)
         dx, dy = page.tags['ModelPixelScaleTag'].value[:2]

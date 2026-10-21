@@ -1,0 +1,132 @@
+{
+ "id": "niushou",
+ "title": "Niushou Mountain: the Usnisha Palace and the Foding Pagoda",
+ "zh": "牛首山 · 佛顶宫 · 佛顶塔",
+ "axes": "three.js: x = east, y = up, z = south (Blender x, z, -y); metres",
+ "walk": {
+  "cell": 1.0,
+  "noWalk": -32768,
+  "grids": [
+   {
+    "name": "plaza",
+    "nx": 340,
+    "ny": 420,
+    "x0": -220.0,
+    "y0": -320.0,
+    "cell": 1.0,
+    "offset": 0
+   }
+  ],
+  "walkableCells": 111296
+ },
+ "labels": {
+  "niushou": "the plaza of Niushou Mountain",
+  "dome": "the Usnisha Palace",
+  "pagoda": "the Foding Pagoda"
+ },
+ "origin_wgs84": [
+  31.91524,
+  118.73634
+ ],
+ "base_z": 20.2627010345459,
+ "fog": 0.0006,
+ "spawns": {
+  "niushou": {
+   "position": [
+    -54.5,
+    112.0,
+    105.0
+   ],
+   "look": [
+    -30.679,
+    112.0,
+    86.764
+   ]
+  },
+  "dome": {
+   "position": [
+    -11.045,
+    112.0,
+    69.661
+   ],
+   "look": [
+    -1.761,
+    112.0,
+    41.134
+   ]
+  },
+  "pagoda": {
+   "position": [
+    -46.62,
+    112.0,
+    178.964
+   ],
+   "look": [
+    -55.905,
+    112.0,
+    207.491
+   ]
+  }
+ },
+ "gates": [
+  {
+   "target": "dome",
+   "position": [
+    -32.62,
+    112.0,
+    186.964
+   ],
+   "look": [
+    -27.194,
+    112.0,
+    157.459
+   ]
+  },
+  {
+   "target": "pagoda",
+   "position": [
+    0.955,
+    112.0,
+    59.661
+   ],
+   "look": [
+    -10.158,
+    112.0,
+    87.527
+   ]
+  }
+ ],
+ "bells": {},
+ "docks": {},
+ "rides": {},
+ "seats": {
+  "plaza-0": {
+   "position": [
+    -121.0,
+    112.0,
+    197.0
+   ],
+   "look": [
+    -137.641,
+    112.0,
+    172.038
+   ]
+  },
+  "plaza-1": {
+   "position": [
+    -121.0,
+    112.0,
+    183.0
+   ],
+   "look": [
+    -137.641,
+    112.0,
+    158.038
+   ]
+  }
+ },
+ "traffic": [],
+ "trees": 5289,
+ "staticTriangles": 211490,
+ "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Palace, pagoda, halls and roads: OpenStreetMap contributors (ODbL). Shapes from published figures and photographs; see research/niushou/FACTS.md."
+}

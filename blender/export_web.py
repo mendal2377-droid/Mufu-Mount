@@ -79,6 +79,17 @@ SETTINGS = {
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap '
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
     },
+    'niushou': {
+        'static': ('Ground', 'Water', 'Palace', 'Pagoda', 'City', 'Gates'),
+        # The plaza between the pagoda and the palace, and the ring round the dome.
+        'grids': [{'name': 'plaza', 'x0': -220.0, 'x1': 120.0, 'y0': -320.0, 'y1': 100.0}],
+        'title': 'Niushou Mountain: the Usnisha Palace and the Foding Pagoda',
+        'zh': '牛首山 · 佛顶宫 · 佛顶塔',
+        'fog': 0.0006,
+        'labels': {'niushou': 'the plaza of Niushou Mountain', 'dome': 'the Usnisha Palace', 'pagoda': 'the Foding Pagoda'},
+        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Palace, pagoda, halls and roads: OpenStreetMap '
+                      'contributors (ODbL). Shapes from published figures and photographs; see research/niushou/FACTS.md.',
+    },
     'bridge': {
         'static': ('Ground', 'Water', 'Far', 'Bridge', 'Overhead', 'City', 'Gates'),
         # The deck's walkways on a grid laid along the bridge (yaw = the OSM outline's axis), fine
