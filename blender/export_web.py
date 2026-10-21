@@ -79,6 +79,20 @@ SETTINGS = {
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap '
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
     },
+    'bridge': {
+        'static': ('Ground', 'Water', 'Bridge', 'Overhead', 'City', 'Gates'),
+        # The deck's walkways on a grid laid along the bridge (yaw = the OSM outline's axis), fine
+        # enough for 2.25 m walkways; the South Bridgehead Park beside it, on the downstream side.
+        'grids': [{'name': 'deck', 'yaw': 2.6089525, 'x0': -40.0, 'x1': 1710.0, 'y0': -12.0, 'y1': 12.0, 'cell': 0.75},
+                  {'name': 'park', 'yaw': 2.6089525, 'x0': -260.0, 'x1': 330.0, 'y0': -300.0, 'y1': -16.0, 'cell': 1.5}],
+        'title': 'The Nanjing Yangtze River Bridge',
+        'zh': '南京长江大桥',
+        'fog': 0.00032,
+        'labels': {'bridge': 'the South Bridgehead', 'deck': 'the road deck', 'riverside': 'the riverbank under the bridge',
+                   'mid': 'mid-river, on the deck'},
+        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Bridge outline, roads, railway, river, park and '
+                      'buildings: OpenStreetMap contributors (ODbL). Structure from published figures; see research/bridge/FACTS.md.',
+    },
     'north': {
         'static': ('Ground', 'Water', 'Temple', 'Walls', 'City', 'Gates'),
         # Jiming hill at 1 m (stairs); the island shore at 1.5 m (flat lawns and paths).
@@ -137,10 +151,13 @@ def walk_grid(trees, grid):
     heights = [NO_WALK] * (nx * ny)
     mats_cache = {}
     walk_count = 0
+    # A yawed grid (the bridge deck) runs in its own (u, v) frame, turned about the world origin.
+    cy_, sy_ = math.cos(grid.get('yaw', 0.0)), math.sin(grid.get('yaw', 0.0))
     for j in range(ny):
-        y = grid['y0'] + (j + 0.5) * cell
+        v = grid['y0'] + (j + 0.5) * cell
         for i in range(nx):
-            x = grid['x0'] + (i + 0.5) * cell
+            u = grid['x0'] + (i + 0.5) * cell
+            x, y = u * cy_ - v * sy_, u * sy_ + v * cy_
             hit, loc, normal, index, obj, _ = s.ray_cast(dg, Vector((x, y, 800.0)), Vector((0, 0, -1)))
             # Either winding: some ring and fan meshes face down, and only the surface's height matters.
             if not hit or abs(normal.z) < 0.5:
@@ -158,7 +175,7 @@ def walk_grid(trees, grid):
                 walk_count += 1
     # Trunks: unwalkable discs round each tree inside the grid.
     for o in trees:
-        x, y = o.location.x, o.location.y
+        x, y = o.location.x * cy_ + o.location.y * sy_, -o.location.x * sy_ + o.location.y * cy_
         if not (grid['x0'] - 3 < x < grid['x1'] + 3 and grid['y0'] - 3 < y < grid['y1'] + 3):
             continue
         r = TRUNK_RADIUS * max(o.scale.x, 0.6)
@@ -248,7 +265,7 @@ def main():
     for g in cfg['grids']:
         nx, ny, h, n = walk_grid(trees, g)
         grids.append({'name': g['name'], 'nx': nx, 'ny': ny, 'x0': g['x0'], 'y0': g['y0'], 'cell': g.get('cell', CELL),
-                      'offset': len(heights)})
+                      'offset': len(heights), **({'yaw': g['yaw']} if g.get('yaw') else {})})
         heights += h
         walk_count += n
     lap('walk grids')
@@ -278,6 +295,9 @@ def main():
         # Boat routes: 'Ride <route> NNN' empties in order, as three.js points.
         'rides': _rides(),
         'seats': named_points('Seat'),
+        # Moving traffic (trains, ships, cars): the build stores routes in Blender metres.
+        'traffic': [{**t, 'pts': [to_three(Vector(p)) for p in t['pts']]}
+                    for t in json.loads(bpy.context.scene.get('traffic', '[]'))],
         'trees': len(trees_out),
         'staticTriangles': tris,
         'provenance': cfg.get('provenance', 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). '

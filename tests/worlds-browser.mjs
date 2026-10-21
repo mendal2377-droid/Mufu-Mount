@@ -9,21 +9,23 @@ import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 
-const PINS = [['zhongshan', 'zhongshan'], ['jiming', 'north'], ['qinhuai', 'oldsouth'], ['palace', 'palace']];
+const PINS = [['zhongshan', 'zhongshan'], ['jiming', 'north'], ['qinhuai', 'oldsouth'], ['palace', 'palace'], ['bridge', 'bridge']];
 const browser = await chromium.launch({channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist']});
 const errors = [], report = {};
 await fs.mkdir('test-results', {recursive: true});
 try {
-  const page = await browser.newPage({viewport: {width: 1100, height: 760}});
-  await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.fulfill({status: 200, contentType: 'text/css', body: ''}));
-  await page.addInitScript(() => localStorage.setItem('mufu-quality', 'smooth'));
-  page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/fonts|ERR_CERT|PointerLock|pointer lock/i.test(m.text())) errors.push(m.text()); });
-  await page.goto(process.env.MUFU_TEST_URL || 'http://127.0.0.1:4190', {waitUntil: 'domcontentloaded', timeout: 120000});
-  await page.waitForFunction(() => window.__mufu?.city?.active, null, {timeout: 180000});
-  await page.evaluate(() => { window.__mufu.paused = true; });
-
-  for (const [pin, id] of PINS) {
+  const only = process.env.MUFU_WORLDS ? process.env.MUFU_WORLDS.split(',') : null;
+  for (const [pin, id] of PINS.filter(([, w]) => !only || only.includes(w))) {
+    // A fresh page per world: software WebGL holding the previous world's millions of triangles
+    // starved the next load (even the navigation away) past any sensible timeout.
+    const page = await browser.newPage({viewport: {width: 1100, height: 760}});
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.fulfill({status: 200, contentType: 'text/css', body: ''}));
+    await page.addInitScript(() => localStorage.setItem('mufu-quality', 'smooth'));
+    page.on('pageerror', e => errors.push(`${id}: ${e.message}`));
+    page.on('console', m => { if (m.type() === 'error' && !/fonts|ERR_CERT|PointerLock|pointer lock/i.test(m.text())) errors.push(`${id}: ${m.text()}`); });
+    await page.goto(process.env.MUFU_TEST_URL || 'http://127.0.0.1:4190', {waitUntil: 'domcontentloaded', timeout: 120000});
+    await page.waitForFunction(() => window.__mufu?.city?.active, null, {timeout: 180000});
+    await page.evaluate(() => { window.__mufu.paused = true; });
     await page.evaluate(p => window.__mufu.city.enter(p), pin);
     await page.waitForFunction(w => window.__mufu.city.world?.id === w, id, {timeout: 600000});   // software WebGL is slow
     const r = await page.evaluate(() => {
@@ -49,13 +51,13 @@ try {
     });
     report[id] = r;
     assert.deepEqual(r.bad, [], `${id}: markers off the walkable ground`);
+    console.log(id, JSON.stringify(r));
     if (r.glide) { assert.ok(r.glide.started && r.glide.landed && r.glide.onGround, `${id}: gate glide`); assert.ok(r.glide.miss < 3); }
     await page.evaluate(() => window.__mufu.step(4, .05));
     await page.screenshot({path: `test-results/world-${id}.png`}).catch(() => {});
-  }
-
   // The Qinhuai boat ride: board at the dock, sail out and back, step ashore at the dock.
-  report.boat = await page.evaluate(() => {
+    if (id === 'oldsouth') {
+    report.boat = await page.evaluate(() => {
     const m = window.__mufu, w = m.city.world, d = Object.values(w.meta.docks)[0];
     w.placeAt({feet: [d.position[0], w.ground(d.position[0], d.position[2] - 6), d.position[2] - 6], look: [d.position[0], 0, d.position[2] + 20]});
     m.step(2, .05); m.city.interact();
@@ -65,7 +67,11 @@ try {
     m.step(12000, .05);
     return {aboard, sailed: +sailed.toFixed(1), back: !w.riding, music: m.city.stats().world.music};
   });
-  assert.ok(report.boat.aboard && report.boat.sailed > 20 && report.boat.back, 'boat ride');
+    assert.ok(report.boat.aboard && report.boat.sailed > 20 && report.boat.back, 'boat ride');
+    }
+    await page.close();
+  }
+
   assert.deepEqual(errors, []);
   console.log('worlds ok', JSON.stringify(report, null, 1));
 } finally {

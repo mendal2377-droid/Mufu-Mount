@@ -111,6 +111,23 @@ function treeGeometry(spec, seed) {
   return out;
 }
 
+// Distant trees: one low crown in the tree's colour, no trunk (an octahedron for broadleaf crowns,
+// a six-sided cone for conifers). A few triangles each, so a whole forest costs little.
+function silhouetteGeometry(spec) {
+  let g;
+  if (spec.cone) { g = new THREE.ConeGeometry(spec.r * .9, spec.h * .9, 6, 1).toNonIndexed(); g.translate(0, spec.h * .55, 0); }
+  else {
+    g = new THREE.OctahedronGeometry(spec.r * (spec.hang ? .95 : 1.05), 0).toNonIndexed();
+    g.scale(1, spec.hang ? 1.25 : .85, 1); g.translate(0, spec.h * (spec.hang ? .55 : .72), 0);
+    const p = g.attributes.position, n = g.attributes.normal, v = new THREE.Vector3(), c = new THREE.Vector3(0, spec.h * .72, 0);
+    for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).sub(c).normalize(); n.setXYZ(i, v.x, v.y, v.z); }
+  }
+  const c = new THREE.Color(spec.crown), a = new Float32Array(g.attributes.position.count * 3);
+  for (let i = 0; i < g.attributes.position.count; i++) c.toArray(a, i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
+
 // Lotus: a few cupped round leaves held at different heights above the water (the photographs
 // show a crowd of raised leaves, not flat pads); a flower is a pink cup on its own leaf.
 function lotusGeometry(spec, colour) {
@@ -171,6 +188,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     if (name === 'lantern_glow') { mat.emissive = new THREE.Color(0xffb347); mat.emissiveIntensity = .75; }
     // The Bao'en tower's glass: a pale green-white glow, as it is lit at night.
     if (name === 'glass_glow') { mat.emissive = new THREE.Color(0xbfe8d2); mat.emissiveIntensity = .55; }
+    // The bridge's magnolia lamps (玉兰花灯): white globes.
+    if (name === 'lamp_white') { mat.emissive = new THREE.Color(0xfff4dc); mat.emissiveIntensity = .8; }
     mat.onBeforeCompile = s => {
       s.uniforms.citySnow = shared.snow; s.uniforms.worldMottle = {value: style.mottle}; s.uniforms.worldScale = {value: style.scale};
       s.uniforms.worldJoints = {value: style.joints || 0}; s.uniforms.cityTime = shared.time;
@@ -263,25 +282,64 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   };
   treeMat.customProgramCacheKey = () => 'landmark-trees-v1';
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(), pos = new THREE.Vector3();
+  const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+  // Level of detail: near trees (within NEAR_R of the traveller, at most NEAR_CAP of them) get the
+  // full painted crown; every other tree is a silhouette of a few triangles in the same colour. All
+  // trees at full detail were ~2.6 M triangles in Zhongshan, too heavy for a phone.
+  const NEAR_R = 280, NEAR_CAP = 2500;
+  const lodKinds = [];
   let treeTriangles = 0;
   for (const [kind, list] of Object.entries(byKind)) {
     const spec = TREES[kind] || TREES.broadleaf, geo = treeGeometry(spec, 101 + kind.length * 17);
-    const inst = new THREE.InstancedMesh(geo, treeMat, list.length);
     // Per-tree tint: far crowns pick from the canopy palette so the forest reads as painted
-    // patches, near trees vary a little in value.
-    // Far crowns are white in the geometry, so the instance colour is the colour.
+    // patches, near trees vary a little in value. Far crowns are white in the geometry, so the
+    // instance colour is the colour.
     const tints = spec.far ? ['#5A8A3C', '#6E9B3E', '#47733A', '#86A84A', '#3E6A3E'].map(h => new THREE.Color(h)) : null;
-    const tint = new THREE.Color();
-    list.forEach((t, i) => {
+    const tint = new THREE.Color(), mats = [], cols = [];
+    list.forEach(t => {
       q.setFromAxisAngle(up, t[4]); sc.setScalar(t[5]); pos.set(t[1], t[2], t[3]);
-      inst.setMatrixAt(i, m4.compose(pos, q, sc));
+      mats.push(new THREE.Matrix4().compose(pos, q, sc));
       const r = Math.abs(Math.sin(t[1] * 12.9898 + t[3] * 78.233)) % 1;
       if (tints) tint.copy(tints[Math.floor(r * tints.length) % tints.length]); else tint.setScalar(.9 + r * .2);
-      inst.setColorAt(i, tint);
+      cols.push(tint.clone());
     });
-    inst.computeBoundingSphere(); inst.name = `trees ${kind}`;
-    scene.add(inst);
-    treeTriangles += geo.attributes.position.count / 3 * list.length;
+    const lod = !spec.far && !spec.lotus && !spec.flower && list.length > 60;
+    const near = new THREE.InstancedMesh(geo, treeMat, lod ? Math.min(list.length, NEAR_CAP) : list.length);
+    near.name = `trees ${kind}`;
+    if (!lod) {
+      mats.forEach((m, i) => { near.setMatrixAt(i, m); near.setColorAt(i, cols[i]); });
+      near.computeBoundingSphere(); scene.add(near);
+      treeTriangles += geo.attributes.position.count / 3 * list.length;
+      continue;
+    }
+    near.count = 0; near.frustumCulled = false; scene.add(near);
+    const farGeo = silhouetteGeometry(spec), far = new THREE.InstancedMesh(farGeo, treeMat, list.length);
+    mats.forEach((m, i) => { far.setMatrixAt(i, m); far.setColorAt(i, cols[i]); });
+    far.computeBoundingSphere(); far.name = `trees ${kind} far`; scene.add(far);
+    lodKinds.push({list, mats, cols, near, far, shown: new Set()});
+    treeTriangles += farGeo.attributes.position.count / 3 * list.length;
+  }
+  let lodAt = -1, lodX = 1e9, lodZ = 1e9;
+  function updateTreeLod(t, centre) {
+    // Every half second, or sooner after a long move (a glide or a gate).
+    if (t - lodAt < .5 && Math.hypot(centre.x - lodX, centre.z - lodZ) < 40) return;
+    lodAt = t; lodX = centre.x; lodZ = centre.z;
+    const r2 = NEAR_R * NEAR_R;
+    for (const k of lodKinds) {
+      const now = new Set();
+      for (let i = 0; i < k.list.length && now.size < NEAR_CAP; i++) {
+        const tr = k.list[i], dx = tr[1] - centre.x, dz = tr[3] - centre.z;
+        if (dx * dx + dz * dz < r2) now.add(i);
+      }
+      for (const i of k.shown) if (!now.has(i)) k.far.setMatrixAt(i, k.mats[i]);
+      for (const i of now) if (!k.shown.has(i)) k.far.setMatrixAt(i, ZERO);
+      let n = 0;
+      for (const i of now) { k.near.setMatrixAt(n, k.mats[i]); k.near.setColorAt(n, k.cols[i]); n++; }
+      k.near.count = n;
+      k.near.instanceMatrix.needsUpdate = true; if (k.near.instanceColor) k.near.instanceColor.needsUpdate = true;
+      k.far.instanceMatrix.needsUpdate = true;
+      k.shown = now;
+    }
   }
 
   // --- Light, sky, weather --------------------------------------------------------------------------
@@ -294,9 +352,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
 
   // --- Walk grid ------------------------------------------------------------------------------------
   // One grid per scene area (the Mausoleum and Music Stage, Meiling), concatenated in walk.bin.
+  // A grid with a yaw is laid along a diagonal (the Yangtze Bridge deck): x0/y0 are then in its
+  // own frame, turned by yaw (Blender radians, anticlockwise) about the world origin.
   function cellOf(x, z) {
     for (const g of walk.grids) {
-      const c = g.cell || walk.cell, i = Math.floor((x - g.x0) / c), j = Math.floor((-z - g.y0) / c);
+      let u = x, v = -z;
+      if (g.yaw) { const c = Math.cos(g.yaw), s = Math.sin(g.yaw); u = x * c - z * s; v = -x * s - z * c; }
+      const c = g.cell || walk.cell, i = Math.floor((u - g.x0) / c), j = Math.floor((v - g.y0) / c);
       if (i >= 0 && j >= 0 && i < g.nx && j < g.ny) return g.offset + j * g.nx + i;
     }
     return -1;
@@ -437,6 +499,85 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     let best = 0, bd = Infinity;
     for (let k = 0; k <= 200; k++) { const q = route.curve.getPointAt(k / 200), d = (q.x - x) ** 2 + (q.z - z) ** 2; if (d < bd) { bd = d; best = k / 200; } }
     return best;
+  }
+  // --- Traffic (meta.traffic): trains on the bridge's lower deck, barges on the river, cars on the
+  // road. Each route runs one way and wraps; vehicles off either end are hidden. -------------------
+  const skin = (c, e = 0, ei = .6) => new THREE.MeshToonMaterial({color: c, gradientMap: bands, emissive: e, emissiveIntensity: ei});
+  function trainCar(i) {
+    const g = new THREE.Group();
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(3.1, 3.6, 22.5), skin(i === 0 ? 0xb8432f : 0x2f6b4a));
+    const band = new THREE.Mesh(new THREE.BoxGeometry(3.16, .9, 21), skin(0xf3e6c4, 0xffd28a, .35));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.7, .5, 22), skin(0x59605c));
+    shell.position.y = 2.3; band.position.y = 2.8; roof.position.y = 4.3;
+    g.add(shell, band, roof);
+    return g;
+  }
+  function barge() {
+    const g = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(11, 2.2, 62), skin(0x3d3a36));
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(9.6, .6, 44), skin(0x8a6a48));   // cargo of sand or coal
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(8.5, 5.5, 7), skin(0xeae6dc));
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(8.6, 1, 6), skin(0xffd28a, 0xffb347, .8));
+    hull.position.y = .6; deck.position.set(0, 1.9, 6); cabin.position.set(0, 4.2, -25); glow.position.set(0, 5.4, -25);
+    g.add(hull, deck, cabin, glow);
+    return g;
+  }
+  const traffic = [];
+  const carPaint = [0xd9d4c8, 0x2b3f9e, 0xb8432f, 0x3e7d5a, 0x5d6670, 0xe2b04a, 0xf3f0e8];
+  for (const t of meta.traffic || []) {
+    const curve = new THREE.CatmullRomCurve3(t.pts.map(p => new THREE.Vector3(...p)), false, 'centripetal'), length = curve.getLength();
+    const r = {kind: t.kind, curve, length, speed: t.speed || 10, units: []};
+    if (t.kind === 'train') {
+      // One train per route, its carriages trailing along the curve.
+      r.cars = Array.from({length: t.cars || 12}, (_, i) => { const m = trainCar(i); scene.add(m); return m; });
+      r.units.push({u: t.phase || 0});
+      r.gap = t.gap || 600;   // metres of empty track between trains
+    } else if (t.kind === 'ship') {
+      for (let i = 0; i < (t.n || 3); i++) { const m = barge(); scene.add(m); r.units.push({u: (i + (t.phase || 0)) / (t.n || 3), mesh: m}); }
+    } else {
+      const n = t.n || 30, geo = new THREE.BoxGeometry(1.9, 1.5, 4.6);
+      geo.translate(0, .75, 0);
+      r.inst = new THREE.InstancedMesh(geo, skin(0xffffff), n);
+      for (let i = 0; i < n; i++) { r.inst.setColorAt(i, new THREE.Color(carPaint[i % carPaint.length])); r.units.push({u: (i + Math.random() * .6) / n}); }
+      r.inst.frustumCulled = false; scene.add(r.inst);
+    }
+    traffic.push(r);
+  }
+  const trafficDummy = new THREE.Object3D();
+  let rumble = 0;
+  function updateTraffic(dt) {
+    rumble = 0;
+    for (const r of traffic) {
+      if (r.kind === 'train') {
+        const u = r.units[0], span = r.length + r.gap, carLen = 23;
+        u.u = (u.u * span + r.speed * dt) % span / span;
+        const head = u.u * span;
+        r.cars.forEach((m, i) => {
+          const s = head - i * carLen;
+          m.visible = s > 0 && s < r.length;
+          if (!m.visible) return;
+          const p = r.curve.getPointAt(s / r.length), tan = r.curve.getTangentAt(s / r.length);
+          m.position.copy(p); m.rotation.y = Math.atan2(tan.x, tan.z);
+          // The bridge hums underfoot as the train passes beneath the walkway.
+          const d = Math.hypot(p.x - body.x, p.z - body.z);
+          if (d < 30 && body.y > p.y) rumble = Math.max(rumble, 1 - d / 30);
+        });
+      } else if (r.kind === 'ship') {
+        for (const s of r.units) {
+          s.u = (s.u + r.speed * dt / r.length) % 1;
+          const p = r.curve.getPointAt(s.u), tan = r.curve.getTangentAt(s.u);
+          s.mesh.position.copy(p); s.mesh.rotation.y = Math.atan2(tan.x, tan.z);
+        }
+      } else {
+        r.units.forEach((c, i) => {
+          c.u = (c.u + r.speed * dt / r.length) % 1;
+          const p = r.curve.getPointAt(c.u), tan = r.curve.getTangentAt(c.u);
+          trafficDummy.position.copy(p); trafficDummy.rotation.set(0, Math.atan2(tan.x, tan.z), 0);
+          trafficDummy.updateMatrix(); r.inst.setMatrixAt(i, trafficDummy.matrix);
+        });
+        r.inst.instanceMatrix.needsUpdate = true;
+      }
+    }
   }
   const camDir = new THREE.Vector3(), tmp = new THREE.Vector3();
 
@@ -625,6 +766,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const g = surface(eye.x, eye.z);
       if (g !== null) eye.y = Math.max(eye.y, g + .45);
       camera.position.lerp(eye, 1 - Math.exp(-dt * 18));
+      if (rumble > 0) camera.position.y += Math.sin(performance.now() * .09) * .025 * rumble;
     },
     frame(dt, t, weather, direction, camera) {
       if (glide) {
@@ -656,6 +798,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       worldRain.visible = weather.storm > .02; worldSnow.visible = weather.snow > .02;
       updatePigeons(t, dt, !!seated);
       updatePetals(t, dt, body);
+      updateTreeLod(t, glide || mode === 'glide' ? camera.position : body);
+      updateTraffic(dt);
       for (const b of boats) {
         b.u += b.dir * 1.4 * dt / b.route.length;
         if (b.u > 1) { b.u = 1; b.dir = -1; } else if (b.u < 0) { b.u = 0; b.dir = 1; }

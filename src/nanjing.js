@@ -82,7 +82,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // The old south city is best at dusk, when the lanterns and windows glow.
     qinhuai:{world:'oldsouth',spawn:'qinhuai',weather:'sunset'},zhonghua:{world:'oldsouth',spawn:'zhonghua',weather:'sunset'},
     mendong:{world:'oldsouth',spawn:'mendong',weather:'sunset'},
-    palace:{world:'palace',spawn:'palace',weather:'morning'}},worlds={};
+    palace:{world:'palace',spawn:'palace',weather:'morning'},
+    // The bridge at dusk: the magnolia lamps lit, the city's towers glowing downriver.
+    bridge:{world:'bridge',spawn:'bridge',weather:'sunset'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
   const music=audio?createMusic(audio):null;
   function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
@@ -274,7 +276,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       if(open){controls.unlock();keys.clear();$('#city-menu').close();renderPassport();if(!d.open)d.showModal();}else d.close();},
     startWindRun(){
       // enter() cancels any run in progress, so start the run afterwards.
-      api.enter('bridge');state.flying=false;
+      api.enter('bridge',{atlas:true});state.flying=false;
       const pose=gameView.startRun();
       // Take off at the start line, climbing towards the first ring.
       selected=places.find(q=>q.id==='bridge');
@@ -298,7 +300,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
         camera.position.fromArray(flight.at(0));camera.lookAt(...p.look);}
       document.body.classList.remove('plan-mode','photo-mode');document.body.classList.add('playing');$('#nanjing-home').hidden=true;
       $('#walk-environment').hidden=false;$('#walk-menu').hidden=false;$('#walk-places').hidden=false;$('#back-to-plan').hidden=false;
-      if(WORLDS[id]){arrival=null;enterWorld(p,opts);return;}
+      // atlas: stay in the atlas even where a landmark has its own world (the wind run starts at the bridge).
+      if(WORLDS[id]&&!opts.atlas){arrival=null;enterWorld(p,opts);return;}
       if(!arrival)toast(`${p.zh} · WASD to walk · Drag to look · G places · K to fly`);},
     leave(){if(!active)return;exitWorld();flying(false);$('#walk-places').hidden=true;$('#city-places')?.close();active=false;reset();baseScene.add(camera);postfx.setScene(baseScene);
       $('#nanjing-home').hidden=true;$('#city-menu').close();document.body.classList.remove('city-mode');

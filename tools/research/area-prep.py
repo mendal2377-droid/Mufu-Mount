@@ -26,7 +26,37 @@ AREAS = {
     # Origin: the Presidential Palace atlas anchor (OSM way 62353727).
     'palace': {'bbox': (32.038, 118.784, 32.054, 118.800), 'origin': (32.04622025, 118.79225685)},
     'oldsouth': {'bbox': (32.006, 118.766, 32.028, 118.794), 'origin': (32.02273535, 118.7836028)},
+    # Origin: the south end of the main bridge's OSM outline (man_made=bridge, way 756599299), on
+    # its centreline; the road ways are mapped some 20 m off it, the railway runs true.
+    'bridge': {'bbox': (32.100, 118.722, 32.130, 118.758), 'origin': (32.1117707, 118.7461623)},
 }
+
+
+def stitch(lines):
+    """Join open polylines end to end (reversing where needed) into closed rings."""
+    lines = [list(l) for l in lines if len(l) > 1]
+    rings = []
+    while lines:
+        cur = lines.pop()
+        grown = True
+        while cur[0] != cur[-1] and grown:
+            grown = False
+            for i, l in enumerate(lines):
+                if l[0] == cur[-1]:
+                    cur += l[1:]
+                elif l[-1] == cur[-1]:
+                    cur += l[-2::-1]
+                elif l[-1] == cur[0]:
+                    cur = l[:-1] + cur
+                elif l[0] == cur[0]:
+                    cur = l[:0:-1] + cur
+                else:
+                    continue
+                lines.pop(i)
+                grown = True
+                break
+        rings.append(cur)
+    return rings
 
 
 def main(area):
@@ -70,10 +100,11 @@ def main(area):
             continue
         if el['type'] == 'relation':
             if t.get('natural') == 'water' or t.get('water') or t.get('landuse') == 'reservoir':
-                for m in el.get('members', []):
-                    if m.get('geometry'):
-                        (feats['water'] if m['role'] == 'outer' else feats['islands']).append(
-                            {'id': el['id'], 'name': name, 'pts': ring(m['geometry'])})
+                # Big rivers (the Yangtze) come as many open member ways: stitch them into rings.
+                for role, key in (('outer', 'water'), ('inner', 'islands')):
+                    for pts in stitch([ring(m['geometry']) for m in el.get('members', [])
+                                       if m.get('geometry') and m['role'] == role]):
+                        feats[key].append({'id': el['id'], 'name': name, 'pts': pts})
             continue
         g = el.get('geometry')
         if not g:
@@ -94,6 +125,8 @@ def main(area):
             feats['bridges'].append({**rec, 'tags': {k: t[k] for k in ('highway', 'bridge', 'layer') if k in t}})
         elif t.get('highway'):
             feats['ways'].append({**rec, 'kind': t['highway']})
+        elif t.get('railway') in ('rail', 'light_rail', 'subway'):
+            feats['ways'].append({**rec, 'kind': 'rail', 'tags': {k: t[k] for k in ('railway', 'bridge', 'tunnel', 'layer') if k in t}})
         elif t.get('place') == 'islet' or t.get('place') == 'island':
             feats['islands'].append(rec)
         elif closed and (t.get('leisure') or t.get('landuse') or t.get('amenity') or t.get('tourism') or t.get('historic')):
