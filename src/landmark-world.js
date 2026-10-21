@@ -211,16 +211,19 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             vec2 cell=vec2((vWorldPos.x+vWorldPos.z)/2.4,vWorldPos.y/3.8);
             vec2 f=fract(cell);float fw2=max(fwidth(cell.x),fwidth(cell.y));
             float frame=max(smoothstep(.82,.9,f.y),smoothstep(.9,.96,f.x))*(1.-smoothstep(.2,.6,fw2));
-            diffuseColor.rgb*=1.-frame*.18*side*worldWindows;
-            winLit=step(.62,lwHash(floor(cell)))*side*(1.-frame);
+            diffuseColor.rgb*=1.-frame*.12*side*worldWindows;
+            // Lit windows only where they read: they fade out with distance and with the skyline haze,
+            // or far towers become specks of light floating in the sky.
+            float dist=length(vViewPosition);
+            winLit=step(.8,lwHash(floor(cell)))*side*(1.-frame)*(1.-smoothstep(500.,1800.,dist))*(1.-smoothstep(.35,1.,fw2));
           }`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           // At dusk and dawn a third of the windows glow warm.
           totalEmissiveRadiance+=winLit*worldWindows*clamp(citySunset+cityDawn,0.,1.)*vec3(1.,.74,.42)*.9;`)
         .replace('#include <dithering_fragment>', `#include <dithering_fragment>
           // Skyline haze: towers fade toward the sky colour with distance, never to nothing.
-          if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.62);}`);
+          if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.45);}`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v5';
+    mat.customProgramCacheKey = () => 'landmark-paint-v7';
     cache.set(name, mat);
     return mat;
   }

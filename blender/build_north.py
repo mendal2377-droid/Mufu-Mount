@@ -275,13 +275,27 @@ def huanzhou_view_point():
     return Vector(min(hz, key=lambda p: p[1] - 0.3 * p[0])) + Vector((10, 14))
 
 
+def view_open(x, y):
+    """Keep the classic Xuanwu view clear: no trees within 140 m of the Huanzhou spawn inside the
+    sightlines to Zifeng Tower and to the Yaoshi Pagoda (willows once hid Zifeng completely)."""
+    sp = huanzhou_view_point()
+    d = Vector((x, y)) - sp
+    if d.length > 140 or d.length < 1:
+        return True
+    for target in (ZIFENG, PAGODA):
+        t = target - sp
+        if d.angle(t) < math.radians(24):
+            return False
+    return True
+
+
 def clear_of_spawns(x, y):
     """Nothing planted within 9 m of a spawn or seat (a tree once grew on the lotus view)."""
     sp = huanzhou_view_point()
     road = next(w for w in F['ways'] if w['name'] == '鸡鸣寺路')['pts']
     spots = [sp, sp + Vector((-12, 6)), sp + Vector((12, 6)), sp + Vector((22, 4)), Vector(road[len(road) // 2]),
              from_axis(0, -14).to_2d(), from_axis(16, -6).to_2d()]
-    return all((Vector((x, y)) - q).length > 9 for q in spots)
+    return all((Vector((x, y)) - q).length > 9 for q in spots) and view_open(x, y)
 
 
 def plant(protos, trees):
@@ -392,7 +406,8 @@ def markers(coll, gates_coll):
     hz = next(w for w in F['islands'] if w['name'] == '环洲')['pts']
     south = min(hz, key=lambda p: p[1] - 0.3 * p[0])
     sp = Vector(south) + Vector((10, 14))
-    ac.add_point(coll, 'Spawn xuanwu', (sp.x, sp.y, zground(sp.x, sp.y)), (PAGODA.x - 200, PAGODA.y, TEMPLE_TOP + 20))
+    look = (ZIFENG + PAGODA) / 2
+    ac.add_point(coll, 'Spawn xuanwu', (sp.x, sp.y, zground(sp.x, sp.y)), (look.x, look.y, TEMPLE_TOP + 20))
     for k, d in enumerate((-12, 0, 12)):
         p = sp + Vector((d, 6))
         ac.add_point(coll, f'Seat xuanwu-{k}', (p.x, p.y, zground(p.x, p.y)), (PAGODA.x - 200, PAGODA.y, TEMPLE_TOP))

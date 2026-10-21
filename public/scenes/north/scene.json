@@ -97,9 +97,9 @@
     -864.02
    ],
    "look": [
-    -74.832,
+    -84.862,
     2.179,
-    -834.433
+    -838.034
    ]
   }
  },
@@ -197,7 +197,7 @@
    ]
   }
  },
- "trees": 26421,
+ "trees": 26425,
  "staticTriangles": 336845,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Lake, islands, walls, streets and buildings: OpenStreetMap contributors (ODbL). Architecture modelled from published descriptions; see research/north/FACTS.md."
 }

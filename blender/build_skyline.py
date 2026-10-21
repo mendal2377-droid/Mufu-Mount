@@ -30,9 +30,9 @@ OUT = ROOT / 'public' / 'scenes' / 'skyline'
 RENDER = '--no-render' not in sys.argv
 
 kit.PALETTE.update({
-    'tower_glass': '#A9BDCF',     # most glass towers: pale blue-grey in the painted haze
+    'tower_glass': '#8FA7BD',     # most glass towers: pale blue-grey in the painted haze
     'tower_glass_dark': '#5E7C9A',  # Zifeng's deep blue-green glass
-    'tower_stone': '#D9D2C2',     # stone- and tile-clad towers
+    'tower_stone': '#C2BBAE',     # stone- and tile-clad towers
     'tower_roof': '#7F8B97',
     'tv_tower': '#E8E4DA',
 })
