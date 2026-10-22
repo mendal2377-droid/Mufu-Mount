@@ -26,4 +26,4 @@ All ten landmarks now have worlds: Zhongshan (with Ming Xiaoling), North (Jiming
 - The illustrated floor-plan map, the season dial, the 2016 / today skyline toggle, and a real-phone benchmark.
 - Train rumble sound on the bridge deck: the camera shakes now, but there is no audio yet.
 
-Merged to `main` and deployed on 22 October 2026 (0fd2351). The worlds test passes against production for the Bridge and Qixia. `tests/live-smoke.mjs` is stale: it still expects the old Mufu-first home page (#access-0), not the Nanjing atlas.
+Merged to `main` and deployed on 22 October 2026 (0fd2351). The worlds test passes against production for the Bridge and Qixia. `tests/live-smoke.mjs` has been rewritten for the atlas home page: Qixia world pin, back to the map, Zifeng walk, audio. It is not yet verified. Run it with `MUFU_TEST_URL=http://localhost:4190/ node tests/live-smoke.mjs`, then against production with no URL.
