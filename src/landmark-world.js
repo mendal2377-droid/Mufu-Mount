@@ -39,6 +39,8 @@ const TREES = {
   broadleaf_shade: {crown: '#2F5A3A', trunk: '#5A4636', h: 16, r: 5.5, lobes: 6},
   plane_autumn: {crown: '#E2B233', trunk: '#B9B39A', h: 18, r: 5.5, lobes: 5},
   maple_autumn: {crown: '#D0622E', trunk: '#5A4636', h: 9, r: 3.6, lobes: 4},
+  // Qixia's Japanese maples: the deep red of the boardwalk photographs.
+  maple_red: {crown: '#C8321E', trunk: '#4A3A34', h: 8, r: 3.8, lobes: 5},
   // Far canopy beyond the walkable area: one crown, no trunk, ~20 triangles.
   far: {crown: '#5A8A3C', trunk: '#5A4636', h: 12, r: 4.6, lobes: 0, far: true},
   cedar: {crown: '#3D5E3F', trunk: '#5A4636', h: 18, r: 4.2, cone: 5},

@@ -9,7 +9,7 @@ import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 
-const PINS = [['zhongshan', 'zhongshan'], ['jiming', 'north'], ['qinhuai', 'oldsouth'], ['palace', 'palace'], ['bridge', 'bridge'], ['niushou', 'niushou']];
+const PINS = [['zhongshan', 'zhongshan'], ['jiming', 'north'], ['qinhuai', 'oldsouth'], ['palace', 'palace'], ['bridge', 'bridge'], ['niushou', 'niushou'], ['qixia', 'qixia']];
 const browser = await chromium.launch({channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist']});
 const errors = [], report = {};
 await fs.mkdir('test-results', {recursive: true});

@@ -85,7 +85,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     palace:{world:'palace',spawn:'palace',weather:'morning'},
     // The bridge at dusk: the magnolia lamps lit, the city's towers glowing downriver.
     bridge:{world:'bridge',spawn:'bridge',weather:'sunset'},
-    niushou:{world:'niushou',spawn:'niushou',weather:'morning'}},worlds={};
+    niushou:{world:'niushou',spawn:'niushou',weather:'morning'},
+    // Qixia is an autumn world: red maples in low gold light.
+    qixia:{world:'qixia',spawn:'qixia',weather:'sunset'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
   const music=audio?createMusic(audio):null;
   function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}

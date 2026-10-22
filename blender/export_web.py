@@ -35,7 +35,7 @@ SCENE_ID = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else 'zhongsha
 OUT = ROOT / 'public' / 'scenes' / SCENE_ID
 OUT.mkdir(parents=True, exist_ok=True)
 
-WALKABLE = {'paving', 'paving_joint', 'granite', 'granite_shade', 'lawn', 'forest_floor'}
+WALKABLE = {'paving', 'paving_joint', 'granite', 'granite_shade', 'lawn', 'forest_floor', 'boardwalk'}
 NO_WALK = -32768
 CELL = 1.0
 TRUNK_RADIUS = 0.9
@@ -78,6 +78,19 @@ SETTINGS = {
                    'zichao': 'the Zichao Building'},
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap '
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
+    },
+    'qixia': {
+        'static': ('Ground', 'Water', 'Temple', 'Hill', 'City', 'Gates'),
+        # The temple, pagoda and cliff in the valley; the boardwalk up Tiger Hill.
+        'grids': [{'name': 'temple', 'x0': -200.0, 'x1': 260.0, 'y0': -90.0, 'y1': 110.0},
+                  {'name': 'hill', 'x0': 30.0, 'x1': 300.0, 'y0': 110.0, 'y1': 560.0}],
+        'title': 'Qixia Mountain in autumn: the temple, the relic pagoda and the maples',
+        'zh': '栖霞山 · 栖霞寺 · 舍利塔',
+        'fog': 0.0007,
+        'labels': {'qixia': 'Qixia Temple', 'pagoda': 'the relic pagoda and the Thousand Buddha Cliff',
+                   'maples': 'the red boardwalk through the maples', 'peak': 'the Reading-the-Maples viewpoint'},
+        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Temple halls, pond, paths and viewpoints: OpenStreetMap '
+                      'contributors (ODbL). Shapes from published figures and photographs; see research/qixia/FACTS.md.',
     },
     'niushou': {
         'static': ('Ground', 'Water', 'Palace', 'Pagoda', 'City', 'Gates'),
