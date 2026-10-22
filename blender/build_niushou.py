@@ -297,7 +297,11 @@ def main():
     for k in range(2):
         b = PAGODA + Vector((-62.0, 20.0 + k * 14.0))
         ac.add_point(pk, f'Seat plaza-{k}', (b.x, b.y, PLAZA), (b.x - 200, b.y + 300, PLAZA - 20))
-    for n, (target, at, toward) in enumerate((('dome', sp + Vector((14.0, -8.0)), sd), ('pagoda', sd + Vector((12.0, 10.0)), sp))):
+    # The dome's gate stands beside its spawn, off the moat bridge and clear of the robe's legs.
+    out = (PAGODA - DOME).normalized()
+    side = Vector((-out.y, out.x))
+    gate_dome = DOME + out * (DOME_R + 24.0) + side * 14.0
+    for n, (target, at, toward) in enumerate((('dome', sp + Vector((14.0, -8.0)), sd), ('pagoda', gate_dome, sp))):
         at = Vector(at)
         d = (Vector(toward) - at).normalized()
         g = kit.moon_gate(f'Moon gate {n}', c['Gates'])
