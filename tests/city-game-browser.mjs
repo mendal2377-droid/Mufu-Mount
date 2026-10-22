@@ -60,10 +60,11 @@ try {
   const wellAimed = report.arrivals.filter(a => a.angle <= 35).length;
   assert.ok(wellAimed >= report.arrivals.length - 3, `only ${wellAimed}/${report.arrivals.length} arrivals face the road`);
 
-  // The drop-in ends exactly at the spawn, and a key press ends it early.
+  // The drop-in ends exactly at the spawn, and a key press ends it early. Zifeng, not the Palace:
+  // the Palace pin now opens its own Blender world, which has its own arrival glide.
   const drop = await page.evaluate(() => {
-    const m = window.__mufu, p = m.city.places.find(q => q.id === 'palace');
-    m.city.enter('palace', {drop: true}); m.step(2, .1);
+    const m = window.__mufu, p = m.city.places.find(q => q.id === 'zifeng');
+    m.city.enter('zifeng', {drop: true}); m.step(2, .1);
     const mid = m.camera.position.y - p.spawn[1];
     m.step(60, .1);
     const end = m.camera.position.toArray();
