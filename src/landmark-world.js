@@ -375,6 +375,35 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // --- Trees: one instanced draw per kind, swaying with the shared clock --------------------------
   const byKind = {};
   for (const t of trees) (byKind[t[0]] ||= []).push(t);
+  // Trunks in a 10 m hash, so the chase camera can step in front of a tree instead of staring at
+  // its bark (an avenue every 9 m puts one behind you constantly).
+  const trunks = new Map();
+  for (const t of trees) {
+    const spec = TREES[t[0]];
+    if (!spec || spec.far || spec.lotus || spec.flower) continue;
+    const key = `${Math.floor(t[1] / 10)},${Math.floor(t[3] / 10)}`;
+    (trunks.get(key) || trunks.set(key, []).get(key)).push([t[1], t[3], (spec.lamp ? .15 : spec.r * .09 * t[5]) + .45]);
+  }
+  const eyeTmp = new THREE.Vector3();
+  // Move `eye` towards `target` until no trunk stands between them, lifting it a little when it
+  // has to come close.
+  function clearOfTrunks(eye, target) {
+    const dx = eye.x - target.x, dz = eye.z - target.z, len = Math.hypot(dx, dz);
+    if (len < .5) return eye;
+    let nearest = len;
+    const x0 = Math.floor(Math.min(eye.x, target.x) / 10) - 1, x1 = Math.floor(Math.max(eye.x, target.x) / 10) + 1;
+    const z0 = Math.floor(Math.min(eye.z, target.z) / 10) - 1, z1 = Math.floor(Math.max(eye.z, target.z) / 10) + 1;
+    for (let i = x0; i <= x1; i++) for (let j = z0; j <= z1; j++) for (const [tx, tz, r] of trunks.get(`${i},${j}`) || []) {
+      const k = ((tx - target.x) * dx + (tz - target.z) * dz) / (len * len);
+      if (k <= 0 || k >= 1) continue;
+      const px = target.x + dx * k - tx, pz = target.z + dz * k - tz;
+      if (px * px + pz * pz < r * r) nearest = Math.min(nearest, k * len - r);
+    }
+    if (nearest >= len) return eye;
+    const keep = Math.max(1.2, nearest) / len;
+    eyeTmp.set(target.x + dx * keep, eye.y + (1 - keep) * 1.6, target.z + dz * keep);
+    return eye.copy(eyeTmp);
+  }
   // One material per kind: the crowns follow the season (SEASONS), sway harder in a storm, and take
   // snow. Brightness variation within a crown and between trees survives the recolouring.
   const treeMats = new Map();
@@ -996,7 +1025,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           camera.rotation.y += dy * (1 - Math.exp(-dt * 2.2));
         }
         camera.getWorldDirection(camDir);
-        const eye = body.clone().add(new THREE.Vector3(0, vehicle === 'boat' ? 2.6 : 2.0, 0)).addScaledVector(camDir, vehicle === 'boat' ? -7 : -5.5);
+        const eye = body.clone().add(new THREE.Vector3(0, vehicle === 'boat' ? 2.6 : 2.2, 0)).addScaledVector(camDir, vehicle === 'boat' ? -7 : -5.5);
+        clearOfTrunks(eye, body);
         const g = surface(eye.x, eye.z);
         if (g !== null) eye.y = Math.max(eye.y, g + .6);
         camera.position.lerp(eye, 1 - Math.exp(-dt * 12));
@@ -1016,6 +1046,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       camera.getWorldDirection(camDir);
       const eye = body.clone().add(new THREE.Vector3(0, sitting ? 1.0 : flyingNow ? 3.2 : 1.55, 0))
         .addScaledVector(camDir, -(flyingNow ? 11 : sitting ? 3.4 : 4.4));
+      if (!flyingNow) clearOfTrunks(eye, body);
       const g = surface(eye.x, eye.z);
       if (g !== null) eye.y = Math.max(eye.y, g + .45);
       camera.position.lerp(eye, 1 - Math.exp(-dt * 18));

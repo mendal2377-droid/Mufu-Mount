@@ -66,21 +66,22 @@ export function createTraveller(bands, outfit = OUTFITS.ochre) {
   body.add(head);
   // A bicycle for riding the avenues: two spoked wheels, a dark frame, bars and saddle. It shows
   // in 'bike' mode; the rider sits on it and pedals.
-  const bike = new THREE.Group(), steel = toon(bands, 0x2f4d44), tyre = toon(bands, 0x222222), seat = toon(bands, 0x5a4030);
+  // Bold enough to read from behind at chase-camera distance: a red frame, fat tyres.
+  const bike = new THREE.Group(), steel = toon(bands, 0xb8432f), tyre = toon(bands, 0x1e1e1e), seat = toon(bands, 0x3a2a20);
   const wheels = [];
   for (const z of [-.52, .52]) {
     const w = new THREE.Group();
-    w.add(new THREE.Mesh(new THREE.TorusGeometry(.33, .025, 6, 20), tyre));
+    w.add(new THREE.Mesh(new THREE.TorusGeometry(.33, .045, 6, 20), tyre));
     for (let k = 0; k < 3; k++) { const spoke = new THREE.Mesh(new THREE.BoxGeometry(.012, .64, .012), steel); spoke.rotation.z = k * Math.PI / 3; w.add(spoke); }
     w.rotation.y = Math.PI / 2; w.position.set(0, .34, z);
     bike.add(w); wheels.push(w);
   }
-  const tube = (len, x, y, z, rx) => { const m = new THREE.Mesh(new THREE.BoxGeometry(.035, len, .035), steel); m.position.set(x, y, z); m.rotation.x = rx; bike.add(m); };
+  const tube = (len, x, y, z, rx) => { const m = new THREE.Mesh(new THREE.BoxGeometry(.06, len, .06), steel); m.position.set(x, y, z); m.rotation.x = rx; bike.add(m); };
   tube(.62, 0, .62, -.08, .95);   // down tube
   tube(.52, 0, .58, -.34, -.35);  // seat tube
   tube(.56, 0, .84, .14, 1.45);   // top tube
   tube(.5, 0, .62, .42, -.3);     // fork
-  const bars = new THREE.Mesh(new THREE.BoxGeometry(.5, .03, .03), steel); bars.position.set(0, 1.0, .36); bike.add(bars);
+  const bars = new THREE.Mesh(new THREE.BoxGeometry(.56, .045, .045), steel); bars.position.set(0, 1.0, .36); bike.add(bars);
   const saddle = new THREE.Mesh(new THREE.BoxGeometry(.13, .04, .24), seat); saddle.position.set(0, .9, -.38); bike.add(saddle);
   bike.visible = false;
   root.add(bike);
