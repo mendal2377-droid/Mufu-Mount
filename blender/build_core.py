@@ -460,6 +460,10 @@ def main():
     rmask = ac.Mask(road_polys, A.extent, 2.0)
     blocked = lambda x, y: bmask.at(x, y) or rmask.at(x, y)  # noqa: E731
 
+    # A tree needs its whole crown clear of buildings, not just its trunk (crowns pierced walls).
+    def crown_clear(x, y, r=4.5):
+        return not any(bmask.at(x + r * math.cos(a), y + r * math.sin(a)) for a in (0, 1.57, 3.14, 4.71, .78, 2.36, 3.93, 5.5))
+
     # Infill: the nearest street's direction within 140 m, from a 100 m bucket index of segments.
     buckets = {}
     for pts, w in carriageways:
@@ -494,7 +498,7 @@ def main():
                 seg = (off[i] - off[i - 1]).length
                 while nxt < run + seg:
                     q = off[i - 1].lerp(off[i], (nxt - run) / max(seg, 1e-6))
-                    if not blocked(q.x, q.y) and not wet(q.x, q.y) and not in_palace(q.x, q.y):
+                    if not blocked(q.x, q.y) and crown_clear(q.x, q.y) and not wet(q.x, q.y) and not in_palace(q.x, q.y):
                         kit.place(protos['plane'], c['Trees'], (q.x, q.y, zground(q.x, q.y)), rnd.uniform(0, 6.28), rnd.uniform(0.85, 1.1))
                         trees += 1
                     nxt += 9.0
@@ -502,12 +506,12 @@ def main():
     for w in F['ways']:
         if w.get('kind') == 'tree_row':
             for p in densify(w['pts'], 8.0):
-                if not blocked(*p):
+                if not blocked(*p) and crown_clear(*p):
                     kit.place(protos['plane'], c['Trees'], (p[0], p[1], zground(*p)), rnd.uniform(0, 6.28), rnd.uniform(0.8, 1.05))
                     trees += 1
     kinds = ['broadleaf', 'broadleaf_sun', 'broadleaf_shade', 'cedar', 'willow']   # cherries return with the seasons
     trees += ac.scatter(protos, c['Trees'], rnd, kinds, 9000, patch[0], patch[1],
-                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and not wet(x, y) and not in_palace(x, y), zground, groves=500)
+                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and not wet(x, y) and not in_palace(x, y), zground, groves=500)
 
     # Markers: Xinjiekou looking up Zhongshan Road; the road itself; the Palace gate; Gulou.
     pk = c['Markers']

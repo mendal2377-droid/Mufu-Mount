@@ -38,6 +38,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 WALKABLE = {'paving', 'paving_joint', 'granite', 'granite_shade', 'lawn', 'forest_floor', 'boardwalk',
             'road_city', 'sidewalk', 'city_paving', 'pitch'}
 NO_WALK = -32768
+ROADS = {'road_city'}
 CELL = 1.0
 TRUNK_RADIUS = 0.9
 
@@ -215,7 +216,10 @@ def walk_grid(trees, grid):
                 name = m.name.split('.')[0] if m else ''
                 mats_cache[key] = name
             if name in WALKABLE:
-                heights[j * nx + i] = max(-32000, min(32000, int(round(loc.z * 100))))
+                # Roads are marked by an odd centimetre (everything else even): the bike keeps to
+                # the carriageway without a second grid to download.
+                cm = max(-32000, min(32000, int(round(loc.z * 100))))
+                heights[j * nx + i] = (cm | 1) if name in ROADS else (cm & ~1)
                 walk_count += 1
             elif name == 'water':
                 water[j * nx + i] = max(-32000, min(32000, int(round(loc.z * 100))))

@@ -554,6 +554,12 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     if (c < 0 || heights[c] === walk.noWalk) return null;
     return heights[c] / 100;
   }
+  // Road cells carry an odd centimetre in the walk grid (blender/export_web.py).
+  function roadAt(x, z) {
+    const c = cellOf(x, z);
+    return c >= 0 && heights[c] !== walk.noWalk && (heights[c] & 1) ? heights[c] / 100 : null;
+  }
+  const hasRoads = heights.some(h => h !== walk.noWalk && (h & 1));
   function waterAt(x, z) {
     if (!waterHeights) return null;
     const c = cellOf(x, z);
@@ -816,7 +822,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const nx = body.x + Math.sin(heading) * vspeed * dt, nz = body.z + Math.cos(heading) * vspeed * dt;
     let moved = false;
     if (bike) {
-      if (canStep({x: body.x, z: body.z}, nx, nz)) { body.x = nx; body.z = nz; moved = true; } else vspeed *= .3;
+      // On a map with roads the bike keeps to the carriageway; elsewhere (temple courts, mountain
+      // paths) any walkable ground will do.
+      // Junctions: a crossing road's pavement lies over the carriageway, so a short gap is fine
+      // when there is road again within 12 m ahead.
+      const sx = Math.sin(heading), sz = Math.cos(heading);
+      const onRoad = !hasRoads || roadAt(nx, nz) !== null || roadAt(nx + sx * 6, nz + sz * 6) !== null || roadAt(nx + sx * 12, nz + sz * 12) !== null;
+      const ok = canStep({x: body.x, z: body.z}, nx, nz) && onRoad;
+      if (ok) { body.x = nx; body.z = nz; moved = true; } else vspeed *= .3;
       const h = surface(body.x, body.z);
       if (h !== null) body.y = THREE.MathUtils.damp(body.y, h, 14, dt);
     } else {
@@ -915,6 +928,11 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         const at = nearest(heightAt, body.x, body.z, 60);
         if (!at) return 'Too far from the shore';
         body.set(at[0], heightAt(at[0], at[1]), at[1]);
+      }
+      if (v === 'bike' && hasRoads && roadAt(body.x, body.z) === null) {
+        const at = nearest(roadAt, body.x, body.z, 80);
+        if (!at) return 'No road near here';
+        body.set(at[0], roadAt(at[0], at[1]), at[1]);
       }
       vehicle = v === 'bike' ? 'bike' : 'walk'; vspeed = 0; steerLean = 0;
       return vehicle === 'bike' ? 'Bike · W pedal · S brake · A / D steer · Shift faster' : 'On foot';
