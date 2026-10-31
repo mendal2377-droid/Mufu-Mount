@@ -150,7 +150,7 @@ def hashf(s, k=0):
     return int(hashlib.md5(f'{s}:{k}'.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
 
 
-def build_buildings(coll, skip):
+def build_buildings(coll, skip, over):
     """Extrude every building and part. Outlines that contain parts are dropped (OSM's 3D
     convention: the parts describe the building, the outline is only its footprint)."""
     parts = [b for b in F['buildings'] if b['tags'].get('building:part')]
@@ -158,6 +158,8 @@ def build_buildings(coll, skip):
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
     col = bm.loops.layers.color.new('Col')
+    obm = bmesh.new()
+    ob = (obm, obm.loops.layers.uv.new('UVMap'), obm.loops.layers.color.new('Col'))
     n = tris = 0
     for b in F['buildings']:
         t = b['tags']
@@ -185,11 +187,14 @@ def build_buildings(coll, skip):
         st = style(t, h)
         wall = (*wall[:3], st)
         roof = (*roof[:3], st)
-        k = extrude(bm, uv, col, pts, g, h0, h, wall, roof)
+        # Parts that start 3 m or more up (skybridges, decks over a street) are Overhead: the walk
+        # grid's ray cast skips them, so the street beneath stays walkable and rideable.
+        k = extrude(*(ob if h0 >= 3.0 else (bm, uv, col)), pts, g, h0, h, wall, roof)
         if k:
             n += 1
             tris += k
     o = kit.mesh_object('City buildings', bm, coll, ['facade', 'roof_city'])
+    kit.mesh_object('Raised building parts', ob[0], over, ['facade', 'roof_city'])
     return o, n, tris
 
 
@@ -442,7 +447,7 @@ def main():
         if o.name.startswith('Pitches'):
             for v in o.data.vertices:
                 v.co.z = zground(v.co.x, v.co.y) + 0.08
-    city, n_b, tris = build_buildings(c['City'], in_palace)
+    city, n_b, tris = build_buildings(c['City'], in_palace, c['Overhead'])
     roads, avenues = build_roads(c['Roads'], in_palace)
     lamp_proto = lamp_prototype(c['Prototypes'])
     for x, y, z, ang in lamps:

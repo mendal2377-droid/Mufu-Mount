@@ -22,3 +22,6 @@ public/scenes/skyline/*.raw.glb
 
 # Overpass bands merged into osm-core.json by hand (see research/core); reproducible, large.
 research/core/data/osm-core-*.json
+
+# Second build for checks while the suite runs on dist/.
+dist-check/
