@@ -1242,7 +1242,10 @@ body.plan-mode:not(.city-mode) #nanjing-return { display: block !important; }
 }
 @media (max-width: 650px) {
   .access-pin { transform: translate(-50%, calc(-100% + 15px)); }
-  #walk-environment { top: 16px; left: 16px; padding: 10px 13px; }
+  #walk-environment { top: 16px; left: 16px; padding: 10px 13px; gap: 8px; max-width: calc(100vw - 32px); }
+  #walk-hour { width: 64px; }
+  #walk-season { max-width: 74px; }
+  #ways { bottom: 16px; }
   .quiet-actions { right: 16px; bottom: 20px; }
   body.playing #touch-controls { left: 16px; bottom: 20px; }
   #toast { bottom: 96px; width: max-content; font-size: 11px; }
