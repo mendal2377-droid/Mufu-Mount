@@ -81,7 +81,7 @@ SETTINGS = {
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
     },
     'core': {
-        'static': ('Ground', 'Water', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates'),
+        'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates'),
         'uv': True,
         # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
         # the city is for riding and flying.
@@ -89,10 +89,11 @@ SETTINGS = {
                   {'name': 'north', 'x0': -3600.0, 'x1': 2080.0, 'y0': 2200.0, 'y1': 6000.0, 'cell': 4.0}],
         'title': 'Tiny Nanjing: from Xinjiekou to the Yangtze',
         'zh': '新街口 · 中山路 · 总统府',
-        'fog': 0.00045,
+        'fog': 0.00022,      # light haze: Purple Mountain should stand clear in the east
         'labels': {'xinjiekou': 'Xinjiekou', 'zhongshan': 'Zhongshan Road', 'palace': 'the Presidential Palace', 'gulou': 'Gulou'},
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: '
-                      'OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none.',
+                      'OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, '
+                      'and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed).',
     },
     'qixia': {
         'static': ('Ground', 'Water', 'Temple', 'Hill', 'City', 'Gates'),

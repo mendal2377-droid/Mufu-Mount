@@ -140,15 +140,24 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     return best?.p||null;
   }
   let active=false,scope='central',selected=places.find(p=>p.id==='qinhuai'),lastFootstep=0;
+  const GROUPS=[['hills','山 <small>Hills</small>'],['water','水 <small>Waters</small>'],['city','城 <small>City</small>'],['heritage','古 <small>Heritage</small>']];
+  const groupOf=p=>['mount','springs'].includes(p.kind)?'hills':['lake','truss','cable','eye'].includes(p.kind)?'water'
+    :['temple','pagoda','mausoleum','tomb','domes'].includes(p.kind)?'heritage':'city';
   const icons={mount:'△',oldtown:'⌂',truss:'≋',cable:'≋',eye:'∞',lake:'≈',domes:'◉',tower:'♜',pagoda:'♜',temple:'♜',mausoleum:'▤',wall:'▥',skyline:'▥',tomb:'◇',palace:'⌂',springs:'♧'};
   for(const p of places){
     const pin=document.createElement('button');pin.className='city-pin';pin.dataset.city=p.id;
     pin.innerHTML=`<span class="city-label">${p.zh}<small>${p.name}</small></span><span class="city-dot">${icons[p.kind]||'◇'}</span>`;
     pin.title=`Explore ${p.name}`;pin.setAttribute('aria-label',pin.title);pin.onclick=()=>api.enter(p.id,{drop:true});
     $('#city-pins').append(pin);records.push({p,pin});
-    const link=document.createElement('button');link.innerHTML=`<span>${icons[p.kind]||'◇'}</span><span>${p.zh}<small>${p.name}</small></span>`;
+    const link=document.createElement('button');link.className='place-card';link.dataset.group=groupOf(p);
+    link.innerHTML=`<b>${p.zh}</b><small>${p.name}${WORLDS[p.id]?' <i title="Walk-in 3D world">✦</i>':''}</small>`;
     link.dataset.city=p.id;link.onclick=()=>api.enter(p.id,{drop:true});$('#city-destinations').append(link);
   }
+  // The landmark list on the home page: four short tabs instead of one long list.
+  {const tabs=$('#city-tabs'),show=g=>{for(const b of tabs.children)b.setAttribute('aria-selected',b.dataset.group===g);
+      for(const c of $('#city-destinations').children)c.hidden=c.dataset.group!==g;};
+    for(const [g,label] of GROUPS){const b=document.createElement('button');b.role='tab';b.dataset.group=g;b.innerHTML=label;b.onclick=()=>show(g);tabs.append(b);}
+    show(GROUPS[0][0]);}
   function refreshPins(){
     for(const {p,pin} of records){
       const sealed=game.stamped(p.id);

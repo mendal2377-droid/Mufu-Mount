@@ -92,3 +92,16 @@ What we measured: about 20 MB on first load, KTX2 textures, a far-tree layer, a 
 - **Light:** a low sun, shadows, ambient occlusion, and tilt-shift seen from above.
 - **Transport:** walk, bike, car or bus, boat, and balloon or paraglider.
 - **Pilot:** the city core, Xinjiekou → Zhongshan Road → Presidential Palace → Jiming and Xuanwu. Zhongshan, Niushou and Qixia stay as separate worlds and get the shared lighting.
+
+## Owner's additions (31 October 2026, after the first Tiny Nanjing views: "great progress")
+
+- **Systems:** weather, time of day and seasons, as one compact control. Seasons recolour the trees (spring cherry, summer green, autumn gold and red, winter bare and snow) and change the light.
+- **Ways to explore:**
+  - on foot;
+  - by bike on the roads, on the road graph, so you can ride anywhere in the city;
+  - by paraglider over the city;
+  - by boat on the Qinhuai, Xuanwu Lake and the Yangtze.
+- **Main page:** a more elegant and brief landmark list.
+- **Night (owner, 1 November):**
+  - **Street lamps** light the streets all around: lamp posts along the roads, glowing heads, warm pools of light on the pavement.
+  - **Window lights follow the clock:** most windows light at dusk and go dark one by one as the night goes on, leaving few after midnight; shops close around 22:00.

@@ -1,6 +1,6 @@
 // Look-dev screenshots of a Blender world in the real runtime, for judging the detail pass by eye.
 //
-//   MUFU_TEST_URL=http://localhost:4190/ node tests/world-shots.mjs zhongshan axis,music,meiling [tag]
+//   MUFU_TEST_URL=http://localhost:4190/ node tests/world-shots.mjs zhongshan "axis;music;cam:x,y,z>lx,ly,lz" [tag]
 //
 // Writes test-results/shots/<world>-<spawn>-<tag>.png. Uses the machine's GPU when headless Chrome
 // gets one (much faster than SwiftShader); set MUFU_SWIFTSHADER=1 to force software rendering.
@@ -27,17 +27,30 @@ try {
     return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : "unknown";
   }));
   await page.evaluate((p) => { window.__mufu.paused = true; window.__mufu.city.enter(p); }, pin);
+  // MUFU_WEATHER=sunset|morning|dawn: the light to judge in (the pins pick their own on arrival).
+  if (process.env.MUFU_WEATHER) await page.evaluate((w) => window.__mufu.setWeather(w), process.env.MUFU_WEATHER);
   await page.waitForFunction((w) => window.__mufu.city.world?.id === w, world, { timeout: 600000 });
-  for (const spawn of spawnList.split(",")) {
+  for (const spawn of spawnList.split(";")) {
     const info = await page.evaluate((s) => {
-      const m = window.__mufu, w = m.city.world, sp = w.spawn(s);
+      const m = window.__mufu, w = m.city.world;
+      // "cam:x,y,z>lx,ly,lz" (three.js metres) is a free camera, for aerial views; else a spawn.
+      if (s.startsWith("cam:")) {
+        const [a, b] = s.slice(4).split(">").map((t) => t.split(",").map(Number));
+        w.placeAt({ feet: [a[0], 0, a[2]], look: b });
+        m.step(30, 0.05);
+        m.camera.position.fromArray(a); m.camera.lookAt(...b); m.camera.updateMatrixWorld();
+        w.traveller.root.visible = false;
+        m.renderer.render(w.scene, m.camera);
+        return { spawn: s };
+      }
+      const sp = w.spawn(s);
       w.placeAt(sp);
       m.camera.position.fromArray(sp.position);
       m.camera.lookAt(...sp.look);
       m.step(30, 0.05); // settle the camera, trees and fog
       return { spawn: s, triangles: m.renderer.info.render.triangles, calls: m.renderer.info.render.calls };
     }, spawn);
-    const path = `test-results/shots/${world}-${spawn}-${tag}.png`;
+    const path = `test-results/shots/${world}-${spawn.startsWith("cam:") ? "cam" + spawnList.split(";").indexOf(spawn) : spawn}-${tag}.png`;
     await page.screenshot({ path, timeout: 300000 });
     console.log("shot", path, JSON.stringify(info));
   }

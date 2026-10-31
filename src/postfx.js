@@ -113,12 +113,15 @@ const GradeShader = {
     uContrast: { value: 1.04 },
     uLetterbox: { value: 0 },
     uFade: { value: 0 },
+    uTilt: { value: 0 },
+    uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
   },
   vertexShader: fullscreenVertex,
   fragmentShader: `
   uniform sampler2D tDiffuse;
-  uniform float uTime, uVignette, uGrain, uAberration, uSaturation, uContrast, uLetterbox, uFade;
+  uniform float uTime, uVignette, uGrain, uAberration, uSaturation, uContrast, uLetterbox, uFade, uTilt;
   uniform vec3 uLift, uGain;
+  uniform vec2 uTexel;
   varying vec2 vUv;
 
   void main(){
@@ -131,6 +134,20 @@ const GradeShader = {
     col.r = texture2D(tDiffuse, vUv - centred * shift).r;
     col.g = texture2D(tDiffuse, vUv).g;
     col.b = texture2D(tDiffuse, vUv + centred * shift).b;
+
+    // Tilt-shift: seen from above, the city blurs away from a sharp band a little below the
+    // middle, so it reads as a model on a table (the Tiny Warsaw look). Twelve taps on a spiral.
+    if (uTilt > 0.001) {
+      float r = uTilt * smoothstep(0.06, 0.42, abs(vUv.y - 0.46)) * 7.0;
+      if (r > 0.25) {
+        vec3 sum = col;
+        for (int i = 1; i <= 12; i++) {
+          float a = float(i) * 2.39996, d = sqrt(float(i) / 12.0) * r;
+          sum += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * d * uTexel).rgb;
+        }
+        col = sum / 13.0;
+      }
+    }
 
     col = clamp(col + uLift * (1.0 - col), 0.0, 4.0) * uGain;
     float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -213,6 +230,7 @@ export function createPostFX(renderer, scene, camera, tierName = "cinematic") {
       renderer.getDrawingBufferSize(size);
       atmosphere.uniforms.uAspect.value = innerWidth / innerHeight;
       atmosphere.uniforms.uTexel.value.set(1 / size.x, 1 / size.y);
+      grade.uniforms.uTexel.value.set(1 / size.x, 1 / size.y);
     },
     render() {
       // RenderPass draws into the composer's *read* buffer and does not swap,

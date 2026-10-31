@@ -36,6 +36,8 @@ AREAS = {
     # Origin: Xinjiekou, the skyline's origin, so the city core and the shared skyline line up. The
     # map runs north past Xuanwu Lake and Xiaguan to the Yangtze (the owner's ask).
     'core': {'bbox': (32.028, 118.728, 32.118, 118.810), 'origin': (32.0418, 118.7838)},
+    # Terrain only, around the core: Purple Mountain to the east, Mufu Mountain on the river.
+    'core_far': {'bbox': (31.990, 118.700, 32.145, 118.905), 'origin': (32.0418, 118.7838), 'osm': False},
     'bridge': {'bbox': (32.100, 118.722, 32.130, 118.758), 'origin': (32.1117707, 118.7461623)},
 }
 
@@ -95,6 +97,10 @@ def main(area):
         'extent_local_m': {'x_west': x0, 'x_east': x1, 'y_south': y0, 'y_north': y1},
         'min_m': float(crop.min()), 'max_m': float(crop.max())}, indent=1), encoding='utf-8')
 
+    if cfg.get('osm') is False:
+        (data / 'features.json').write_text(json.dumps({k: [] for k in ('water', 'islands', 'wall', 'buildings', 'ways', 'bridges', 'places')}), encoding='utf-8')
+        print(area, 'terrain only', 'extent', round(x0), round(x1), round(y0), round(y1))
+        return
     osm = json.loads((data / f'osm-{area}.json').read_text(encoding='utf-8'))
     feats = {'water': [], 'islands': [], 'wall': [], 'buildings': [], 'ways': [], 'bridges': [], 'places': []}
 

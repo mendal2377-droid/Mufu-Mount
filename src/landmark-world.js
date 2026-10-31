@@ -10,7 +10,8 @@ import {createTraveller, createMagpie, createGlider} from './traveller.js';
 // 392 steps are real steps, and walking is free over a ray-cast walk grid instead of corridors.
 
 // Materials that only receive the sun's shadow (see the static mesh loop).
-const GROUND_MATERIALS = new Set(['lawn', 'forest_floor', 'city_ground', 'river_bed', 'water', 'canal_stone', 'paving_joint']);
+const GROUND_MATERIALS = new Set(['lawn', 'forest_floor', 'city_ground', 'river_bed', 'water', 'canal_stone', 'paving_joint',
+  'far_ground', 'city_paving', 'pitch', 'road_city', 'sidewalk']);
 const EYE = 1.65, SIT_EYE = 1.15, STEP_UP = .65, WALK = 1.7, RUN = 4.6;
 
 // Palette names from design/ART-BIBLE.md; the GLB carries them as material names.
@@ -260,7 +261,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             float st=0.;
             #endif
             diffuseColor.a=1.;
-            float h=vUv.y,u=vUv.x;
+            float h=1.-vUv.y,u=vUv.x;     // glTF stores v as 1 - v
             if(h>=0.&&st<.9){
               float fh=st>.6?3.0:3.3, sp=st>.6?3.6:st>.3?1.6:3.2;
               float fv=fract(h/fh), fu=fract(u/sp);
@@ -269,18 +270,20 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
               bool shop=h<4.2&&st<.6;
               if(shop){float su=fract(u/4.6);win=step(abs(su-.5),.4)*step(.12,h/4.2)*step(h/4.2,.86);}
               float fw=max(fwidth(u/sp),fwidth(h/fh));
-              float k=1.-smoothstep(.25,.7,fw);
+              float k=1.-smoothstep(.12,.38,fw);
               vec3 glass=mix(vec3(.16,.22,.27),vec3(.42,.52,.6),.35+.3*lwHash(vec2(floor(u/sp),floor(h/fh))));
               if(shop)glass=vec3(.28,.24,.2);
-              diffuseColor.rgb=mix(diffuseColor.rgb,mix(diffuseColor.rgb*.78,glass,win),k);
+              diffuseColor.rgb=mix(diffuseColor.rgb,mix(diffuseColor.rgb*.82,glass,win*.8),k);
               diffuseColor.rgb*=1.-(1.-smoothstep(0.,.08,fv))*.12*k*(st>.6?0.:1.);
-              float lit=(shop?1.:step(.62,lwHash(vec2(floor(u/sp)+3.,floor(h/fh)))))*win*k;
-              winLit=max(winLit,lit*(1.-smoothstep(400.,1400.,length(vViewPosition))));
+              // About one window in seven lit at dusk, and every shop; far ones fade, or the towers
+              // fizz with specks.
+              float lit=(shop?1.:step(.86,lwHash(vec2(floor(u/sp)+3.,floor(h/fh)))))*win*k;
+              winLit=max(winLit,lit*(1.-smoothstep(300.,900.,length(vViewPosition))));
             }
           }
           if(worldRoad>.5){
             // Lanes: a double centre line, dashed lane lines every 3.5 m, faded where they alias.
-            float v=abs(vUv.y),u=vUv.x;
+            float v=abs(1.-vUv.y),u=vUv.x;
             float fw=max(fwidth(v),fwidth(u)*.1), k=1.-smoothstep(.15,.5,fw);
             float centre=step(.08,v)*step(v,.22);
             float lane=step(abs(fract(v/3.5+.5)-.5)*3.5,.07)*step(1.,v)*step(fract(u/9.),.45);
@@ -301,6 +304,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   let staticTriangles = 0;
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
+    // Blender's exporter writes a blank COLOR_0 beside the real colours (COLOR_1): use the real ones.
+    if (o.geometry.attributes.color_1) { o.geometry.setAttribute('color', o.geometry.attributes.color_1); o.geometry.deleteAttribute('color_1'); }
     o.material = Array.isArray(o.material) ? o.material.map(paint) : paint(o.material);
     // Sun shadows: everything receives; buildings, walls, stairs and bridges cast. Ground sheets do
     // not: they only shade themselves, and the terrain is most of the triangles.
@@ -408,6 +413,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   }
 
   // --- Light, sky, weather --------------------------------------------------------------------------
+  // Tiny Nanjing is lit like a diorama: a stronger sun against a dimmer sky fill, so long shadows
+  // carve the blocks (the Tiny Warsaw look). The landmark worlds keep their softer light.
+  const LIGHT = id === 'core' ? {sun: 1.35, sky: .7} : {sun: 1, sky: 1};
   const sky = createSkyDome(scene, skyShared).dome;
   // Softer than the atlas: at true scale the pale granite and paving fill the frame and glare.
   const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x6d8a4a, 1.1), sun = new THREE.DirectionalLight(0xffe7b8, 2.0);
@@ -867,9 +875,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const r = focus.dot(lightRight), u = focus.dot(lightUp);
       focus.addScaledVector(lightRight, Math.round(r / SHADOW_TEXEL) * SHADOW_TEXEL - r).addScaledVector(lightUp, Math.round(u / SHADOW_TEXEL) * SHADOW_TEXEL - u);
       sun.position.copy(focus).addScaledVector(direction, 600); sun.target.position.copy(focus);
-      sun.intensity = (2.1 - weather.storm * 1.5 - weather.snow * .6) * (1 - weather.dawn * .6);
+      sun.intensity = (2.1 - weather.storm * 1.5 - weather.snow * .6) * (1 - weather.dawn * .6) * LIGHT.sun;
       sun.color.setRGB(1, 1 - weather.sunset * .3, 1 - weather.sunset * .55);
-      hemi.intensity = 1.05 - weather.storm * .35 - weather.dawn * .55;
+      hemi.intensity = (1.05 - weather.storm * .35 - weather.dawn * .55) * LIGHT.sky;
       scene.fog.color.setRGB(.66 + weather.sunset * .26 - weather.storm * .30, .80 - weather.sunset * .2 - weather.storm * .36, .93 - weather.sunset * .32 - weather.storm * .40);
       // Per-world haze: the lake needs a kilometre of view, the forest slice much less.
       const haze = meta.fog ?? .0011;

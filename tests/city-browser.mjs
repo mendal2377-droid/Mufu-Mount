@@ -75,7 +75,8 @@ try{
   assert.equal(await page.locator('.plan-card').isVisible(),true);assert.equal(await page.locator('.access-pin').count(),6);
   await page.locator('#nanjing-return').click();assert.equal(await page.evaluate(()=>window.__mufu.city.active),true);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.__mufu.step(2,.1));
-  await page.locator('#city-list summary').click();await page.locator('#city-destinations button[data-city="qinhuai"]').click();
+  // The home page lists places under four tabs; Qinhuai is under City.
+  await page.locator('#city-tabs button[data-group="city"]').click();await page.locator('#city-destinations button[data-city="qinhuai"]').click();
   assert.equal(await page.evaluate(()=>window.__mufu.city.selected.id),'qinhuai');
   await page.evaluate(()=>window.__mufu.city.showPlan('central'));await page.screenshot({path:'test-results/nanjing-mobile.png',timeout:60000});
   report.errors=errors;assert.equal(errors.length,0,errors.join('\n'));console.log('Map, walking, kite, weather, Mufu portal and mobile checks passed');

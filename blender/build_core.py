@@ -39,10 +39,16 @@ A = ac.Area('core')
 F = A.feats
 kit.PALETTE.update({
     'facade': '#FFFFFF', 'roof_city': '#FFFFFF',          # colours come from the vertices
-    'road_city': '#5E6062', 'sidewalk': '#C7C1B4', 'city_paving': '#B8B3A6', 'pitch': '#7FA05A',
+    'road_city': '#55585A', 'sidewalk': '#B3AC9E', 'city_paving': '#8F9488', 'pitch': '#7FA05A',
     'plane_leaf': '#86A84A',
 })
 X0, X1, Y0, Y1 = A.extent
+# The landscape around the map, terrain only (Purple Mountain, Mufu Mountain), in the core's heights.
+FAR = ac.Area('core_far')
+
+
+def far_z(x, y):
+    return FAR.bare_at(x, y) + FAR.base - A.base - (8.0 if FAR.bare_at(x, y) + FAR.base - A.base > 30 else 0.0)  # canopy off the hills
 
 # --- Ground and water -------------------------------------------------------------------------------
 lakes = [w['pts'] for w in F['water']]
@@ -178,31 +184,83 @@ def build_buildings(coll, skip):
         st = style(t, h)
         wall = (*wall[:3], st)
         roof = (*roof[:3], st)
-        base = [bm.verts.new((x, y, g + h0 - (0.6 if h0 == 0 else 0))) for x, y in pts]
-        top = [bm.verts.new((x, y, g + h)) for x, y in pts]
-        run = 0.0
-        for i in range(len(pts)):
-            j = (i + 1) % len(pts)
-            L = math.dist(pts[i], pts[j])
-            f = bm.faces.new((base[i], base[j], top[j], top[i]))
-            f.material_index = 0
-            for loop, (u, v) in zip(f.loops, ((run, h0 - 0.6 if h0 == 0 else h0), (run + L, h0 - 0.6 if h0 == 0 else h0), (run + L, h), (run, h))):
-                loop[uv].uv = (u, v)
-                loop[col] = wall
-            run += L
-        try:
-            f = bm.faces.new(top)
-        except ValueError:
-            continue
-        f.material_index = 1
-        for loop in f.loops:
-            loop[uv].uv = (0.0, -1.0)     # v < 0 marks a roof for the shader
-            loop[col] = roof
-        res = bmesh.ops.triangulate(bm, faces=[f], quad_method='BEAUTY', ngon_method='EAR_CLIP')
-        n += 1
-        tris += len(pts) * 2 + len(res['faces'])
+        k = extrude(bm, uv, col, pts, g, h0, h, wall, roof)
+        if k:
+            n += 1
+            tris += k
     o = kit.mesh_object('City buildings', bm, coll, ['facade', 'roof_city'])
     return o, n, tris
+
+
+def extrude(bm, uv, col, pts, g, h0, h, wall, roof):
+    """Walls and a flat roof for one footprint (anticlockwise). Wall UVs: metres along the wall,
+    metres above the ground; roofs get v = -1. Returns triangles added, 0 if the roof failed."""
+    lo = h0 - 0.6 if h0 == 0 else h0          # walls start a little below ground on sloping streets
+    base = [bm.verts.new((x, y, g + lo)) for x, y in pts]
+    top = [bm.verts.new((x, y, g + h)) for x, y in pts]
+    run = 0.0
+    for i in range(len(pts)):
+        j = (i + 1) % len(pts)
+        L = math.dist(pts[i], pts[j])
+        f = bm.faces.new((base[i], base[j], top[j], top[i]))
+        f.material_index = 0
+        for loop, (u, v) in zip(f.loops, ((run, lo), (run + L, lo), (run + L, h), (run, h))):
+            loop[uv].uv = (u, v)
+            loop[col] = wall
+        run += L
+    try:
+        f = bm.faces.new(top)
+    except ValueError:
+        return 0
+    f.material_index = 1
+    for loop in f.loops:
+        loop[uv].uv = (0.0, -1.0)     # v < 0 marks a roof for the shader
+        loop[col] = roof
+    res = bmesh.ops.triangulate(bm, faces=[f], quad_method='BEAUTY', ngon_method='EAR_CLIP')
+    return len(pts) * 2 + len(res['faces'])
+
+
+def _seg(x, y, a, b):
+    ax, ay, bx, by = a[0], a[1], b[0], b[1]
+    dx, dy = bx - ax, by - ay
+    k = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / max(dx * dx + dy * dy, 1e-9)))
+    return math.hypot(x - ax - dx * k, y - ay - dy * k)
+
+
+def build_infill(coll, blocked, near_road, skip, mark):
+    """Where OSM has no buildings, fill in the commonest Nanjing pattern: compounds of six- and
+    seven-storey slab blocks in rows, turned to the nearest street. Only on dry, non-green land near
+    a street and clear of mapped buildings and roads. Marked as assumed in the provenance."""
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new('UVMap')
+    col = bm.loops.layers.color.new('Col')
+    n = 0
+    step = 34.0
+    y = Y0 + 60
+    while y < Y1 - 60:
+        x = X0 + 60
+        while x < X1 - 60:
+            px, py = x + rnd.uniform(-5, 5), y + rnd.uniform(-5, 5)
+            ang = near_road(px, py)
+            x += step
+            if ang is None or skip(px, py) or wet(px, py) or green_mask.at(px, py):
+                continue
+            L, W = rnd.uniform(36, 58), rnd.uniform(11, 14)
+            ca, sa = math.cos(ang), math.sin(ang)
+            pts = [(px + ca * u - sa * v, py + sa * u + ca * v) for u, v in ((-L / 2, -W / 2), (L / 2, -W / 2), (L / 2, W / 2), (-L / 2, W / 2))]
+            probe = pts + [(px, py)] + [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(pts, pts[1:] + pts[:1])]
+            if any(blocked(qx, qy) or wet(qx, qy) or green_mask.at(qx, qy) for qx, qy in probe):
+                continue
+            floors = rnd.choice((6, 6, 7, 7, 7, 11, 18)) if rnd.random() < 0.85 else rnd.choice((24, 28, 32))
+            h = floors * 3.0 + 1.2
+            wall = lin(WALLS[int(rnd.random() * len(WALLS))])
+            roof = lin(ROOFS[int(rnd.random() * len(ROOFS))] if h > 25 else rnd.choice(('#8FA0A6', '#A9AAA3', '#7E9AA8')))
+            if extrude(bm, uv, col, pts, zground(px, py), 0.0, h, (*wall[:3], 0.0), (*roof[:3], 0.0)):
+                n += 1
+                mark(pts)
+        y += step
+    kit.mesh_object('Infill buildings', bm, coll, ['facade', 'roof_city'])
+    return n
 
 
 # --- Roads ------------------------------------------------------------------------------------------
@@ -244,6 +302,8 @@ def build_roads(coll, skip):
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
     avenues = []
+    global carriageways
+    carriageways = []
     order = {'footway': 0, 'path': 0, 'cycleway': 0, 'pedestrian': 1, 'service': 1, 'living_street': 2, 'residential': 3,
              'unclassified': 3, 'tertiary': 4, 'tertiary_link': 4, 'secondary': 5, 'secondary_link': 5, 'primary': 6,
              'primary_link': 6, 'trunk': 7, 'trunk_link': 7}
@@ -272,11 +332,13 @@ def build_roads(coll, skip):
             rise = 7.0 * max(0.0, math.sin(math.pi * min(run / total, 1.0))) ** 0.5 if bridge and total > 60 else 0.0
             pts3.append((p[0], p[1], zground(*p) + rise))
         foot = kind in FOOT
-        ribbon(bm, uv, pts3, width, 1 if foot else 0, 0.06 + 0.012 * order.get(kind, 0))
+        if not foot:
+            carriageways.append(([p[:2] for p in pts3], width))
+        ribbon(bm, uv, pts3, width, 1 if foot else 0, 0.3 + 0.015 * order.get(kind, 0))
         if kind in AVENUE or kind == 'tertiary':
             for side in (-1, 1):
                 off = ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0))
-                ribbon(bm, uv, [(o.x, o.y, p[2]) for o, p in zip(off, pts3)], 4.0, 1, 0.2)
+                ribbon(bm, uv, [(o.x, o.y, p[2]) for o, p in zip(off, pts3)], 4.0, 1, 0.45)
             if kind in AVENUE:
                 avenues.append((pts3, width, kind))
     o = kit.mesh_object('City roads', bm, coll, ['road_city', 'sidewalk'])
@@ -301,7 +363,7 @@ def main():
     root = bpy.data.collections.new('Core')
     scene.collection.children.link(root)
     c = {n: ac_coll for n, ac_coll in ((n, bpy.data.collections.new(n)) for n in
-                                       ('Ground', 'Water', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'Trees', 'Prototypes', 'Markers'))}
+                                       ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'Trees', 'Prototypes', 'Markers'))}
     for v in c.values():
         root.children.link(v)
     protos = plane_prototype(oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes'])), c['Prototypes'])
@@ -331,6 +393,20 @@ def main():
     ac.terrain_patch('Terrain outer', c['Ground'], (X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24),
                      lambda x, y: ground(x, y) if not (patch[0][0] + 6 < x < patch[0][1] - 6 and patch[1][0] + 6 < y < patch[1][1] - 6)
                      else (ground(x, y)[0] - 2.0, ground(x, y)[1]), ['lawn', 'city_paving', 'lawn', 'canal_stone'], step=24.0)
+    # Beyond the map: coarse ground to the horizon, forested hills with one-crown canopy trees.
+    kit.PALETTE.setdefault('far_ground', '#8E9478')
+    ac.outer_apron('Landscape', c['Far'], FAR, (((X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24)),), far_z, step=60.0, material='far_ground')
+    fx0, fx1, fy0, fy1 = FAR.extent
+    # Out to 40 km, a flat frame just below the landscape's edge, so the sky never shows under the
+    # world. Its own collection: meshopt quantises over each mesh's bounds (see bridge, 1 Nov).
+    far, lo = 40000.0, min(far_z(x, y) for x, y in ((fx0 + 70, fy0 + 70), (fx1 - 70, fy0 + 70), (fx0 + 70, fy1 - 70), (fx1 - 70, fy1 - 70))) - 1.0
+    gx0, gx1, gy0, gy1 = fx0 + 60, fx1 - 60, fy0 + 60, fy1 - 60
+    ac.polygon_mesh('Horizon', c['Horizon'], [[(-far, -far), (far, -far), (far, gy0), (-far, gy0)], [(-far, gy1), (far, gy1), (far, far), (-far, far)],
+                                              [(-far, gy0), (gx0, gy0), (gx0, gy1), (-far, gy1)], [(gx1, gy0), (far, gy0), (far, gy1), (gx1, gy1)]],
+                    lo, 'far_ground')
+    canopy = ac.scatter(protos, c['Trees'], rnd, ['far'], 14000, (fx0 + 80, fx1 - 80), (fy0 + 80, fy1 - 80),
+                        lambda x, y: not (X0 < x < X1 and Y0 < y < Y1) and far_z(x, y) > 28 and not wet(x, y), far_z,
+                        scale=(1.1, 1.6), clump=60.0, groves=400)
     # Each lake and river at its own level: the lowest DSM round its shore (the Yangtze is metres
     # below Xuanwu Lake).
     for k, w in enumerate(lakes):
@@ -346,6 +422,41 @@ def main():
 
     # Plane trees: both sides of every avenue, every 9 m, where there is no building; OSM tree rows.
     bmask = ac.Mask([b['pts'] for b in F['buildings']], A.extent, 2.0)
+    # Carriageways as polygons (both edges of each ribbon), so trees never stand in a road: Zhongshan
+    # Road is mapped as two one-way ways, and each side's trees fell on the other.
+    road_polys = []
+    for pts, w in carriageways:
+        if len(pts) > 1:
+            l, r = ac.polyline_offset(pts, w / 2 + 0.6), ac.polyline_offset(pts, -w / 2 - 0.6)
+            road_polys.append([(v.x, v.y) for v in l] + [(v.x, v.y) for v in reversed(r)])
+    rmask = ac.Mask(road_polys, A.extent, 2.0)
+    blocked = lambda x, y: bmask.at(x, y) or rmask.at(x, y)  # noqa: E731
+
+    # Infill: the nearest street's direction within 140 m, from a 100 m bucket index of segments.
+    buckets = {}
+    for pts, w in carriageways:
+        for a, b in zip(pts, pts[1:]):
+            key = (int((a[0] + b[0]) / 200), int((a[1] + b[1]) / 200))
+            buckets.setdefault(key, []).append((a, b))
+
+    def near_road(x, y):
+        best, ang = 140.0, None
+        kx, ky = int(x // 100), int(y // 100)
+        for i in range(kx - 2, kx + 3):
+            for j in range(ky - 2, ky + 3):
+                for a, b in buckets.get((i, j), ()):
+                    d = _seg(x, y, a, b)
+                    if d < best:
+                        best, ang = d, math.atan2(b[1] - a[1], b[0] - a[0])
+        return ang
+
+    def mark(pts):
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        for j in range(int((min(ys) - bmask.y0) / bmask.cell), int((max(ys) - bmask.y0) / bmask.cell) + 2):
+            for i in range(int((min(xs) - bmask.x0) / bmask.cell), int((max(xs) - bmask.x0) / bmask.cell) + 2):
+                if 0 <= i < bmask.nx and 0 <= j < bmask.ny and ac.point_in_poly(bmask.x0 + i * bmask.cell, bmask.y0 + j * bmask.cell, pts):
+                    bmask.m[j, i] = True
+    infill = build_infill(c['City'], blocked, near_road, in_palace, mark)
     trees = 0
     for pts3, width, kind in avenues:
         for side in (-1, 1):
@@ -355,7 +466,7 @@ def main():
                 seg = (off[i] - off[i - 1]).length
                 while nxt < run + seg:
                     q = off[i - 1].lerp(off[i], (nxt - run) / max(seg, 1e-6))
-                    if not bmask.at(q.x, q.y) and not wet(q.x, q.y) and not in_palace(q.x, q.y):
+                    if not blocked(q.x, q.y) and not wet(q.x, q.y) and not in_palace(q.x, q.y):
                         kit.place(protos['plane'], c['Trees'], (q.x, q.y, zground(q.x, q.y)), rnd.uniform(0, 6.28), rnd.uniform(0.85, 1.1))
                         trees += 1
                     nxt += 9.0
@@ -363,12 +474,12 @@ def main():
     for w in F['ways']:
         if w.get('kind') == 'tree_row':
             for p in densify(w['pts'], 8.0):
-                if not bmask.at(*p):
+                if not blocked(*p):
                     kit.place(protos['plane'], c['Trees'], (p[0], p[1], zground(*p)), rnd.uniform(0, 6.28), rnd.uniform(0.8, 1.05))
                     trees += 1
-    kinds = ['broadleaf', 'broadleaf_sun', 'broadleaf_shade', 'cedar', 'willow', 'cherry']
+    kinds = ['broadleaf', 'broadleaf_sun', 'broadleaf_shade', 'cedar', 'willow']   # cherries return with the seasons
     trees += ac.scatter(protos, c['Trees'], rnd, kinds, 9000, patch[0], patch[1],
-                        lambda x, y: green_mask.at(x, y) and not bmask.at(x, y) and not wet(x, y) and not in_palace(x, y), zground, groves=500)
+                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and not wet(x, y) and not in_palace(x, y), zground, groves=500)
 
     # Markers: Xinjiekou looking up Zhongshan Road; the road itself; the Palace gate; Gulou.
     pk = c['Markers']
@@ -398,7 +509,7 @@ def main():
     }
     OUT_BLEND.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))
-    print('BUILD', {'buildings': n_b, 'building_tris': tris, 'avenues': len(avenues), 'trees': trees, 'palace': [round(pal.x), round(pal.y), round(pal_z, 1)],
+    print('BUILD', {'canopy': canopy, 'infill': infill, 'buildings': n_b, 'building_tris': tris, 'avenues': len(avenues), 'trees': trees, 'palace': [round(pal.x), round(pal.y), round(pal_z, 1)],
                     'objects': len(bpy.data.objects)}, flush=True)
     if RENDER:
         ac.render_views(scene, cams, RENDERS, 'lookdev')
