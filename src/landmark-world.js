@@ -44,6 +44,14 @@ const TREES = {
   maple_autumn: {crown: '#D0622E', trunk: '#5A4636', h: 9, r: 3.6, lobes: 4},
   // Qixia's Japanese maples: the deep red of the boardwalk photographs.
   maple_red: {crown: '#C8321E', trunk: '#4A3A34', h: 8, r: 3.8, lobes: 5},
+  // Nanjing's researched street and park trees (research/plants/FACTS.md).
+  camphor: {crown: '#3F6B35', trunk: '#5A4636', h: 13, r: 5.6, lobes: 7},
+  ginkgo: {crown: '#8DB34A', trunk: '#6B5A48', h: 15, r: 3.4, lobes: 4},
+  metasequoia: {crown: '#7FA65A', trunk: '#7A4E36', h: 20, r: 3.0, cone: 6},
+  scholar: {crown: '#6E9A46', trunk: '#4E4036', h: 11, r: 4.8, lobes: 5},
+  privet: {crown: '#3E5E34', trunk: '#4E4036', h: 7, r: 2.8, lobes: 4},
+  wingnut: {crown: '#7FA548', trunk: '#5A4636', h: 14, r: 5.2, lobes: 5},
+  plum: {crown: '#6E8F48', trunk: '#3E302A', h: 5, r: 2.6, lobes: 4},
   // Tiny Nanjing's street lamps ride the tree instancing: a dark pole and a warm head that glows
   // at night (lampMat); far away, a glowing dot.
   lamp: {lamp: true, crown: '#FFE7B4', trunk: '#3A3F44', h: 8, r: .6},
@@ -62,11 +70,22 @@ const TREES = {
 // thin grey-brown crown). Autumn picks per tree among `fall` so a park is never one colour.
 const BROAD = {year: ['#A4CB5C', null, '#D9A93A', '#9A8E7E'], fall: ['#E08A33', '#C4652E', '#D9A93A', '#9BAA45']};
 const SEASONS = {
-  broadleaf: BROAD, broadleaf_sun: BROAD, broadleaf_shade: BROAD, plane: BROAD, plane_autumn: {year: ['#A4CB5C', '#86A84A', '#E2B233', '#9A8E7E']},
+  broadleaf: BROAD, broadleaf_sun: BROAD, broadleaf_shade: BROAD, plane_autumn: {year: ['#A4CB5C', '#86A84A', '#E2B233', '#9A8E7E']},
   far: {year: ['#7DA34A', null, '#B98A3A', '#8E8676'], fall: ['#A86A34', '#8E9A44', '#C2993C']},
   maple_autumn: {year: ['#A8C860', '#5E9E3E', null, '#8E7E72']}, maple_red: {year: ['#A8C860', '#5E9E3E', null, '#8E7E72']},
   cherry: {year: ['#F2B8C6', '#6E9E46', '#D9783A', '#8E7E72']}, willow: {year: ['#B8D86A', null, '#C9B84A', '#A79A70']},
   cedar: {year: [null, null, null, '#36513A']}, cypress: {year: [null, null, null, '#36513A']},
+  // From research/plants/FACTS.md: ginkgo gold in late November, metasequoia fiery red in early
+  // December, plane yellowing late; camphor, privet and cedar evergreen (camphor's lighter spring
+  // flush is an assumption); plum flowers in late February, so its "winter" is the blossom.
+  plane: {year: ['#A4CB5C', '#86A84A', '#D8B040', '#9A8E7E']},
+  camphor: {year: ['#5E8A3E', null, null, '#3A6232']},
+  ginkgo: {year: ['#A9CC5C', '#7EA84A', '#E6BE2E', '#9C8F80']},
+  metasequoia: {year: ['#A7C96A', '#6E9A50', '#B9562A', '#8E7262']},
+  scholar: {year: ['#A4CB5C', null, '#C9B24A', '#9A8E7E']},
+  privet: {year: [null, null, null, '#36513A']},
+  wingnut: {year: ['#A4CB5C', null, '#C2A548', '#9A8E7E']},
+  plum: {year: ['#8FB45A', '#6E8F48', '#B98A48', '#F3CFD8']},
 };
 
 function treeGeometry(spec, seed) {

@@ -159,8 +159,8 @@ for kind, x3, y3, z3, *_ in trees:
     x, y = x3, -z3
     if kind == 'far':
         continue
-    # Lotus grows in the water on purpose.
-    if WATER is not None and kind not in ('lotus', 'lotus_flower') and value(WATER, x, y) not in (None, NO):
+    # Lotus grows in the water on purpose, and lamps over water stand on bridges.
+    if WATER is not None and kind not in ('lotus', 'lotus_flower', 'lamp') and value(WATER, x, y) not in (None, NO):
         wet_trees += 1
         examples.append((kind, 'water', round(x), round(y)))
     v = value(WALK, x, y)

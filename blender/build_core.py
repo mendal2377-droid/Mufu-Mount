@@ -22,6 +22,7 @@ from pathlib import Path
 
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -52,7 +53,33 @@ def far_z(x, y):
 
 # --- Ground and water -------------------------------------------------------------------------------
 lakes = [w['pts'] for w in F['water']]
+# Rivers and canals mapped only as centrelines (the inner Qinhuai's 运渎, the Pearl River) become
+# channels: the line buffered to its OSM width, else a typical width for its kind. Lines already
+# inside a water polygon are left alone (tests/city-audit.py found these missing).
+RIVER_WIDTH = {'river': 14.0, 'canal': 10.0, 'stream': 4.0}
+_poly_mask = ac.Mask(lakes, A.extent, 4.0)
+for w in F['ways']:
+    kind = w.get('tags', {}).get('waterway')
+    if w.get('kind') != 'waterway' or kind not in RIVER_WIDTH or len(w['pts']) < 2:
+        continue
+    if sum(_poly_mask.at(*p) for p in w['pts']) > len(w['pts']) / 2:
+        continue
+    try:
+        width = float(str(w.get('tags', {}).get('width', '')).split()[0])
+    except (ValueError, IndexError):
+        width = RIVER_WIDTH[kind]
+    left, right = ac.polyline_offset(w['pts'], width / 2), ac.polyline_offset(w['pts'], -width / 2)
+    lakes.append([(v.x, v.y) for v in left] + [(v.x, v.y) for v in reversed(right)])
 water_mask = ac.Mask(lakes, A.extent, 4.0)
+# Each water body's level, from the bare ground on its banks; the bed is always below it (a
+# pond's bed once came out above its own surface, from the noisy bare-ground estimate).
+water_level = np.full(water_mask.m.shape, np.inf, dtype=np.float32)
+LAKE_LEVELS = []
+for w in lakes:
+    level = min(A.bare_at(x, y) for x, y in w[::max(1, len(w) // 400)]) - 0.4
+    LAKE_LEVELS.append(level)
+    m = ac.Mask([w], A.extent, 4.0).m
+    water_level[m] = np.minimum(water_level[m], level)
 island_mask = ac.Mask([w['pts'] for w in F['islands']], A.extent, 4.0)
 GREEN = {'grass', 'park', 'garden', 'wood', 'flowerbed', 'meadow', 'village_green', 'recreation_ground', 'cemetery', 'scrub', 'forest'}
 greens = [p['pts'] for p in F['places'] if p.get('pts') and (p['tags'].get('landuse') in GREEN or p['tags'].get('leisure') in GREEN
@@ -74,7 +101,9 @@ WATER = {}
 
 def ground(x, y):
     if wet(x, y):
-        return zground(x, y) - 3.0, 3
+        i, j = int(round((x - water_mask.x0) / water_mask.cell)), int(round((y - water_mask.y0) / water_mask.cell))
+        level = water_level[j, i] if 0 <= i < water_mask.nx and 0 <= j < water_mask.ny else np.inf
+        return min(zground(x, y) - 3.0, level - 1.5), 3
     return zground(x, y), (0 if green_mask.at(x, y) else 1)
 
 
@@ -317,8 +346,9 @@ def build_roads(coll, skip):
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
     avenues = []
-    global carriageways, lamps
+    global carriageways, lamps, planted
     carriageways = []
+    planted = []
     lamps = []
     order = {'footway': 0, 'path': 0, 'cycleway': 0, 'pedestrian': 1, 'service': 1, 'living_street': 2, 'residential': 3,
              'unclassified': 3, 'tertiary': 4, 'tertiary_link': 4, 'secondary': 5, 'secondary_link': 5, 'primary': 6,
@@ -352,6 +382,7 @@ def build_roads(coll, skip):
             carriageways.append(([p[:2] for p in pts3], width))
         ribbon(bm, uv, pts3, width, 1 if foot else 0, 0.3 + 0.015 * order.get(kind, 0))
         if kind in AVENUE or kind == 'tertiary':
+            planted.append((pts3, width, kind, t.get('name', ''), w['id']))
             for side in (-1, 1):
                 off = ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0))
                 ribbon(bm, uv, [(o.x, o.y, p[2]) for o, p in zip(off, pts3)], 4.0, 1, 0.45)
@@ -373,6 +404,37 @@ def build_roads(coll, skip):
 
 
 # --- Trees ------------------------------------------------------------------------------------------
+# From research/plants/FACTS.md. Roads the city lists as plane avenues (梧桐路):
+PLANE_ROADS = ('中山路', '中山东路', '中山北路', '中山南路', '中央路', '长江路', '北京西路', '瞻园路', '黄埔路', '瑞金路', '颐和路',
+               '灵谷寺路', '陵园路')
+# Street trees of the main city by census share (2026): camphor 26 %, plane 17 %; the rest split
+# among the 2007 survey's dominant species (the split is an assumption).
+CENSUS = (('camphor', 26.3), ('plane', 17.2), ('scholar', 12.0), ('privet', 10.0), ('metasequoia', 9.0),
+          ('cedar', 8.0), ('wingnut', 7.0), ('ginkgo', 6.0))
+# OSM places with their own planting.
+ZONES = {
+    62114524: ['ginkgo', 'ginkgo', 'ginkgo', 'camphor', 'cedar'],         # 清凉山公园: the city's largest ginkgo grove
+    88779953: ['ginkgo', 'ginkgo', 'plane', 'camphor', 'cedar'],          # 南京大学 (鼓楼)
+    89638729: ['ginkgo', 'ginkgo', 'camphor', 'cedar', 'plane'],          # 南京师范大学 (随园)
+    236946068: ['cherry'],                                              # the mapped cherry grove (樱花)
+    91828655: ['camphor', 'cedar', 'broadleaf_shade', 'wingnut', 'metasequoia'],   # 北极阁 wood
+    62344629: ['camphor', 'broadleaf', 'broadleaf_shade', 'cedar', 'wingnut'],     # 幕府山 wood
+}
+
+
+def species_prototypes(protos, coll):
+    """Stand-ins named for each researched species; the web draws the species (TREES in
+    src/landmark-world.js) by the mesh's name."""
+    for kind in ('camphor', 'ginkgo', 'metasequoia', 'scholar', 'privet', 'wingnut', 'plum'):
+        me = protos['plane'].data.copy()
+        me.name = f'proto {kind}'
+        o = bpy.data.objects.new(f'proto {kind}', me)
+        o.hide_render = o.hide_viewport = True
+        coll.objects.link(o)
+        protos[kind] = o
+    return protos
+
+
 def plane_prototype(protos, coll):
     me = protos['plane_autumn'].data.copy()
     me.name = 'proto plane'
@@ -404,7 +466,7 @@ def main():
                                        ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'Trees', 'Prototypes', 'Markers'))}
     for v in c.values():
         root.children.link(v)
-    protos = plane_prototype(oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes'])), c['Prototypes'])
+    protos = species_prototypes(plane_prototype(oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes'])), c['Prototypes']), c['Prototypes'])
 
     # The Presidential Palace hero: appended from art-src/palace.blend at its own origin.
     (olat, olon), core_o = (32.04622025, 118.79225685), A.meta['origin_wgs84']
@@ -450,8 +512,7 @@ def main():
     for k, w in enumerate(lakes):
         # From the bare ground on the banks, not the surface model: its minimum caught roofs and
         # trees and floated one surface 8 m up, over Jiefang South Road (tests/road-audit.py).
-        z = min(A.bare_at(x, y) for x, y in w[::max(1, len(w) // 400)])
-        ac.polygon_mesh(f'Water {k}', c['Water'], [w], z - 0.4, 'water')
+        ac.polygon_mesh(f'Water {k}', c['Water'], [w], LAKE_LEVELS[k], 'water')
     ac.polygon_mesh('Pitches', c['Ground'], pitches, 0.0, 'pitch')
     for o in c['Ground'].objects:
         if o.name.startswith('Pitches'):
@@ -505,7 +566,24 @@ def main():
                     bmask.m[j, i] = True
     infill = build_infill(c['City'], blocked, near_road, in_palace, mark)
     trees = 0
-    for pts3, width, kind in avenues:
+    # Street trees by research (research/plants/FACTS.md): plane on the roads the city names as
+    # plane avenues, cherries on Jiming Temple Road; every other road one species along its whole
+    # length (streets are planted uniformly), drawn by the census shares.
+    def street_species(name, wid):
+        if any(r in name for r in PLANE_ROADS):
+            return 'plane'
+        if '鸡鸣寺路' in name:
+            return 'cherry'
+        pick, acc = hashf(wid, 7) * sum(w for _, w in CENSUS), 0.0
+        for kind, w in CENSUS:
+            acc += w
+            if pick <= acc:
+                return kind
+        return 'camphor'
+    species_count = {}
+    for pts3, width, kind, name, wid in planted:
+        sp = street_species(name, wid)
+        spacing = 7.0 if sp == 'cherry' else 9.0
         for side in (-1, 1):
             off = ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0))
             run, nxt = 0.0, rnd.uniform(0, 9)
@@ -514,9 +592,10 @@ def main():
                 while nxt < run + seg:
                     q = off[i - 1].lerp(off[i], (nxt - run) / max(seg, 1e-6))
                     if not blocked(q.x, q.y) and crown_clear(q.x, q.y) and not wet(q.x, q.y) and not in_palace(q.x, q.y):
-                        kit.place(protos['plane'], c['Trees'], (q.x, q.y, zground(q.x, q.y)), rnd.uniform(0, 6.28), rnd.uniform(0.85, 1.1))
+                        kit.place(protos[sp], c['Trees'], (q.x, q.y, zground(q.x, q.y)), rnd.uniform(0, 6.28), rnd.uniform(0.85, 1.1))
+                        species_count[sp] = species_count.get(sp, 0) + 1
                         trees += 1
-                    nxt += 9.0
+                    nxt += spacing
                 run += seg
     for w in F['ways']:
         if w.get('kind') == 'tree_row':
@@ -524,13 +603,48 @@ def main():
                 if not blocked(*p) and crown_clear(*p):
                     kit.place(protos['plane'], c['Trees'], (p[0], p[1], zground(*p)), rnd.uniform(0, 6.28), rnd.uniform(0.8, 1.05))
                     trees += 1
-    kinds = ['broadleaf', 'broadleaf_sun', 'broadleaf_shade', 'cedar', 'willow']   # cherries return with the seasons
+    # Places with their own planting (research/plants/FACTS.md): ginkgo groves and campuses,
+    # the mapped cherry grove, the Beiji'ge and Mufu Mountain woods.
+    zones = []
+    for pid, mix in ZONES.items():
+        poly = next((p['pts'] for p in F['places'] if p['id'] == pid and p.get('pts')), None)
+        if poly:
+            zones.append((ac.Mask([poly], A.extent, 4.0), mix))
+
+    def zone_ok(mix):
+        return lambda x, y: not blocked(x, y) and crown_clear(x, y, 3.0) and not wet(x, y) and any(m.at(x, y) for m, k in zones if k is mix)
+    for mask, mix in zones:
+        n = int(mask.m.sum() * 16 / 140)         # about one tree per 140 m² of the place
+        trees += ac.scatter(protos, c['Trees'], rnd, mix, min(n, 3000), patch[0], patch[1], zone_ok(mix), zground, groves=max(6, n // 30))
+    # Lake shores: willows above all, cherries and camphor between (Xuanwu's banks, the moats).
+    shore = 0
+    for w in lakes:
+        if len(w) > 4000:
+            continue                                 # the Yangtze: its banks are wharves and dikes
+        for a, b in zip(w, w[1:]):
+            L = math.dist(a, b)
+            for k in range(int(L / 10)):
+                px, py = a[0] + (b[0] - a[0]) * (k + .5) * 10 / L, a[1] + (b[1] - a[1]) * (k + .5) * 10 / L
+                nx, ny = -(b[1] - a[1]) / L, (b[0] - a[0]) / L
+                for side in (1, -1):
+                    qx, qy = px + nx * side * 4.0, py + ny * side * 4.0
+                    if not wet(qx, qy) and not blocked(qx, qy) and crown_clear(qx, qy, 2.5):
+                        r = rnd.random()
+                        kit.place(protos['willow' if r < .65 else 'cherry' if r < .8 else 'camphor'], c['Trees'], (qx, qy, zground(qx, qy)),
+                                  rnd.uniform(0, 6.28), rnd.uniform(.85, 1.1))
+                        shore += 1
+                        break
+    trees += shore
+    # Other green spaces: the census mix of the city's own trees.
+    kinds = ['camphor', 'camphor', 'plane', 'scholar', 'ginkgo', 'metasequoia', 'cedar', 'privet', 'wingnut']
     trees += ac.scatter(protos, c['Trees'], rnd, kinds, 9000, patch[0], patch[1],
-                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and not wet(x, y) and not in_palace(x, y), zground, groves=500)
+                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and not wet(x, y) and not in_palace(x, y)
+                        and not any(m.at(x, y) for m, _ in zones), zground, groves=500)
+    print('SPECIES', species_count, 'shore', shore, flush=True)
 
     # Markers: Xinjiekou looking up Zhongshan Road; the road itself; the Palace gate; Gulou.
     pk = c['Markers']
-    xj = Vector((-445.0, 150.0))
+    xj = Vector((-460.0, 150.0))       # on the pavement; -445 was inside 南京新百's footprint
     ac.add_point(pk, 'Spawn xinjiekou', (xj.x, xj.y, zground(*xj)), (-460.0, 900.0, zground(-460, 900) + 20))
     zs = Vector((-430.0, 1100.0))
     ac.add_point(pk, 'Spawn zhongshan', (zs.x, zs.y, zground(*zs)), (-460.0, 1900.0, zground(-460, 1900) + 8))
