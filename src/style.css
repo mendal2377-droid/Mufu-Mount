@@ -1140,13 +1140,16 @@ body.playing .brand small { display: none; }
 body.playing header, body.playing .trail-card, body.playing .map-card,
 body.playing .bottom-panel, body.playing .memory-rail, body.playing .memory-card,
 body.playing .tour-banner, body.playing #resume, body.playing .crosshair { display: none !important; }
+/* The hour slider sits beside the time it sets. */
+#walk-hour { width: 110px; accent-color: #f0d9a0; margin: 0 4px; }
+#walk-season { background: transparent; color: inherit; border: 0; font: inherit; }
 #walk-environment { position: fixed; top: 22px; left: 24px; z-index: 6; display: flex;
   align-items: center; gap: 12px; border-radius: 28px; padding: 10px 16px;
   background: #203a35c9; backdrop-filter: blur(14px); font-size: 12px;
   box-shadow: 0 2px 15px #0e272218; color: #fffbea; }
 #scene-time { font-variant-numeric: tabular-nums; }
 #walk-weather { border: none; background: transparent; color: inherit; cursor: pointer; font-size: 12px; padding: 0; width: auto; }
-#walk-weather option { background: #203a35; }
+#walk-weather option, #walk-season option { background: #203a35; }
 .quiet-actions { position: fixed; bottom: 24px; right: 24px; display: flex; gap: 9px; z-index: 6; }
 .quiet-actions button { border-radius: 50%; width: 46px; height: 46px; background: #203a35c9;
   backdrop-filter: blur(12px); box-shadow: 0 2px 15px #0e272218; font-size: 17px; }

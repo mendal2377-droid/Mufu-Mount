@@ -44,6 +44,9 @@ const TREES = {
   maple_autumn: {crown: '#D0622E', trunk: '#5A4636', h: 9, r: 3.6, lobes: 4},
   // Qixia's Japanese maples: the deep red of the boardwalk photographs.
   maple_red: {crown: '#C8321E', trunk: '#4A3A34', h: 8, r: 3.8, lobes: 5},
+  // Tiny Nanjing's street lamps ride the tree instancing: a dark pole and a warm head that glows
+  // at night (lampMat); far away, a glowing dot.
+  lamp: {lamp: true, crown: '#FFE7B4', trunk: '#3A3F44', h: 8, r: .6},
   // Far canopy beyond the walkable area: one crown, no trunk, ~20 triangles.
   far: {crown: '#5A8A3C', trunk: '#5A4636', h: 12, r: 4.6, lobes: 0, far: true},
   cedar: {crown: '#3D5E3F', trunk: '#5A4636', h: 18, r: 4.2, cone: 5},
@@ -55,6 +58,17 @@ const TREES = {
   lotus_flower: {crown: '#F4A6B8', flower: true},
 };
 
+// Each kind's crown through the year: spring, summer, autumn, winter (bare branches read as a
+// thin grey-brown crown). Autumn picks per tree among `fall` so a park is never one colour.
+const BROAD = {year: ['#A4CB5C', null, '#D9A93A', '#9A8E7E'], fall: ['#E08A33', '#C4652E', '#D9A93A', '#9BAA45']};
+const SEASONS = {
+  broadleaf: BROAD, broadleaf_sun: BROAD, broadleaf_shade: BROAD, plane: BROAD, plane_autumn: {year: ['#A4CB5C', '#86A84A', '#E2B233', '#9A8E7E']},
+  far: {year: ['#7DA34A', null, '#B98A3A', '#8E8676'], fall: ['#A86A34', '#8E9A44', '#C2993C']},
+  maple_autumn: {year: ['#A8C860', '#5E9E3E', null, '#8E7E72']}, maple_red: {year: ['#A8C860', '#5E9E3E', null, '#8E7E72']},
+  cherry: {year: ['#F2B8C6', '#6E9E46', '#D9783A', '#8E7E72']}, willow: {year: ['#B8D86A', null, '#C9B84A', '#A79A70']},
+  cedar: {year: [null, null, null, '#36513A']}, cypress: {year: [null, null, null, '#36513A']},
+};
+
 function treeGeometry(spec, seed) {
   let s = seed;
   const rand = () => (s = (s * 16807) % 2147483647) / 2147483647;
@@ -62,9 +76,20 @@ function treeGeometry(spec, seed) {
     const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) c.toArray(a, i * 3);
     g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+    // 1 on leaves, 0 on trunks and lamp poles: the season recolours leaves only.
+    g.setAttribute('crown', new THREE.BufferAttribute(new Float32Array(n).fill(hex === spec.trunk ? 0 : 1), 1));
     return g;
   };
   if (spec.lotus || spec.flower) return lotusGeometry(spec, colour);
+  if (spec.lamp) {
+    const pole = new THREE.CylinderGeometry(.08, .12, spec.h, 5, 1, true).toNonIndexed();
+    pole.translate(0, spec.h / 2, 0);
+    const arm = new THREE.BoxGeometry(.08, .08, 1.3).toNonIndexed();
+    arm.translate(0, spec.h - .1, .6);
+    const head = new THREE.BoxGeometry(.42, .2, .9).toNonIndexed();
+    head.translate(0, spec.h - .2, 1.1);
+    parts.push(colour(pole, spec.trunk), colour(arm, spec.trunk), colour(head, spec.crown));
+  } else
   if (!spec.far) {
     const trunk = new THREE.CylinderGeometry(spec.r * .06, spec.r * .09, spec.h * .62, 5, 1, true).toNonIndexed();
     trunk.translate(0, spec.h * .31, 0);
@@ -107,11 +132,11 @@ function treeGeometry(spec, seed) {
   // Manual merge (all non-indexed, same attributes).
   const total = parts.reduce((n, g) => n + g.attributes.position.count, 0);
   const out = new THREE.BufferGeometry();
-  for (const name of ['position', 'normal', 'color']) {
-    const arr = new Float32Array(total * 3);
+  for (const [name, size] of [['position', 3], ['normal', 3], ['color', 3], ['crown', 1]]) {
+    const arr = new Float32Array(total * size);
     let o = 0;
     for (const g of parts) { arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; }
-    out.setAttribute(name, new THREE.BufferAttribute(arr, 3));
+    out.setAttribute(name, new THREE.BufferAttribute(arr, size));
   }
   return out;
 }
@@ -120,7 +145,8 @@ function treeGeometry(spec, seed) {
 // a six-sided cone for conifers). A few triangles each, so a whole forest costs little.
 function silhouetteGeometry(spec) {
   let g;
-  if (spec.cone) { g = new THREE.ConeGeometry(spec.r * .9, spec.h * .9, 6, 1).toNonIndexed(); g.translate(0, spec.h * .55, 0); }
+  if (spec.lamp) { g = new THREE.OctahedronGeometry(.5, 0).toNonIndexed(); g.translate(0, spec.h - .2, 1.1); }
+  else if (spec.cone) { g = new THREE.ConeGeometry(spec.r * .9, spec.h * .9, 6, 1).toNonIndexed(); g.translate(0, spec.h * .55, 0); }
   else {
     g = new THREE.OctahedronGeometry(spec.r * (spec.hang ? .95 : 1.05), 0).toNonIndexed();
     g.scale(1, spec.hang ? 1.25 : .85, 1); g.translate(0, spec.h * (spec.hang ? .55 : .72), 0);
@@ -130,6 +156,7 @@ function silhouetteGeometry(spec) {
   const c = new THREE.Color(spec.crown), a = new Float32Array(g.attributes.position.count * 3);
   for (let i = 0; i < g.attributes.position.count; i++) c.toArray(a, i * 3);
   g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  g.setAttribute('crown', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(spec.lamp ? 0 : 1), 1));
   return g;
 }
 
@@ -189,9 +216,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     if (far) mat.fog = false;
     // Tiny Nanjing: buildings carry their colours in the vertices and wall UVs in metres (along,
     // up); roads carry metres (along, across). Shaders below draw windows and lanes from those.
-    const facade = name === 'facade', road = name === 'road_city';
+    const facade = name === 'facade', road = name === 'road_city', walkway = name === 'sidewalk';
     if (facade || name === 'roof_city') mat.vertexColors = true;
-    if (facade || road) mat.defines = {...mat.defines, USE_UV: ''};
+    if (facade || road || walkway) mat.defines = {...mat.defines, USE_UV: ''};
     if (name === 'water') { mat.color.multiplyScalar(1.05); mat.emissive = new THREE.Color(0x0b2f3a); }
     // Lanterns and lit windows glow; the bloom pass turns them into soft lights at dusk.
     if (name === 'lantern') { mat.emissive = new THREE.Color(0xe8473a); mat.emissiveIntensity = .9; }
@@ -207,11 +234,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.worldWindows = {value: style.windows || 0};
       s.uniforms.citySunset = shared.sunset || {value: 0}; s.uniforms.cityDawn = shared.dawn || {value: 0};
       s.uniforms.worldFar = {value: far ? 1 : 0}; s.uniforms.hazeColor = hazeColor;
-      s.uniforms.worldFacade = {value: facade ? 1 : 0}; s.uniforms.worldRoad = {value: road ? 1 : 0};
+      s.uniforms.worldFacade = {value: facade ? 1 : 0}; s.uniforms.worldRoad = {value: road ? 1 : 0}; s.uniforms.worldWalk = {value: walkway ? 1 : 0};
+      s.uniforms.cityNight = shared.night || {value: 0}; s.uniforms.cityLit = shared.litShare || {value: 0};
+      s.uniforms.cityShops = shared.shopsOpen || {value: 0};
       s.uniforms.skyClip = {value: new THREE.Vector4(...(meta.skyline_clip || [1, -1, 1, -1]))};
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad;uniform vec3 hazeColor;uniform vec4 skyClip;varying vec3 vWorldPos;varying float vUp;\n' +
+      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops;uniform vec3 hazeColor;uniform vec4 skyClip;varying vec3 vWorldPos;varying float vUp;\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -248,6 +277,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             float dist=length(vViewPosition);
             winLit=step(.8,lwHash(floor(cell)))*side*(1.-frame)*(1.-smoothstep(500.,1800.,dist))*(1.-smoothstep(.35,1.,fw2));
           }
+          float pool=0.;
           // The skyline's towers inside the city core are drawn by the city itself.
           if(worldFar>.5&&vWorldPos.x>skyClip.x&&vWorldPos.x<skyClip.y&&vWorldPos.z>skyClip.z&&vWorldPos.z<skyClip.w)discard;
           #ifdef USE_UV
@@ -275,11 +305,19 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
               if(shop)glass=vec3(.28,.24,.2);
               diffuseColor.rgb=mix(diffuseColor.rgb,mix(diffuseColor.rgb*.82,glass,win*.8),k);
               diffuseColor.rgb*=1.-(1.-smoothstep(0.,.08,fv))*.12*k*(st>.6?0.:1.);
-              // About one window in seven lit at dusk, and every shop; far ones fade, or the towers
-              // fizz with specks.
-              float lit=(shop?1.:step(.86,lwHash(vec2(floor(u/sp)+3.,floor(h/fh)))))*win*k;
-              winLit=max(winLit,lit*(1.-smoothstep(300.,900.,length(vViewPosition))));
+              // Each window has its own bedtime: the clock's lit share falls through the night
+              // and windows go dark one by one. Shops close at ten. Far windows fade (they fizz),
+              // less so at night, when the lit city should sparkle into the distance.
+              float lit=(shop?cityShops:step(1.-cityLit,lwHash(vec2(floor(u/sp)+3.,floor(h/fh)))))*win*k;
+              winLit=max(winLit,lit*(1.-smoothstep(300.+cityNight*700.,900.+cityNight*3200.,length(vViewPosition))));
+              // A lit window at night is the room's warm light, not the glass: darken under the glow.
+              diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.10,.08,.06),lit*cityNight*.85);
             }
+          }
+          if(worldWalk>.5){
+            // Pools of lamplight on the pavement: the lamps stand every 28 m along it, from 14 m.
+            float du=(fract((vUv.x-14.)/28.+.5)-.5)*28., dv=(1.-vUv.y)*1.6;
+            pool=exp(-(du*du+dv*dv)/40.);
           }
           if(worldRoad>.5){
             // Lanes: a double centre line, dashed lane lines every 3.5 m, faded where they alias.
@@ -289,15 +327,19 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             float lane=step(abs(fract(v/3.5+.5)-.5)*3.5,.07)*step(1.,v)*step(fract(u/9.),.45);
             diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.72,.3),centre*k);
             diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.88,.84),lane*k*.9);
+            // Lamplight spills onto the outer lanes, on the pavement lamps' 28 m rhythm.
+            float du=(fract((u-14.)/28.+.5)-.5)*28.;
+            pool=exp(-du*du/45.)*smoothstep(1.5,6.,v)*.14;
           }
           #endif`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           // At dusk and dawn a third of the windows glow warm.
-          totalEmissiveRadiance+=winLit*max(worldWindows,worldFacade)*clamp(citySunset+cityDawn,0.,1.)*vec3(1.,.74,.42)*.9;`)
+          totalEmissiveRadiance+=winLit*max(worldWindows,worldFacade)*clamp(citySunset+cityDawn+cityNight*1.3,0.,1.3)*vec3(1.,.50,.16)*.85;
+          totalEmissiveRadiance+=pool*cityNight*vec3(1.,.62,.28)*1.8;`)
         .replace('#include <dithering_fragment>', `#include <dithering_fragment>
           // Skyline haze: towers fade toward the sky colour with distance, never to nothing.
           if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.45);}`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v8' + (facade ? 'f' : road ? 'r' : '');
+    mat.customProgramCacheKey = () => 'landmark-paint-v9' + (facade ? 'f' : road ? 'r' : walkway ? 'w' : '');
     cache.set(name, mat);
     return mat;
   }
@@ -330,20 +372,50 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // --- Trees: one instanced draw per kind, swaying with the shared clock --------------------------
   const byKind = {};
   for (const t of trees) (byKind[t[0]] ||= []).push(t);
-  const treeMat = new THREE.MeshToonMaterial({vertexColors: true, gradientMap: bands});
-  treeMat.onBeforeCompile = s => {
-    s.uniforms.cityTime = shared.time; s.uniforms.citySnow = shared.snow;
-    s.vertexShader = 'uniform float cityTime;\n' + s.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-      float sway=smoothstep(2.,14.,transformed.y);
-      vec3 o=instanceMatrix[3].xyz;
-      transformed.x+=sin(cityTime*.9+o.x*.05+o.z*.07)*.18*sway;transformed.z+=cos(cityTime*.7+o.x*.06)*.12*sway;`);
-    s.fragmentShader = 'uniform float citySnow;\n' + s.fragmentShader.replace('#include <color_fragment>',
-      '#include <color_fragment>\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(.9,.92,.9),citySnow*.45);');
-  };
-  treeMat.customProgramCacheKey = () => 'landmark-trees-v1';
+  // One material per kind: the crowns follow the season (SEASONS), sway harder in a storm, and take
+  // snow. Brightness variation within a crown and between trees survives the recolouring.
+  const treeMats = new Map();
+  function treeMaterial(kind, spec) {
+    if (treeMats.has(kind)) return treeMats.get(kind);
+    const m = new THREE.MeshToonMaterial({vertexColors: true, gradientMap: bands});
+    const plan = SEASONS[kind] || {year: []};
+    const base = new THREE.Color(kind === 'far' ? '#5A8A3C' : spec.crown);
+    const year = [0, 1, 2, 3].map(i => new THREE.Color(plan.year[i] || '#' + base.getHexString()));
+    const fall = (plan.fall || ['#' + year[2].getHexString()]).map(h => new THREE.Color(h));
+    while (fall.length < 4) fall.push(fall[fall.length - 1]);
+    m.onBeforeCompile = s => {
+      s.uniforms.cityTime = shared.time; s.uniforms.citySnow = shared.snow; s.uniforms.cityStorm = shared.storm || {value: 0};
+      s.uniforms.citySeason = shared.season || {value: 1};
+      s.uniforms.seasonCol = {value: year}; s.uniforms.fallCol = {value: fall}; s.uniforms.crownBase = {value: base};
+      s.vertexShader = 'uniform float cityTime,cityStorm;attribute float crown;varying float vCrown,vTreeHash;\n' + s.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        float sway=smoothstep(2.,14.,transformed.y)*(1.+cityStorm*2.5);
+        vec3 o=instanceMatrix[3].xyz;
+        vCrown=crown;vTreeHash=fract(sin(dot(o.xz,vec2(12.9898,78.233)))*43758.5453);
+        transformed.x+=sin(cityTime*(.9+cityStorm*1.6)+o.x*.05+o.z*.07)*.18*sway;transformed.z+=cos(cityTime*(.7+cityStorm*1.4)+o.x*.06)*.12*sway;`);
+      s.fragmentShader = 'uniform float citySnow,citySeason;uniform vec3 seasonCol[4],fallCol[4],crownBase;varying float vCrown,vTreeHash;\n' + s.fragmentShader.replace('#include <color_fragment>',
+        `#include <color_fragment>
+        float s4=mod(citySeason,4.);int si=int(floor(s4));float sf=s4-float(si);int sj=(si+1)-4*((si+1)/4);
+        vec3 fallPick=fallCol[int(vTreeHash*3.999)];
+        vec3 ca=si==2?fallPick:seasonCol[si], cb=sj==2?fallPick:seasonCol[sj];
+        float shade=clamp(dot(diffuseColor.rgb,vec3(.3,.59,.11))/max(dot(crownBase,vec3(.3,.59,.11)),.02),.7,1.3);
+        diffuseColor.rgb=mix(diffuseColor.rgb,mix(ca,cb,sf)*shade,vCrown);
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.9,.92,.9),citySnow*.45);`);
+    };
+    m.customProgramCacheKey = () => 'landmark-trees-v2-' + kind;
+    treeMats.set(kind, m);
+    return m;
+  }
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(), pos = new THREE.Vector3();
   const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
   const shadowOnly = new THREE.MeshBasicMaterial({colorWrite: false, depthWrite: false});
+  // Lamps: no sway, and the warm head (its bright vertex colour) glows once the night comes.
+  const lampMat = new THREE.MeshToonMaterial({vertexColors: true, gradientMap: bands});
+  lampMat.onBeforeCompile = s => {
+    s.uniforms.cityNight = shared.night || {value: 0};
+    s.fragmentShader = 'uniform float cityNight;\n' + s.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      totalEmissiveRadiance+=vec3(1.,.70,.36)*step(.9,vColor.r)*step(.8,vColor.g)*cityNight*2.0;`);
+  };
+  lampMat.customProgramCacheKey = () => 'landmark-lamps-v1';
   // Level of detail: near trees (within NEAR_R of the traveller, at most NEAR_CAP of them) get the
   // full painted crown; every other tree is a silhouette of a few triangles in the same colour. All
   // trees at full detail were ~2.6 M triangles in Zhongshan, too heavy for a phone.
@@ -365,12 +437,12 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       cols.push(tint.clone());
     });
     const lod = !spec.far && !spec.lotus && !spec.flower && list.length > 60;
-    const near = new THREE.InstancedMesh(geo, treeMat, lod ? Math.min(list.length, NEAR_CAP) : list.length);
+    const near = new THREE.InstancedMesh(geo, spec.lamp ? lampMat : treeMaterial(kind, spec), lod ? Math.min(list.length, NEAR_CAP) : list.length);
     near.name = `trees ${kind}`;
     if (!lod) {
       mats.forEach((m, i) => { near.setMatrixAt(i, m); near.setColorAt(i, cols[i]); });
       near.computeBoundingSphere(); near.receiveShadow = true; scene.add(near);
-      if (!spec.lotus && !spec.flower) {
+      if (!spec.lotus && !spec.flower && !spec.lamp) {
         const caster = new THREE.InstancedMesh(silhouetteGeometry(spec), shadowOnly, list.length);
         caster.instanceMatrix = near.instanceMatrix; caster.castShadow = true; caster.frustumCulled = false; scene.add(caster);
       }
@@ -383,7 +455,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const caster = new THREE.InstancedMesh(silhouetteGeometry(spec), shadowOnly, near.instanceMatrix.count);
     caster.instanceMatrix = near.instanceMatrix; caster.count = 0; caster.castShadow = true; caster.frustumCulled = false;
     scene.add(caster);
-    const farGeo = silhouetteGeometry(spec), far = new THREE.InstancedMesh(farGeo, treeMat, list.length);
+    const farGeo = silhouetteGeometry(spec), far = new THREE.InstancedMesh(farGeo, spec.lamp ? lampMat : treeMaterial(kind, spec), list.length);
     mats.forEach((m, i) => { far.setMatrixAt(i, m); far.setColorAt(i, cols[i]); });
     far.computeBoundingSphere(); far.name = `trees ${kind} far`; scene.add(far);
     lodKinds.push({list, mats, cols, near, far, caster, shown: new Set()});
@@ -415,6 +487,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // --- Light, sky, weather --------------------------------------------------------------------------
   // Tiny Nanjing is lit like a diorama: a stronger sun against a dimmer sky fill, so long shadows
   // carve the blocks (the Tiny Warsaw look). The landmark worlds keep their softer light.
+  const NIGHT_FOG = new THREE.Color(.07, .085, .15);
   const LIGHT = id === 'core' ? {sun: 1.35, sky: .7} : {sun: 1, sky: 1};
   const sky = createSkyDome(scene, skyShared).dome;
   // Softer than the atlas: at true scale the pale granite and paving fill the frame and glare.
@@ -498,7 +571,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     if (!petals) return;
     const active = nearCherry(centre, 22) || petals.burst > 0;
     petals.burst = Math.max(0, petals.burst - dt);
-    const rate = active ? (petals.burst > 0 ? 400 : 60) : 0;
+    // Blossom falls in spring (season 0, fading by summer); a rung bell still shakes some loose.
+    const spring = Math.max(0, 1 - Math.min((shared.season?.value ?? 0) % 4, 4 - (shared.season?.value ?? 0) % 4));
+    const rate = active ? (petals.burst > 0 ? 400 : 60 * spring) : 0;
     let spawn = rate * dt;
     petals.ps.forEach((q, i) => {
       if (q.live <= 0 && spawn > 0 && Math.random() < spawn / 20) {
@@ -876,10 +951,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const r = focus.dot(lightRight), u = focus.dot(lightUp);
       focus.addScaledVector(lightRight, Math.round(r / SHADOW_TEXEL) * SHADOW_TEXEL - r).addScaledVector(lightUp, Math.round(u / SHADOW_TEXEL) * SHADOW_TEXEL - u);
       sun.position.copy(focus).addScaledVector(direction, 600); sun.target.position.copy(focus);
-      sun.intensity = (2.1 - weather.storm * 1.5 - weather.snow * .6) * (1 - weather.dawn * .6) * LIGHT.sun;
-      sun.color.setRGB(1, 1 - weather.sunset * .3, 1 - weather.sunset * .55);
-      hemi.intensity = (1.05 - weather.storm * .35 - weather.dawn * .55) * LIGHT.sky;
-      scene.fog.color.setRGB(.66 + weather.sunset * .26 - weather.storm * .30, .80 - weather.sunset * .2 - weather.storm * .36, .93 - weather.sunset * .32 - weather.storm * .40);
+      // At night the directional light is the moon: faint and blue.
+      const night = weather.night || 0;
+      sun.intensity = (2.1 - weather.storm * 1.5 - weather.snow * .6) * (1 - weather.dawn * .6) * (1 - night * .86) * LIGHT.sun;
+      sun.color.setRGB(1 - night * .45, 1 - weather.sunset * .3 - night * .3, 1 - weather.sunset * .55);
+      hemi.intensity = (1.05 - weather.storm * .35 - weather.dawn * .55) * (1 - night * .84) * LIGHT.sky;
+      hemi.color.setRGB(.81 - night * .45, .9 - night * .4, 1);
+      scene.fog.color.setRGB(.66 + weather.sunset * .26 - weather.storm * .30, .80 - weather.sunset * .2 - weather.storm * .36, .93 - weather.sunset * .32 - weather.storm * .40)
+        .lerp(NIGHT_FOG, night * .92);
       // Per-world haze: the lake needs a kilometre of view, the forest slice much less.
       const haze = meta.fog ?? .0011;
       // From the home page's height the street haze would bury the city: a fifth of it up there.

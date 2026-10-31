@@ -302,8 +302,9 @@ def build_roads(coll, skip):
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
     avenues = []
-    global carriageways
+    global carriageways, lamps
     carriageways = []
+    lamps = []
     order = {'footway': 0, 'path': 0, 'cycleway': 0, 'pedestrian': 1, 'service': 1, 'living_street': 2, 'residential': 3,
              'unclassified': 3, 'tertiary': 4, 'tertiary_link': 4, 'secondary': 5, 'secondary_link': 5, 'primary': 6,
              'primary_link': 6, 'trunk': 7, 'trunk_link': 7}
@@ -339,6 +340,17 @@ def build_roads(coll, skip):
             for side in (-1, 1):
                 off = ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0))
                 ribbon(bm, uv, [(o.x, o.y, p[2]) for o, p in zip(off, pts3)], 4.0, 1, 0.45)
+                # Street lamps every 28 m from 14 m along this pavement, where its shader draws
+                # their pools of light; the arm reaches out over the road.
+                run, nxt = 0.0, 14.0
+                for i in range(1, len(off)):
+                    seg = (off[i] - off[i - 1]).length
+                    while nxt < run + seg:
+                        q = off[i - 1].lerp(off[i], (nxt - run) / max(seg, 1e-6))
+                        d = off[i] - off[i - 1]
+                        lamps.append((q.x, q.y, pts3[i][2] + 0.45, math.atan2(d.y, d.x) + (math.pi if side > 0 else 0.0)))
+                        nxt += 28.0
+                    run += seg
             if kind in AVENUE:
                 avenues.append((pts3, width, kind))
     o = kit.mesh_object('City roads', bm, coll, ['road_city', 'sidewalk'])
@@ -355,6 +367,17 @@ def plane_prototype(protos, coll):
     coll.objects.link(o)
     protos['plane'] = o
     return protos
+
+
+def lamp_prototype(coll):
+    """A stand-in mesh named 'proto lamp': the web draws the lamp itself (TREES.lamp)."""
+    bm = bmesh.new()
+    kit.add_box(bm, (0, 0, 4.0), (0.2, 0.2, 8.0))
+    kit.add_box(bm, (0, 1.1, 7.8), (0.42, 0.9, 0.2))
+    o = kit.mesh_object('proto lamp', bm, coll, ['bark'])
+    o.data.name = 'proto lamp'
+    o.hide_render = o.hide_viewport = True
+    return o
 
 
 def main():
@@ -419,6 +442,9 @@ def main():
                 v.co.z = zground(v.co.x, v.co.y) + 0.08
     city, n_b, tris = build_buildings(c['City'], in_palace)
     roads, avenues = build_roads(c['Roads'], in_palace)
+    lamp_proto = lamp_prototype(c['Prototypes'])
+    for x, y, z, ang in lamps:
+        kit.place(lamp_proto, c['Trees'], (x, y, z), ang)
 
     # Plane trees: both sides of every avenue, every 9 m, where there is no building; OSM tree rows.
     bmask = ac.Mask([b['pts'] for b in F['buildings']], A.extent, 2.0)
@@ -509,7 +535,7 @@ def main():
     }
     OUT_BLEND.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_BLEND))
-    print('BUILD', {'canopy': canopy, 'infill': infill, 'buildings': n_b, 'building_tris': tris, 'avenues': len(avenues), 'trees': trees, 'palace': [round(pal.x), round(pal.y), round(pal_z, 1)],
+    print('BUILD', {'lamps': len(lamps), 'canopy': canopy, 'infill': infill, 'buildings': n_b, 'building_tris': tris, 'avenues': len(avenues), 'trees': trees, 'palace': [round(pal.x), round(pal.y), round(pal_z, 1)],
                     'objects': len(bpy.data.objects)}, flush=True)
     if RENDER:
         ac.render_views(scene, cams, RENDERS, 'lookdev')

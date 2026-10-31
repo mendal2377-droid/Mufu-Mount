@@ -458,7 +458,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   refreshPins();
   $('#city-scope').onchange=e=>api.showPlan(e.target.value);$('#city-reset').onclick=frameMap;
   $('#city-map-return').onclick=()=>api.showPlan();$('#city-menu-close').onclick=()=>$('#city-menu').close();
-  $('#city-mufu').onclick=()=>api.enter('mufu');$('#city-weather').onclick=()=>{const moods=['morning','sunset','storm','snow','dawn'];onWeather(moods[(moods.indexOf(state.weather)+1)%moods.length]);};
+  $('#city-mufu').onclick=()=>api.enter('mufu');$('#city-weather').onclick=()=>{const moods=['morning','sunset','night','storm','snow','dawn'];onWeather(moods[(moods.indexOf(state.weather)+1)%moods.length]);};
   $('#city-sound').onclick=()=>{$('#sound').click();$('#city-menu').close();};
   $('#nanjing-return').onclick=()=>api.showPlan();
   return api;

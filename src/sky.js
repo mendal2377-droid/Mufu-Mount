@@ -8,7 +8,7 @@ varying vec3 vDir;
 void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 
 const fragmentShader = `
-uniform float time, sunset, storm, snow, flash, dawn;
+uniform float time, sunset, storm, snow, flash, dawn, night;
 uniform vec3 uSunDir;
 uniform float uHorizon;
 // 1 in the illustrated city: a hand-painted sky of saturated blue, towering flat-based
@@ -69,6 +69,8 @@ void main(){
   // Overcast and snow flatten the whole dome towards grey.
   col = mix(col, mix(vec3(0.322, 0.376, 0.396), vec3(0.070, 0.113, 0.145), h), storm * 0.9);
   col = mix(col, mix(vec3(0.812, 0.855, 0.859), vec3(0.506, 0.612, 0.671), h), snow * 0.82);
+  // Night: deep blue overhead, a little lighter (the city's glow) along the horizon.
+  col = mix(col, mix(vec3(0.060, 0.070, 0.135), vec3(0.008, 0.016, 0.050), pow(h, 0.55)), night * 0.95);
 
   vec3 sd = normalize(uSunDir);
   float cosSun = dot(d, sd);
@@ -92,8 +94,9 @@ void main(){
   }
 
   // --- stars, moon and the evening star ----------------------------------
-  float night = max(dawn, sunset * 0.55) * (1.0 - storm) * (1.0 - snow);
-  if (night > 0.001) {
+  float starry = max(max(dawn, sunset * 0.55), night) * (1.0 - storm) * (1.0 - snow);
+  if (starry > 0.001) {
+    float night = starry;
     vec2 grid = d.xz / max(abs(d.y) + 0.12, 0.12) * 46.0;
     float star = pow(hash(floor(grid)), 220.0);
     float twinkle = 0.65 + 0.35 * sin(time * 2.1 + hash(floor(grid)) * 90.0);
@@ -131,6 +134,7 @@ void main(){
   vec3 cloudDark = mix(vec3(0.42, 0.46, 0.50), vec3(0.13, 0.15, 0.18), storm);
   cloudDark = mix(cloudDark, vec3(0.30, 0.26, 0.31), dusk * 0.7);
   vec3 cloud = mix(cloudDark, cloudLit, 0.30 + towardSun * 0.62);
+  cloud *= 1.0 - night * 0.82;
 
   // In the painted city sky the cel-shaded cumulus below replaces these two decks in clear
   // weather, which also saves five noise evaluations per sky pixel; overcast brings them back.
@@ -185,13 +189,14 @@ void main(){
     vec3 midC = mix(vec3(0.84, 0.92, 0.99), vec3(0.93, 0.62, 0.62), dusk);
     vec3 shdC = mix(vec3(0.54, 0.68, 0.88), vec3(0.42, 0.30, 0.56), dusk);
     vec3 paint = tone < 0.5 ? mix(shdC, midC, tone * 2.0) : mix(midC, litC, (tone - 0.5) * 2.0);
-    col = mix(col, paint, cu * uPainted * (1.0 - storm) * (1.0 - snow * 0.7) * (0.92));
+    col = mix(col, paint * (1.0 - night * 0.84), cu * uPainted * (1.0 - storm) * (1.0 - snow * 0.7) * (0.92));
   }
 
   // --- horizon haze ------------------------------------------------------
   vec3 haze = mix(vec3(0.75, 0.80, 0.80), vec3(0.92, 0.66, 0.48), sunset);
   haze = mix(haze, vec3(0.34, 0.39, 0.41), storm);
   haze = mix(haze, vec3(0.24, 0.26, 0.38), dawn * 0.7);
+  haze = mix(haze, vec3(0.10, 0.11, 0.19), night);
   col = mix(col, haze, horizon * (0.22 + storm * 0.22));
 
   // --- the far bank ------------------------------------------------------
@@ -214,10 +219,11 @@ void main(){
   // Shore lights, and the long lit line of a crossing, once the sun is down.
   float lamps = smoothstep(0.00055, 0.0, abs(elev - ridge * 0.42));
   float lit = step(0.66, hash(vec2(floor(azim * 620.0), 19.0)));
-  col += vec3(1.0, 0.63, 0.24) * lamps * lit * dusk * 0.85 * (1.0 - storm * 0.8);
+  float lightsOn = max(dusk, night);
+  col += vec3(1.0, 0.63, 0.24) * lamps * lit * lightsOn * 0.85 * (1.0 - storm * 0.8);
   float crossing = smoothstep(0.00030, 0.0, abs(elev - 0.0016))
                  * smoothstep(0.45, 0.9, fbm(vec2(azim * 1.3, 29.0)));
-  col += vec3(1.0, 0.72, 0.30) * crossing * dusk * 0.7 * (1.0 - storm * 0.8);
+  col += vec3(1.0, 0.72, 0.30) * crossing * lightsOn * 0.7 * (1.0 - storm * 0.8);
 
   col = mix(col, haze * 0.55, smoothstep(0.0, -0.22, d.y));
 

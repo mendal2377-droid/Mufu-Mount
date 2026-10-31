@@ -38,6 +38,11 @@ const state = {
   overview: false,
   photoMode: false,
   weather: "morning",
+  // The clock (hours, 0-24), the sky (clear, rain, snow) and the season. The weather moods are
+  // presets of these; dawn, golden hour and night follow from where the sun is.
+  hour: 9.5,
+  sky: "clear",
+  season: "autumn",
   quality: "cinematic",
   route: 2,
   place: 0,
@@ -120,16 +125,23 @@ let renderer,
   forest,
   returnPose,
   geometryBytes = 0;
-const weather = { dawn: 0, sunset: 0, storm: 0, snow: 0 };
+const weather = { dawn: 0, sunset: 0, storm: 0, snow: 0, night: 0 };
 // One sun for everything. The sky draws its disc here, the water lays its
 // glitter path along it, and the directional light casts from it.
 const sunDirection = new THREE.Vector3(-0.8, 0.55, -0.6).normalize();
+const clockSun = new THREE.Vector3();
 const u = {
   time: { value: 0 },
   dawn: { value: 0 },
   sunset: { value: 0 },
   storm: { value: 0 },
   snow: { value: 0 },
+  night: { value: 0 },
+  // The season as a number round the year: 0 spring, 1 summer, 2 autumn, 3 winter (4 = spring again).
+  season: { value: 2 },
+  // Share of windows lit (0-1) and shops open (0-1), from the clock: see windowShare().
+  litShare: { value: 0 },
+  shopsOpen: { value: 0 },
   flash: { value: 0 },
   planView: { value: 0 },
   uSunDir: { value: sunDirection },
@@ -189,6 +201,14 @@ const GRADES = {
     bloom: 0.22,
     exposure: 0.86,
   },
+  night: {
+    lift: [0.004, 0.008, 0.024],
+    gain: [0.86, 0.92, 1.08],
+    saturation: 0.92,
+    contrast: 1.12,
+    bloom: 0.9,
+    exposure: 0.82,
+  },
   snow: {
     lift: [0.03, 0.033, 0.038],
     gain: [0.99, 1.0, 1.03],
@@ -204,7 +224,57 @@ const WEATHER_LABEL = {
   sunset: "GOLDEN HOUR",
   storm: "A STORM PASSES",
   snow: "WINTER STILLNESS",
+  night: "NIGHT",
 };
+
+// --- the clock ---------------------------------------------------------------
+// Sunrise and sunset in Nanjing by season (hours), and the sun's noon height (degrees).
+const SEASON_SUN = { spring: [5.9, 18.4, 58], summer: [5.1, 19.1, 80], autumn: [6.4, 17.4, 44], winter: [7.0, 17.2, 34] };
+const MOOD_CLOCK = { dawn: [6.3, "clear"], morning: [9.5, "clear"], sunset: [17.1, "clear"], night: [21.5, "clear"], storm: [14.0, "rain"], snow: [11.0, "snow"] };
+const ramp = (x, a, b) => THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
+// How much of each light the clock asks for: dawn and golden hour around the sun's low points,
+// night once it is well down; rain and snow from the sky.
+function clockTargets() {
+  const [rise, set] = SEASON_SUN[state.season] || SEASON_SUN.autumn, h = state.hour;
+  const dawn = Math.min(ramp(h, rise - 1.0, rise + 0.2), 1 - ramp(h, rise + 0.4, rise + 1.7));
+  const sunset = Math.min(ramp(h, set - 1.9, set - 0.4), 1 - ramp(h, set + 0.1, set + 0.9));
+  const night = Math.max(1 - ramp(h, rise - 1.3, rise - 0.2), ramp(h, set + 0.2, set + 1.3));
+  const sum = Math.max(1, dawn + sunset + night);
+  return { dawn: dawn / sum, sunset: sunset / sum, night: night / sum, storm: state.sky === "rain" ? 1 : 0, snow: state.sky === "snow" ? 1 : 0 };
+}
+// The sun from the clock: east at sunrise, south at noon, west at sunset (x east, z south).
+// Below the horizon the light becomes the moon's, high in the south-east.
+function sunForClock(out) {
+  const [rise, set, top] = SEASON_SUN[state.season] || SEASON_SUN.autumn;
+  const f = (state.hour - rise) / (set - rise);
+  if (f <= 0 || f >= 1) return out.set(0.45, 0.62, 0.64).normalize();
+  const az = THREE.MathUtils.degToRad(90 + 180 * f), el = THREE.MathUtils.degToRad(Math.max(2, top * Math.sin(Math.PI * f)));
+  return out.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
+}
+// How many windows are lit at this hour: none by day, most at dusk, then going dark one by one
+// through the night. Shops close at ten.
+function windowShare() {
+  const [rise, set] = SEASON_SUN[state.season] || SEASON_SUN.autumn, h = state.hour;
+  const evening = ramp(h, set - 0.6, set + 1.4) * 0.42;
+  const late = h >= 12 ? THREE.MathUtils.lerp(0.42, 0.26, ramp(h, 21.5, 23.5)) : THREE.MathUtils.lerp(0.10, 0.04, ramp(h, 1.5, 4));
+  const small = h < 12 ? THREE.MathUtils.lerp(0.30, 0.10, ramp(h, 0, 1.5)) : 1;
+  const morning = h < 12 ? 1 - ramp(h, rise - 0.5, rise + 0.7) : 1;
+  const share = h >= 12 ? Math.min(evening, late) : Math.min(h < 1.5 ? small : late, morning * 0.2 + (h < rise ? 1 : 0));
+  return { share: Math.max(0, share), shops: h >= 12 ? Math.min(ramp(h, set - 1.0, set + 0.2), 1 - ramp(h, 21.7, 22.3)) : 0 };
+}
+function setClock(hour, { sky = state.sky, season = state.season } = {}) {
+  state.hour = ((hour % 24) + 24) % 24;
+  state.sky = sky;
+  state.season = season;
+  const h = $("#walk-hour");
+  if (h) h.value = String(state.hour);
+  // The mood menu follows the clock, so it never says "Morning" at nine at night.
+  const [rise, set] = SEASON_SUN[state.season] || SEASON_SUN.autumn, x = state.hour;
+  const mood = state.sky === "rain" ? "storm" : state.sky === "snow" ? "snow"
+    : x < rise - 0.5 || x > set + 0.8 ? "night" : x < rise + 1.5 ? "dawn" : x > set - 1.8 ? "sunset" : "morning";
+  const w = $("#walk-weather");
+  if (w && w.value !== mood) w.value = mood;
+}
 
 function toast(text) {
   $("#toast").textContent = text;
@@ -728,6 +798,7 @@ async function load() {
       toggleKite,
       kite,
       setWeather,
+      setClock,
       startTour,
       endTour,
       cinematic: () => cinematic,
@@ -993,15 +1064,16 @@ function stopWalks() {
 // --- weather ----------------------------------------------------------------
 
 function setWeather(name) {
-  if (!["dawn", "morning", "sunset", "storm", "snow"].includes(name)) return;
+  if (!["dawn", "morning", "sunset", "storm", "snow", "night"].includes(name)) return;
   state.weather = name;
+  setClock(MOOD_CLOCK[name][0], { sky: MOOD_CLOCK[name][1] });
   $("#walk-weather").value = name;
   document
     .querySelectorAll("[data-weather]")
     .forEach((b) => b.classList.toggle("active", b.dataset.weather === name));
   $("#weather-label").textContent = WEATHER_LABEL[name];
   const planWeather = {
-    dawn: "✦ Dawn", morning: "☀ Morning", sunset: "◒ Sunset", storm: "ϟ Storm", snow: "❄ Snow",
+    dawn: "✦ Dawn", morning: "☀ Morning", sunset: "◒ Sunset", storm: "ϟ Storm", snow: "❄ Snow", night: "☾ Night",
   }[name];
   $("#plan-weather").textContent = planWeather;
   $("#city-weather").textContent = planWeather;
@@ -1014,6 +1086,7 @@ function setWeather(name) {
         sunset: "Stay a while. Watch the light turn gold.",
         storm: "Rain on the path. Thunder across the river.",
         snow: "The forest becomes a little quieter.",
+        night: "The lamps come on, one street after another.",
       }[name],
     );
 }
@@ -1277,13 +1350,14 @@ const direction = new THREE.Vector3(),
   };
 
 function updateGrade(dt) {
-  const clear = 1 - weather.dawn - weather.sunset - weather.storm - weather.snow;
+  const clear = 1 - weather.dawn - weather.sunset - weather.storm - weather.snow - weather.night;
   const mix = {
     morning: Math.max(0, clear),
     dawn: weather.dawn,
     sunset: weather.sunset,
     storm: weather.storm,
     snow: weather.snow,
+    night: weather.night,
   };
   let total = 0;
   grade.lift.set(0, 0, 0);
@@ -1329,13 +1403,22 @@ function updateGrade(dt) {
 function updateSunPosition() {
   // The memory walk carries its own clock; otherwise the sky sits at the
   // hour the mood implies.
-  const minutes = state.memoryWalk
-    ? THREE.MathUtils.lerp(WALK_START_MINUTES, WALK_END_MINUTES, walkTimeBlend)
-    : THREE.MathUtils.lerp(WALK_END_MINUTES + 94, WALK_START_MINUTES, weather.dawn);
-  const displayMinutes = Math.round(THREE.MathUtils.lerp(minutes, 18 * 60 + 15, weather.sunset));
-  $("#scene-time").textContent = `${String(Math.floor(displayMinutes / 60)).padStart(2,"0")}:${String(displayMinutes % 60).padStart(2,"0")}`;
-  sunDirectionForMinutes(minutes, sunDirection);
-  sunDirection.lerp(sunsetDirection, weather.sunset).normalize();
+  // The memory walk carries the morning it happened in, and the Mufu walk keeps its art-directed
+  // sun (its sunset over the river was tuned by hand). Nanjing follows the clock.
+  if (state.memoryWalk || !city?.active) {
+    const minutes = state.memoryWalk
+      ? THREE.MathUtils.lerp(WALK_START_MINUTES, WALK_END_MINUTES, walkTimeBlend)
+      : THREE.MathUtils.lerp(WALK_END_MINUTES + 94, WALK_START_MINUTES, weather.dawn);
+    const displayMinutes = Math.round(THREE.MathUtils.lerp(minutes, 18 * 60 + 15, weather.sunset));
+    $("#scene-time").textContent = `${String(Math.floor(displayMinutes / 60)).padStart(2,"0")}:${String(displayMinutes % 60).padStart(2,"0")}`;
+    sunDirectionForMinutes(minutes, sunDirection);
+    sunDirection.lerp(sunsetDirection, weather.sunset).normalize();
+  } else {
+    const minutes = Math.round(state.hour * 60);
+    $("#scene-time").textContent = `${String(Math.floor(minutes / 60) % 24).padStart(2,"0")}:${String(minutes % 60).padStart(2,"0")}`;
+    // Eased, so a jump on the slider swings the sun across rather than snapping it.
+    sunDirection.lerp(sunForClock(clockSun), 0.08).normalize();
+  }
 
   // Where the 70 km water plane ends for this eye height. The far bank is
   // drawn just above it, so it has to move as you climb the mountain.
@@ -1416,13 +1499,17 @@ function frame(elapsed) {
 
   feel.unapply();
 
-  for (const key of ["dawn", "sunset", "storm", "snow"]) {
-    weather[key] = THREE.MathUtils.damp(
-      weather[key],
-      state.weather === key ? 1 : 0,
-      0.75,
-      weatherDt,
-    );
+  const target = clockTargets(), lights = windowShare();
+  u.litShare.value = THREE.MathUtils.damp(u.litShare.value, lights.share, 2, weatherDt);
+  u.shopsOpen.value = THREE.MathUtils.damp(u.shopsOpen.value, lights.shops, 2, weatherDt);
+  // Ease to the chosen season the short way round the year (winter to spring, not back via summer).
+  const want = { spring: 0, summer: 1, autumn: 2, winter: 3 }[state.season] ?? 2;
+  let gap = want - (u.season.value % 4);
+  if (gap > 2) gap -= 4;
+  if (gap < -2) gap += 4;
+  u.season.value = (((u.season.value + gap * (1 - Math.exp(-weatherDt * 0.9))) % 4) + 4) % 4;
+  for (const key of ["dawn", "sunset", "storm", "snow", "night"]) {
+    weather[key] = THREE.MathUtils.damp(weather[key], target[key], 0.75, weatherDt);
     u[key].value = weather[key];
   }
 
@@ -1703,6 +1790,9 @@ $("#menu-kite").onclick = toggleKite;
 $("#menu-map").onclick = () => { $("#info").close(); showPlan(); };
 $("#menu-sound").onclick = () => $("#sound").click();
 $("#walk-weather").onchange = e => { setWeather(e.target.value); e.target.blur(); };
+// The hour slider moves only the clock: the light, the lamps and the windows follow it.
+$("#walk-hour").oninput = e => setClock(Number(e.target.value));
+$("#walk-season").onchange = e => { setClock(state.hour, { season: e.target.value }); e.target.blur(); };
 $("#walk-menu").onclick = () => city?.active ? city.menu() : $("#help").click();
 $("#album-photos").append($("#memory-strip"));
 // Keep tours, photos and destinations available without covering the view.

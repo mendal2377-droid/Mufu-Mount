@@ -29,6 +29,12 @@ try {
   await page.evaluate((p) => { window.__mufu.paused = true; window.__mufu.city.enter(p); }, pin);
   // MUFU_WEATHER=sunset|morning|dawn: the light to judge in (the pins pick their own on arrival).
   if (process.env.MUFU_WEATHER) await page.evaluate((w) => window.__mufu.setWeather(w), process.env.MUFU_WEATHER);
+  // MUFU_HOUR=21.5: set the clock instead (the light eases there over a few simulated seconds).
+  if (process.env.MUFU_HOUR || process.env.MUFU_SEASON) await page.evaluate(([h, season]) => {
+    const m = window.__mufu;
+    m.setClock(h ? Number(h) : m.state.hour, season ? { season } : {});
+    m.step(60, 0.5);
+  }, [process.env.MUFU_HOUR, process.env.MUFU_SEASON]);
   await page.waitForFunction((w) => window.__mufu.city.world?.id === w, world, { timeout: 600000 });
   for (const spawn of spawnList.split(";")) {
     const info = await page.evaluate((s) => {
