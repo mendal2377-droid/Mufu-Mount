@@ -90,8 +90,11 @@ class Mask:
                 for a, b in zip(xs[0::2], xs[1::2]):
                     ia = max(0, int(math.ceil((a - self.x0) / cell)))
                     ib = min(self.nx - 1, int((b - self.x0) / cell))
+                    # Set, not toggle: spans of one polygon never overlap, but different polygons do
+                    # (every road junction, both carriageways), and XOR cancelled them into holes
+                    # that infill and trees then filled (found by tests/road-audit.py).
                     if ib >= ia:
-                        self.m[j, ia:ib + 1] ^= True
+                        self.m[j, ia:ib + 1] = True
 
     def at(self, x, y):
         i, j = int(round((x - self.x0) / self.cell)), int(round((y - self.y0) / self.cell))

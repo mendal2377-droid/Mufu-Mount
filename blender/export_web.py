@@ -342,7 +342,8 @@ def main():
         'zh': cfg['zh'],
         'axes': 'three.js: x = east, y = up, z = south (Blender x, z, -y); metres',
         # Grid in three.js terms: column i -> x = x0 + (i + .5) * cell, row j -> z = -(y0 + (j + .5) * cell).
-        'walk': {'cell': CELL, 'noWalk': NO_WALK, 'grids': grids, 'walkableCells': walk_count, 'water': has_water},
+        'walk': {'cell': CELL, 'noWalk': NO_WALK, 'grids': grids, 'walkableCells': walk_count, 'water': has_water,
+                 'roads': any(v != NO_WALK and v & 1 for v in heights)},      # odd centimetres mark roads
         'labels': cfg.get('labels', {}),
         'origin_wgs84': list(bpy.context.scene.get('origin_wgs84', [])),
         'base_z': bpy.context.scene.get('base_z'),

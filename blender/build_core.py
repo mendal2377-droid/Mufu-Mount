@@ -163,8 +163,9 @@ def build_buildings(coll, skip, over):
     n = tris = 0
     for b in F['buildings']:
         t = b['tags']
-        # Underground buildings (metro stations, layer < 0) stood on Zhongshan Road's carriageway.
-        if (num(t.get('layer')) or 0) < 0:
+        # Underground buildings (metro stations, layer < 0) stood on Zhongshan Road's carriageway;
+        # construction sites are plots, not buildings, and several are mapped over roads.
+        if (num(t.get('layer')) or 0) < 0 or t.get('building') == 'construction':
             continue
         pts = b['pts'][:-1] if b['pts'][0] == b['pts'][-1] else list(b['pts'])
         if len(pts) < 3:
@@ -447,8 +448,10 @@ def main():
     # Each lake and river at its own level: the lowest DSM round its shore (the Yangtze is metres
     # below Xuanwu Lake).
     for k, w in enumerate(lakes):
-        z = min(A.dsm_at(x, y) for x, y in w[::max(1, len(w) // 400)])
-        ac.polygon_mesh(f'Water {k}', c['Water'], [w], z + 0.3, 'water')
+        # From the bare ground on the banks, not the surface model: its minimum caught roofs and
+        # trees and floated one surface 8 m up, over Jiefang South Road (tests/road-audit.py).
+        z = min(A.bare_at(x, y) for x, y in w[::max(1, len(w) // 400)])
+        ac.polygon_mesh(f'Water {k}', c['Water'], [w], z - 0.4, 'water')
     ac.polygon_mesh('Pitches', c['Ground'], pitches, 0.0, 'pitch')
     for o in c['Ground'].objects:
         if o.name.startswith('Pitches'):
