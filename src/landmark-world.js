@@ -690,6 +690,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
 
   const world = {
     id, meta, scene, sky, seats, staticTriangles, treeTriangles, traveller,
+    overview: false,     // set while this world is the home page's aerial view
     spawn(name = 'axis') {
       const s = meta.spawns[name] || Object.values(meta.spawns)[0];
       const h = surface(s.position[0], s.position[2]) ?? s.position[1];
@@ -881,7 +882,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       scene.fog.color.setRGB(.66 + weather.sunset * .26 - weather.storm * .30, .80 - weather.sunset * .2 - weather.storm * .36, .93 - weather.sunset * .32 - weather.storm * .40);
       // Per-world haze: the lake needs a kilometre of view, the forest slice much less.
       const haze = meta.fog ?? .0011;
-      scene.fog.density = (mode === 'glide' ? haze * .45 : haze) + weather.storm * .004 + weather.snow * .003;
+      // From the home page's height the street haze would bury the city: a fifth of it up there.
+      scene.fog.density = (world.overview ? haze * .2 : mode === 'glide' ? haze * .45 : haze) + weather.storm * .004 + weather.snow * .003;
       sky.position.copy(camera.position);
       hazeColor.value.copy(scene.fog.color);
       worldRain.position.copy(camera.position); worldSnow.position.copy(camera.position);

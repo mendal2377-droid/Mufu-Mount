@@ -1339,3 +1339,6 @@ body.flying #game-lanterns { opacity: .35; }
   #seal-moment.show .seal-stamp { animation: none; transform: rotate(-6deg); opacity: 1; }
   #fact-card { transition: none; }
 }
+
+/* Home over Tiny Nanjing: places beyond the map stand at its edge with their distance. */
+.city-pin.edge .city-label::after { content: " → " attr(data-km); font-size: 9px; opacity: .75; }

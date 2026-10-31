@@ -91,6 +91,31 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // Tiny Nanjing, the continuous city from Xinjiekou to the Yangtze (pilot): in at Gulou below Zifeng.
     zifeng:{world:'core',spawn:'gulou',weather:'sunset'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
+  // The home page opens on Tiny Nanjing (the 'core' world) seen from the air, once it has loaded;
+  // until then, and if it fails, the illustrated atlas stands in. Pins sit on their true positions.
+  let home=null,homeLoad=null;
+  const HOME_RADIUS=10500;           // pins further out stand at the edge, pointing the way
+  function homePosition(p,w){
+    const [olat,olon]=w.meta.origin_wgs84,[lon,lat]=p.coord;
+    let x=(lon-olon)*111320*Math.cos(olat*Math.PI/180),y=(lat-olat)*110574;
+    const d=Math.hypot(x,y),edge=d>HOME_RADIUS;
+    if(edge){x*=HOME_RADIUS/d;y*=HOME_RADIUS/d;}
+    return {position:[x,(w.ground(x,-y)??(edge?40:25))+30,-y],edge,km:Math.round(d/1000)};
+  }
+  function showHome(w){
+    if(!state.overview||world)return;
+    home=w;w.overview=true;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);w.traveller.root.visible=false;
+    for(const r of records){const h=homePosition(r.p,w);r.home=h.position;r.pin.classList.toggle('edge',h.edge);
+      r.pin.querySelector('.city-label').dataset.km=h.edge?`${h.km} km`:'';}
+    orbit.enableDamping=false;
+    camera.position.set(-2200,1250,600);orbit.target.set(-400,0,-2600);
+    camera.fov=38;camera.near=20;camera.far=120000;camera.updateProjectionMatrix();
+    polar=orbit.maxPolarAngle;
+    orbit.minDistance=250;orbit.maxDistance=14000;orbit.maxPolarAngle=1.35;orbit.update();orbit.enableDamping=true;updatePins();
+  }
+  let polar=Math.PI;
+  function leaveHome(){if(!home)return;home.overview=false;home.scene.remove(camera);scene.add(camera);postfx.setScene(scene);orbit.maxPolarAngle=polar;
+    for(const r of records){r.home=null;r.pin.classList.remove('edge');}home=null;}
   const music=audio?createMusic(audio):null;
   function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
   async function enterWorld(p,opts){
@@ -188,7 +213,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     orbit.minDistance=180;orbit.maxDistance=7000;orbit.update();orbit.enableDamping=true;updatePins();
   }
   function updatePins(){camera.updateMatrixWorld();let prior=[];
-    records.forEach(({p,pin})=>{const a=projectPin(p.position,camera,innerWidth,innerHeight);
+    records.forEach(({p,pin,home:h})=>{const a=projectPin(home&&h?h:p.position,camera,innerWidth,innerHeight);
       pin.hidden=!a.visible;pin.style.left=`${a.x}px`;pin.style.top=`${a.y}px`;
       pin.classList.toggle('compact',prior.some(b=>Math.abs(b.x-a.x)<100&&Math.abs(b.y-a.y)<66));if(a.visible)prior.push(a);});}
   const boats=[];
@@ -297,13 +322,15 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       camera.position.fromArray(pose.position);camera.lookAt(...pose.look);camera.rotation.z=0;
       state.overview=false;flying(true);keys.clear();},
     get active(){return active;},get scope(){return scope;},get selected(){return selected;},
-    showPlan(){arrival=null;gameView.cancelRun();exitWorld();useScene();scope='central';flying(false);state.playing=false;state.overview=true;state.moving=false;state.photoMode=false;
+    showPlan(){arrival=null;gameView.cancelRun();exitWorld();leaveHome();useScene();scope='central';flying(false);state.playing=false;state.overview=true;state.moving=false;state.photoMode=false;
       orbit.enabled=true;document.body.classList.remove('playing','photo-mode','locked');document.body.classList.add('plan-mode');
       $('#nanjing-home').hidden=false;$('#walk-environment').hidden=true;$('#walk-menu').hidden=true;$('#walk-places').hidden=true;$('#back-to-plan').hidden=true;
-      $('#city-scope').value=scope;frameMap();},
+      $('#city-scope').value=scope;frameMap();
+      homeLoad||=(worlds.core||=loadLandmarkWorld('core',{shared,skyShared,bands,rain,snow}).catch(e=>{delete worlds.core;homeLoad=null;throw e;}));
+      homeLoad.then(showHome).catch(e=>console.warn('home city',e));},
     // `drop` plays the descent onto the avenue. Pins and menus ask for it;
     // programmatic entry (tests, the debug API) stays instant and deterministic.
-    enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');
+    enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');leaveHome();
       if(id==='mufu'){api.leave();onMufu();return;}
       exitWorld();useScene();reset();clearOrbitMotion(orbit);selected=p;currentRoute=p.route;flying(false);gameView.cancelRun();arrival=null;
       const mood=WORLDS[id]?.weather||p.vista?.weather;
@@ -352,6 +379,11 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
           camera.position.fromArray(pos);camera.lookAt(...arrival.look);camera.rotation.z=0;}
         state.moving=false;return false;
       }
+      if(state.overview&&home){
+        // Home over Tiny Nanjing: the city's own sun, trees and haze, seen from the orbit camera.
+        home.frame(dt,t,weather,cityDirection,camera);home.traveller.root.visible=false;orbit.update();
+        camera.near=Math.max(5,camera.position.distanceTo(orbit.target)*.02);camera.updateProjectionMatrix();
+        updatePins();state.moving=false;return false;}
       if(state.overview){orbit.update();
         // Depth precision follows atlas zoom: lakes and land are close layers,
         // even when the whole municipality is thousands of units from the eye.
@@ -400,7 +432,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       const [lx,ly,lz]=seat.look,dx=lx-seat.position[0],dz=lz-seat.position[2];
       camera.rotation.set(-.06,Math.atan2(-dx,-dz),0,'YXZ');
       toast('Sitting · listen · watch the birds · move to stand');},
-    get world(){return world;},
+    get world(){return world;},get home(){return home;},
     // Pins that open a Blender world instead of an atlas walk (tests skip the atlas checks for them).
     get worldPins(){return Object.keys(WORLDS);},
     // V: third person (the traveller and the magpie in view) or first person.

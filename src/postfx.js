@@ -138,7 +138,7 @@ const GradeShader = {
     // Tilt-shift: seen from above, the city blurs away from a sharp band a little below the
     // middle, so it reads as a model on a table (the Tiny Warsaw look). Twelve taps on a spiral.
     if (uTilt > 0.001) {
-      float r = uTilt * smoothstep(0.06, 0.42, abs(vUv.y - 0.46)) * 7.0;
+      float r = uTilt * smoothstep(0.14, 0.5, abs(vUv.y - 0.5)) * 4.5;
       if (r > 0.25) {
         vec3 sum = col;
         for (int i = 1; i <= 12; i++) {

@@ -1436,7 +1436,7 @@ function frame(elapsed) {
     grade.uVignette.value=.18;grade.uGrain.value=.15;grade.uAberration.value=0;
     // Tiny Nanjing: tilt-shift grows with the camera's height above the streets, and ambient
     // occlusion (when the tier has it) settles the blocks into the ground.
-    const w=city.world,core=w?.id==='core';
+    const w=city.world||city.home,core=w?.id==='core';
     const above=core?camera.position.y-(w.ground(camera.position.x,camera.position.z)??w.body.y):0;
     grade.uTilt.value=core?THREE.MathUtils.smoothstep(above,45,220):0;
     postfx.atmosphere.uniforms.uShafts.value=0;
