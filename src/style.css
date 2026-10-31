@@ -434,15 +434,18 @@ select {
 .resume[hidden] {
   display: none;
 }
+/* Captions sit low and quiet at the bottom, so they never cover the view (the owner's ask). */
 #toast {
   position: fixed;
-  top: 100px;
+  bottom: 30px;
   left: 50%;
-  transform: translate(-50%, -15px);
-  padding: 13px 24px;
+  transform: translate(-50%, 10px);
+  padding: 8px 18px;
   border-radius: 30px;
-  background: #e4edc8;
-  color: #183829;
+  background: #10201a40;
+  backdrop-filter: blur(6px);
+  color: #fffbeaE6;
+  text-shadow: 0 1px 3px #0008;
   font-size: 12px;
   opacity: 0;
   pointer-events: none;
@@ -964,7 +967,7 @@ body.focus-mode .memory-rail {
     font-size: 29px;
   }
   #toast {
-    top: 80px;
+    bottom: 24px;
     font-size: 10px;
   }
   .welcome-foot {
@@ -1236,7 +1239,7 @@ body.plan-mode:not(.city-mode) #nanjing-return { display: block !important; }
   #walk-environment { top: 16px; left: 16px; padding: 10px 13px; }
   .quiet-actions { right: 16px; bottom: 20px; }
   body.playing #touch-controls { left: 16px; bottom: 20px; }
-  #toast { top: 74px; width: max-content; font-size: 11px; }
+  #toast { bottom: 96px; width: max-content; font-size: 11px; }
 }
 
 
