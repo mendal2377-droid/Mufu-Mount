@@ -274,6 +274,8 @@ function setClock(hour, { sky = state.sky, season = state.season } = {}) {
     : x < rise - 0.5 || x > set + 0.8 ? "night" : x < rise + 1.5 ? "dawn" : x > set - 1.8 ? "sunset" : "morning";
   const w = $("#walk-weather");
   if (w && w.value !== mood) w.value = mood;
+  const sn = $("#walk-season");
+  if (sn && sn.value !== state.season) sn.value = state.season;
 }
 
 function toast(text) {
