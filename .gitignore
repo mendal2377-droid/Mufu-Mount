@@ -19,3 +19,6 @@ public/scenes/*/*.raw.glb
 
 # Uncompressed skyline export
 public/scenes/skyline/*.raw.glb
+
+# Overpass bands merged into osm-core.json by hand (see research/core); reproducible, large.
+research/core/data/osm-core-*.json

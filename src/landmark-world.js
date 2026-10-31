@@ -186,6 +186,11 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const mat = new THREE.MeshToonMaterial({color: src.color.clone(), gradientMap: bands, side: THREE.FrontSide});
     mat.name = name;
     if (far) mat.fog = false;
+    // Tiny Nanjing: buildings carry their colours in the vertices and wall UVs in metres (along,
+    // up); roads carry metres (along, across). Shaders below draw windows and lanes from those.
+    const facade = name === 'facade', road = name === 'road_city';
+    if (facade || name === 'roof_city') mat.vertexColors = true;
+    if (facade || road) mat.defines = {...mat.defines, USE_UV: ''};
     if (name === 'water') { mat.color.multiplyScalar(1.05); mat.emissive = new THREE.Color(0x0b2f3a); }
     // Lanterns and lit windows glow; the bloom pass turns them into soft lights at dusk.
     if (name === 'lantern') { mat.emissive = new THREE.Color(0xe8473a); mat.emissiveIntensity = .9; }
@@ -201,9 +206,11 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.worldWindows = {value: style.windows || 0};
       s.uniforms.citySunset = shared.sunset || {value: 0}; s.uniforms.cityDawn = shared.dawn || {value: 0};
       s.uniforms.worldFar = {value: far ? 1 : 0}; s.uniforms.hazeColor = hazeColor;
+      s.uniforms.worldFacade = {value: facade ? 1 : 0}; s.uniforms.worldRoad = {value: road ? 1 : 0};
+      s.uniforms.skyClip = {value: new THREE.Vector4(...(meta.skyline_clip || [1, -1, 1, -1]))};
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar;uniform vec3 hazeColor;varying vec3 vWorldPos;varying float vUp;\n' +
+      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad;uniform vec3 hazeColor;uniform vec4 skyClip;varying vec3 vWorldPos;varying float vUp;\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -239,14 +246,55 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             // or far towers become specks of light floating in the sky.
             float dist=length(vViewPosition);
             winLit=step(.8,lwHash(floor(cell)))*side*(1.-frame)*(1.-smoothstep(500.,1800.,dist))*(1.-smoothstep(.35,1.,fw2));
-          }`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          }
+          // The skyline's towers inside the city core are drawn by the city itself.
+          if(worldFar>.5&&vWorldPos.x>skyClip.x&&vWorldPos.x<skyClip.y&&vWorldPos.z>skyClip.z&&vWorldPos.z<skyClip.w)discard;
+          #ifdef USE_UV
+          if(worldFacade>.5){
+            // Façades: floors, windows and shop fronts from wall metres. Vertex alpha is the style:
+            // 0 flats, .35 office glass, .7 old low houses, 1 blank. Far away the pattern fades to
+            // its average so it never shimmers.
+            #ifdef USE_COLOR_ALPHA
+            float st=vColor.a;
+            #else
+            float st=0.;
+            #endif
+            diffuseColor.a=1.;
+            float h=vUv.y,u=vUv.x;
+            if(h>=0.&&st<.9){
+              float fh=st>.6?3.0:3.3, sp=st>.6?3.6:st>.3?1.6:3.2;
+              float fv=fract(h/fh), fu=fract(u/sp);
+              float ww=st>.6?.32:st>.3?.9:.46, wb=st>.6?.36:st>.3?.12:.3, wt=st>.6?.74:st>.3?.92:.78;
+              float win=step(abs(fu-.5),ww*.5)*step(wb,fv)*step(fv,wt);
+              bool shop=h<4.2&&st<.6;
+              if(shop){float su=fract(u/4.6);win=step(abs(su-.5),.4)*step(.12,h/4.2)*step(h/4.2,.86);}
+              float fw=max(fwidth(u/sp),fwidth(h/fh));
+              float k=1.-smoothstep(.25,.7,fw);
+              vec3 glass=mix(vec3(.16,.22,.27),vec3(.42,.52,.6),.35+.3*lwHash(vec2(floor(u/sp),floor(h/fh))));
+              if(shop)glass=vec3(.28,.24,.2);
+              diffuseColor.rgb=mix(diffuseColor.rgb,mix(diffuseColor.rgb*.78,glass,win),k);
+              diffuseColor.rgb*=1.-(1.-smoothstep(0.,.08,fv))*.12*k*(st>.6?0.:1.);
+              float lit=(shop?1.:step(.62,lwHash(vec2(floor(u/sp)+3.,floor(h/fh)))))*win*k;
+              winLit=max(winLit,lit*(1.-smoothstep(400.,1400.,length(vViewPosition))));
+            }
+          }
+          if(worldRoad>.5){
+            // Lanes: a double centre line, dashed lane lines every 3.5 m, faded where they alias.
+            float v=abs(vUv.y),u=vUv.x;
+            float fw=max(fwidth(v),fwidth(u)*.1), k=1.-smoothstep(.15,.5,fw);
+            float centre=step(.08,v)*step(v,.22);
+            float lane=step(abs(fract(v/3.5+.5)-.5)*3.5,.07)*step(1.,v)*step(fract(u/9.),.45);
+            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.72,.3),centre*k);
+            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.88,.84),lane*k*.9);
+          }
+          #endif`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           // At dusk and dawn a third of the windows glow warm.
-          totalEmissiveRadiance+=winLit*worldWindows*clamp(citySunset+cityDawn,0.,1.)*vec3(1.,.74,.42)*.9;`)
+          totalEmissiveRadiance+=winLit*max(worldWindows,worldFacade)*clamp(citySunset+cityDawn,0.,1.)*vec3(1.,.74,.42)*.9;`)
         .replace('#include <dithering_fragment>', `#include <dithering_fragment>
           // Skyline haze: towers fade toward the sky colour with distance, never to nothing.
           if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.45);}`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v7';
+    mat.customProgramCacheKey = () => 'landmark-paint-v8' + (facade ? 'f' : road ? 'r' : '');
     cache.set(name, mat);
     return mat;
   }

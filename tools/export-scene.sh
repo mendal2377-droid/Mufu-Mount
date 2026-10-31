@@ -8,5 +8,6 @@ flag=--no-render; [ "$1" = "--render" ] && flag=
 "$B" -b art-src/$id.blend --python blender/export_web.py -- $id 2>&1 | grep -E "EXPORTED|Error|Traceback|line "
 # --join-meshes false: meshopt quantises positions over each mesh's bounds, and joining every
 # collection into one mesh let the bridge's 80 km far land coarsen the deck to metre steps.
+# --prune-attributes false: the city's façade and road shaders read UVs that no texture uses.
 npx gltf-transform optimize public/scenes/$id/static.raw.glb public/scenes/$id/static.glb \
-  --compress meshopt --texture-compress false --simplify false --palette false --join-meshes false 2>&1 | tail -1
+  --compress meshopt --texture-compress false --simplify false --palette false --join-meshes false --prune-attributes false 2>&1 | tail -1

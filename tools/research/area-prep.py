@@ -33,6 +33,9 @@ AREAS = {
                 'tile': ROOT / 'research' / 'niushou' / 'data' / 'cop30_N31_E118.tif'},
     # Origin: Qixia Temple (OSM way 1243073749); the relic pagoda and Thousand Buddha Cliff are just east.
     'qixia': {'bbox': (32.142, 118.938, 32.166, 118.970), 'origin': (32.15386, 118.95302)},
+    # Origin: Xinjiekou, the skyline's origin, so the city core and the shared skyline line up. The
+    # map runs north past Xuanwu Lake and Xiaguan to the Yangtze (the owner's ask).
+    'core': {'bbox': (32.028, 118.728, 32.118, 118.810), 'origin': (32.0418, 118.7838)},
     'bridge': {'bbox': (32.100, 118.722, 32.130, 118.758), 'origin': (32.1117707, 118.7461623)},
 }
 
@@ -125,18 +128,22 @@ def main(area):
         elif t.get('barrier') == 'city_wall' or t.get('historic') in ('citywalls', 'city_wall'):
             feats['wall'].append(rec)
         elif t.get('building') or t.get('building:part'):
-            feats['buildings'].append({**rec, 'tags': {k: t[k] for k in ('building', 'building:levels', 'height', 'amenity',
-                                                                        'historic', 'tourism', 'religion', 'roof:shape') if k in t}})
+            feats['buildings'].append({**rec, 'tags': {k: t[k] for k in ('building', 'building:part', 'building:levels', 'height',
+                                                                        'min_height', 'building:min_level', 'building:colour',
+                                                                        'roof:colour', 'roof:shape', 'roof:height', 'amenity',
+                                                                        'historic', 'tourism', 'religion', 'shop', 'layer') if k in t}})
         elif t.get('bridge') and t.get('highway'):
             feats['bridges'].append({**rec, 'tags': {k: t[k] for k in ('highway', 'bridge', 'layer') if k in t}})
         elif t.get('highway'):
-            feats['ways'].append({**rec, 'kind': t['highway']})
+            feats['ways'].append({**rec, 'kind': t['highway'], 'tags': {k: t[k] for k in ('lanes', 'width', 'bridge', 'tunnel', 'layer', 'oneway', 'name') if k in t}})
+        elif t.get('natural') == 'tree_row':
+            feats['ways'].append({**rec, 'kind': 'tree_row'})
         elif t.get('railway') in ('rail', 'light_rail', 'subway'):
             feats['ways'].append({**rec, 'kind': 'rail', 'tags': {k: t[k] for k in ('railway', 'bridge', 'tunnel', 'layer') if k in t}})
         elif t.get('place') == 'islet' or t.get('place') == 'island':
             feats['islands'].append(rec)
-        elif closed and (t.get('leisure') or t.get('landuse') or t.get('amenity') or t.get('tourism') or t.get('historic')):
-            feats['places'].append({'id': el['id'], 'name': name, 'tags': {k: t[k] for k in ('leisure', 'landuse', 'amenity', 'tourism', 'historic', 'religion') if k in t},
+        elif closed and (t.get('leisure') or t.get('landuse') or t.get('amenity') or t.get('tourism') or t.get('historic') or t.get('natural')):
+            feats['places'].append({'id': el['id'], 'name': name, 'tags': {k: t[k] for k in ('leisure', 'landuse', 'amenity', 'tourism', 'historic', 'religion', 'natural') if k in t},
                                     'pts': pts})
     (data / 'features.json').write_text(json.dumps(feats, ensure_ascii=False), encoding='utf-8')
     print(area, {k: len(v) for k, v in feats.items()}, 'extent', round(x0), round(x1), round(y0), round(y1))

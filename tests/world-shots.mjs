@@ -8,7 +8,7 @@ import { chromium } from "@playwright/test";
 import fs from "node:fs/promises";
 
 const [world = "zhongshan", spawnList = "axis", tag = "now"] = process.argv.slice(2);
-const pin = { north: "jiming", oldsouth: "qinhuai" }[world] || world;
+const pin = { north: "jiming", oldsouth: "qinhuai", core: "zifeng" }[world] || world;
 const args = process.env.MUFU_SWIFTSHADER
   ? ["--use-angle=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"]
   : ["--enable-gpu", "--ignore-gpu-blocklist", "--use-angle=d3d11"];

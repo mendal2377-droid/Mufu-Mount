@@ -35,7 +35,8 @@ SCENE_ID = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else 'zhongsha
 OUT = ROOT / 'public' / 'scenes' / SCENE_ID
 OUT.mkdir(parents=True, exist_ok=True)
 
-WALKABLE = {'paving', 'paving_joint', 'granite', 'granite_shade', 'lawn', 'forest_floor', 'boardwalk'}
+WALKABLE = {'paving', 'paving_joint', 'granite', 'granite_shade', 'lawn', 'forest_floor', 'boardwalk',
+            'road_city', 'sidewalk', 'city_paving', 'pitch'}
 NO_WALK = -32768
 CELL = 1.0
 TRUNK_RADIUS = 0.9
@@ -78,6 +79,20 @@ SETTINGS = {
                    'zichao': 'the Zichao Building'},
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap '
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
+    },
+    'core': {
+        'static': ('Ground', 'Water', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates'),
+        'uv': True,
+        # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
+        # the city is for riding and flying.
+        'grids': [{'name': 'centre', 'x0': -1480.0, 'x1': 2080.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 2.5},
+                  {'name': 'north', 'x0': -3600.0, 'x1': 2080.0, 'y0': 2200.0, 'y1': 6000.0, 'cell': 4.0}],
+        'title': 'Tiny Nanjing: from Xinjiekou to the Yangtze',
+        'zh': '新街口 · 中山路 · 总统府',
+        'fog': 0.00045,
+        'labels': {'xinjiekou': 'Xinjiekou', 'zhongshan': 'Zhongshan Road', 'palace': 'the Presidential Palace', 'gulou': 'Gulou'},
+        'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: '
+                      'OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none.',
     },
     'qixia': {
         'static': ('Ground', 'Water', 'Temple', 'Hill', 'City', 'Gates'),
@@ -269,7 +284,11 @@ def export_static(static):
     bpy.ops.export_scene.gltf(filepath=str(path), export_format='GLB', use_selection=True,
                               export_cameras=False, export_lights=False, export_animations=False,
                               export_materials='EXPORT', export_extras=False, export_yup=True,
-                              export_apply=True, export_normals=True, export_texcoords=False)
+                              export_apply=True, export_normals=True,
+                              # The city's façade and road shaders read UVs (metres along and up) and
+                              # vertex colours (wall and roof colour, window style); other worlds need neither.
+                              export_texcoords=SETTINGS[SCENE_ID].get('uv', False),
+                              export_vertex_color='ACTIVE' if SETTINGS[SCENE_ID].get('uv') else 'MATERIAL')
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in joined)
     return path, tris
 
@@ -312,6 +331,8 @@ def main():
         'origin_wgs84': list(bpy.context.scene.get('origin_wgs84', [])),
         'base_z': bpy.context.scene.get('base_z'),
         'fog': cfg.get('fog'),
+        # Skyline towers inside this rectangle are drawn by the world itself (three.js x, z ranges).
+        'skyline_clip': (lambda r: [r[0], r[1], -r[3], -r[2]] if r else None)(list(bpy.context.scene.get('skyline_clip', [])) or None),
         'spawns': named_points('Spawn'),
         'gates': gates,
         'bells': named_points('Bell'),
