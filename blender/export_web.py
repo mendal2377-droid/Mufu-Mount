@@ -173,7 +173,9 @@ def tree_records(trees):
     out = []
     for o in trees:
         kind = o.data.name.replace('proto ', '').replace(' ', '_')
-        out.append([kind, *to_three(o.location), round(o.rotation_euler.z, 3), round(o.scale.x, 3)])
+        # A decimetre is plenty for a tree or a lamp, and trims trees.json by a third.
+        x, y, z = to_three(o.location)
+        out.append([kind, round(x, 1), round(y, 1), round(z, 1), round(o.rotation_euler.z, 2), round(o.scale.x, 2)])
     return out
 
 

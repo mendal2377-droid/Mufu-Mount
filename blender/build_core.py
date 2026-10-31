@@ -83,6 +83,7 @@ NAMED = {'white': '#EEEBE4', 'grey': '#A9A9A4', 'gray': '#A9A9A4', 'red': '#B552
          'yellow': '#E2C76A', 'beige': '#D9C7A6', 'black': '#3A3A3A', 'green': '#6A9D37'}
 WALLS = ['#E8DFC8', '#EEEBE4', '#D5D2C8', '#D9C7A6', '#D8B69A', '#E6D59A', '#C9CDC8', '#E1CFB8']
 ROOFS = ['#B9B7AE', '#A9AAA3', '#C4C0B4', '#8FA0A6', '#9A9C96']
+INFILL_WALLS = ['#EEEBE4', '#E8E2D2', '#DEDBD2', '#E8DFC8', '#D5D2C8', '#E4D9C2', '#D9C7A6', '#EEEBE4']
 
 
 def colour(v, fallback):
@@ -251,9 +252,10 @@ def build_infill(coll, blocked, near_road, skip, mark):
             probe = pts + [(px, py)] + [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(pts, pts[1:] + pts[:1])]
             if any(blocked(qx, qy) or wet(qx, qy) or green_mask.at(qx, qy) for qx, qy in probe):
                 continue
-            floors = rnd.choice((6, 6, 7, 7, 7, 11, 18)) if rnd.random() < 0.85 else rnd.choice((24, 28, 32))
+            floors = rnd.choice((6, 6, 6, 7, 7, 7, 11, 18)) if rnd.random() < 0.93 else rnd.choice((24, 28, 32))
             h = floors * 3.0 + 1.2
-            wall = lin(WALLS[int(rnd.random() * len(WALLS))])
+            # Nanjing's compounds are mostly white, cream and pale grey; a few warm blocks between.
+            wall = lin(INFILL_WALLS[int(rnd.random() * len(INFILL_WALLS))])
             roof = lin(ROOFS[int(rnd.random() * len(ROOFS))] if h > 25 else rnd.choice(('#8FA0A6', '#A9AAA3', '#7E9AA8')))
             if extrude(bm, uv, col, pts, zground(px, py), 0.0, h, (*wall[:3], 0.0), (*roof[:3], 0.0)):
                 n += 1
