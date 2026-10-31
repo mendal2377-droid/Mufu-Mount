@@ -69,7 +69,8 @@ try{
   assert.equal(await page.evaluate(()=>window.__mufu.getStats().audioEnabled),true);
   await page.evaluate(()=>{window.__mufu.setWeather('morning');window.__mufu.step(14,.5);});
   await page.locator('#walk-menu').click();await page.locator('#city-map-return').click();
-  await page.locator('#city-scope').selectOption('central');await page.evaluate(()=>window.__mufu.step(2,.1));
+  // The single-option area menu is hidden now; show the central map directly.
+  await page.evaluate(()=>{window.__mufu.city.showPlan('central');window.__mufu.step(2,.1);});
   await page.screenshot({path:'test-results/nanjing-municipal.png',timeout:60000});
   await page.evaluate(()=>window.__mufu.city.enter('mufu'));assert.equal(await page.evaluate(()=>window.__mufu.city.active),false);
   assert.equal(await page.locator('.plan-card').isVisible(),true);assert.equal(await page.locator('.access-pin').count(),6);

@@ -163,6 +163,9 @@ def build_buildings(coll, skip, over):
     n = tris = 0
     for b in F['buildings']:
         t = b['tags']
+        # Underground buildings (metro stations, layer < 0) stood on Zhongshan Road's carriageway.
+        if (num(t.get('layer')) or 0) < 0:
+            continue
         pts = b['pts'][:-1] if b['pts'][0] == b['pts'][-1] else list(b['pts'])
         if len(pts) < 3:
             continue

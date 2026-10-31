@@ -22,7 +22,8 @@ try {
   await page.evaluate(() => { window.__mufu.paused = true; window.__mufu.city.enter("zifeng"); });
   await page.waitForFunction(() => window.__mufu.city.world?.id === "core", null, { timeout: 600000 });
 
-  // Bike: from the Zhongshan Road spawn, pedal for ten simulated seconds.
+  // Bike: from the Zhongshan Road spawn, pedal north for twenty simulated seconds. The road must
+  // be clear: a building across it once stopped the ride after 47 m.
   const before = await page.evaluate(() => {
     const m = window.__mufu, w = m.city.world;
     w.placeAt(w.spawn("zhongshan")); m.step(5, 0.05);
@@ -31,13 +32,13 @@ try {
   });
   assert.equal(before.vehicle, "bike");
   await page.keyboard.down("KeyW");
-  await page.evaluate(() => window.__mufu.step(200, 0.05));
+  await page.evaluate(() => window.__mufu.step(400, 0.05));
   await page.keyboard.up("KeyW");
   const rode = await page.evaluate(() => window.__mufu.city.world.body.toArray());
   const bikeDistance = Math.hypot(rode[0] - before.body[0], rode[2] - before.body[2]);
   await page.screenshot({ path: "test-results/shots/ways-bike.png" });
   console.log("bike", bikeDistance.toFixed(1), "m");
-  assert.ok(bikeDistance > 25, `the bike should cover ground (rode ${bikeDistance.toFixed(1)} m)`);
+  assert.ok(bikeDistance > 80, `the bike should ride up the road (rode ${bikeDistance.toFixed(1)} m)`);
 
   // Boat: from the shore of Xuanwu Lake (south-west of the Jiming spawn), row out.
   const boat = await page.evaluate(() => {

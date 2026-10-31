@@ -9,8 +9,11 @@ import {chromium} from '@playwright/test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 
-const PINS = [['zhongshan', 'zhongshan'], ['jiming', 'north'], ['qinhuai', 'oldsouth'], ['palace', 'palace'], ['bridge', 'bridge'], ['niushou', 'niushou'], ['qixia', 'qixia']];
-const browser = await chromium.launch({channel: 'chrome', headless: true, args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist']});
+const PINS = [['zhongshan', 'zhongshan'], ['jiming', 'north'], ['qinhuai', 'oldsouth'], ['palace', 'palace'], ['bridge', 'bridge'], ['niushou', 'niushou'], ['qixia', 'qixia'], ['zifeng', 'core']];
+// MUFU_GPU=1 uses the machine's GPU: software WebGL needs far longer than any timeout for the
+// city (1.3 M triangles) and all seven worlds.
+const browser = await chromium.launch({channel: 'chrome', headless: true, args: process.env.MUFU_GPU
+  ? ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11'] : ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist']});
 const errors = [], report = {};
 await fs.mkdir('test-results', {recursive: true});
 try {
