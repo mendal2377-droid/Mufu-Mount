@@ -254,7 +254,11 @@ def build_infill(coll, blocked, near_road, skip, mark):
             L, W = rnd.uniform(36, 58), rnd.uniform(11, 14)
             ca, sa = math.cos(ang), math.sin(ang)
             pts = [(px + ca * u - sa * v, py + sa * u + ca * v) for u, v in ((-L / 2, -W / 2), (L / 2, -W / 2), (L / 2, W / 2), (-L / 2, W / 2))]
-            probe = pts + [(px, py)] + [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(pts, pts[1:] + pts[:1])]
+            # Probe the whole footprint every 4 m: corner probes alone let a 57 m slab straddle an
+            # 11 m carriageway (one stood across Zhongshan Road).
+            probe = [(px + ca * u - sa * v, py + sa * u + ca * v)
+                     for u in [-L / 2 + k * 4.0 for k in range(int(L / 4) + 1)] + [L / 2]
+                     for v in (-W / 2, 0.0, W / 2)]
             if any(blocked(qx, qy) or wet(qx, qy) or green_mask.at(qx, qy) for qx, qy in probe):
                 continue
             floors = rnd.choice((6, 6, 6, 7, 7, 7, 11, 18)) if rnd.random() < 0.93 else rnd.choice((24, 28, 32))
