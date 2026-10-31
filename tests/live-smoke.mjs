@@ -54,12 +54,12 @@ try {
   assert.ok(world.onGround, "the traveller stands on walkable ground in Qixia");
   console.log("qixia world", JSON.stringify({ onGround: world.onGround, body: world.stats.body }));
   await shot(page, "test-results/live-world.png");
-  await page.evaluate(() => { window.__mufu.paused = false; });
 
-  // Back to the atlas, then an atlas walk: the Zifeng Tower pin.
-  await page.evaluate(() => document.exitPointerLock());
-  await page.locator("#back-to-plan").click();
-  await page.locator("#nanjing-home").waitFor({ state: "visible", timeout: 60000 });
+  // Back to the atlas with M (the header and its Map button are hidden in city mode), then an
+  // atlas walk: the Zifeng Tower pin.
+  await page.evaluate(() => { document.exitPointerLock(); window.__mufu.paused = false; });
+  await page.keyboard.press("m");
+  await page.locator("#nanjing-home").waitFor({ state: "visible", timeout: 120000 });
   await page.locator('.city-pin[data-city="zifeng"]').click();
   await page.waitForFunction(
     () => window.__mufu.city.selected?.id === "zifeng" && !window.__mufu.city.world,

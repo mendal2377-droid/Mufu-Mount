@@ -57,3 +57,38 @@ by bike.
 
 - Look: **rich illustrated**. Keep the approved painted, Miyazaki-like warmth, and add real detail, light and life. Not photoreal.
 - Pilot: **Zhongshan with Lingyuan Road**: walk the Sacred Way, bike the plane-tree road, fly over Purple Mountain.
+
+## Style target (31 October 2026): the sunlit low-poly diorama
+
+The owner added a second reference: [jakub_works' Warsaw city](https://x.com/jakub_works/status/2116154993833079271/video/1), "if too many details are heavy, you can try this style". It stays deliberately low-poly. Its richness comes from:
+
+- a warm low sun with long soft shadows and ambient occlusion;
+- window grids on every façade, with cornices, dormers and balconies as simple shapes;
+- varied wall and roof colours from building to building;
+- trees as clusters of small blobs in mixed autumn colours;
+- life everywhere: trams, buses, parked cars, street lamps, crossings, lane markings;
+- a pastel gradient sky at street level.
+
+This is lighter than the detail list above, so it becomes the target: light, façade shaders, colour variation, tree clusters and traffic before any heavy geometry.
+
+## Decision (31 October 2026): Tiny Nanjing
+
+The owner pointed to [Tiny Warsaw](https://tinywarsaw.app/) ("research deeply and choose the best"). Its About page describes the method:
+
+- Ordinary buildings are generated from OSM outlines plus height and roof-colour data, with windows and shop fronts drawn by a shader.
+- Over a thousand landmarks are dedicated low-poly models, each a short program that builds the shape from photos and maps, written by AI.
+- Roads, tracks and bridges are generated procedurally from street data.
+- Everything streams in small compressed chunks and renders with three.js r187 and WebGL.
+
+What we measured: about 20 MB on first load, KTX2 textures, a far-tree layer, a low warm sun with long shadows, and tilt-shift blur. Vehicles: car, bus, helicopter, balloon, scooter, plane, jet.
+
+**Chosen:** build Tiny Nanjing the same way.
+
+- **City:** one continuous, streamed low-poly map of central Nanjing.
+  - Every OSM building is extruded, with heights from OSM levels or estimated by district and footprint.
+  - A façade shader draws windows and shop fronts; roof colours follow rules by district.
+  - Roads, rail, bridges, water and parks come from OSM, with plane trees on the avenues.
+- **Landmarks:** our Blender models become the hero models placed inside the city.
+- **Light:** a low sun, shadows, ambient occlusion, and tilt-shift seen from above.
+- **Transport:** walk, bike, car or bus, boat, and balloon or paraglider.
+- **Pilot:** the city core, Xinjiekou → Zhongshan Road → Presidential Palace → Jiming and Xuanwu. Zhongshan, Niushou and Qixia stay as separate worlds and get the shared lighting.

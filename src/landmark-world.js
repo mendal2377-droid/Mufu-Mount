@@ -9,6 +9,8 @@ import {createTraveller, createMagpie, createGlider} from './traveller.js';
 // and streamed on arrival. Unlike the atlas it is in true metres: the walker's eye is 1.65 m, the
 // 392 steps are real steps, and walking is free over a ray-cast walk grid instead of corridors.
 
+// Materials that only receive the sun's shadow (see the static mesh loop).
+const GROUND_MATERIALS = new Set(['lawn', 'forest_floor', 'city_ground', 'river_bed', 'water', 'canal_stone', 'paving_joint']);
 const EYE = 1.65, SIT_EYE = 1.15, STEP_UP = .65, WALK = 1.7, RUN = 4.6;
 
 // Palette names from design/ART-BIBLE.md; the GLB carries them as material names.
@@ -252,7 +254,10 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
     o.material = Array.isArray(o.material) ? o.material.map(paint) : paint(o.material);
-    o.castShadow = false; o.receiveShadow = false;
+    // Sun shadows: everything receives; buildings, walls, stairs and bridges cast. Ground sheets do
+    // not: they only shade themselves, and the terrain is most of the triangles.
+    const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+    o.castShadow = !GROUND_MATERIALS.has(mat.name); o.receiveShadow = true;
     staticTriangles += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
   });
   scene.add(gltf.scene);
@@ -285,6 +290,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   treeMat.customProgramCacheKey = () => 'landmark-trees-v1';
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(), pos = new THREE.Vector3();
   const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+  const shadowOnly = new THREE.MeshBasicMaterial({colorWrite: false, depthWrite: false});
   // Level of detail: near trees (within NEAR_R of the traveller, at most NEAR_CAP of them) get the
   // full painted crown; every other tree is a silhouette of a few triangles in the same colour. All
   // trees at full detail were ~2.6 M triangles in Zhongshan, too heavy for a phone.
@@ -310,15 +316,24 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     near.name = `trees ${kind}`;
     if (!lod) {
       mats.forEach((m, i) => { near.setMatrixAt(i, m); near.setColorAt(i, cols[i]); });
-      near.computeBoundingSphere(); scene.add(near);
+      near.computeBoundingSphere(); near.receiveShadow = true; scene.add(near);
+      if (!spec.lotus && !spec.flower) {
+        const caster = new THREE.InstancedMesh(silhouetteGeometry(spec), shadowOnly, list.length);
+        caster.instanceMatrix = near.instanceMatrix; caster.castShadow = true; caster.frustumCulled = false; scene.add(caster);
+      }
       treeTriangles += geo.attributes.position.count / 3 * list.length;
       continue;
     }
-    near.count = 0; near.frustumCulled = false; scene.add(near);
+    near.count = 0; near.frustumCulled = false; near.receiveShadow = true; scene.add(near);
+    // Shadows: never from the full crowns (HANDOFF 4.2: millions of triangles through the shadow map
+    // lost the GPU). An invisible silhouette shares the near trees' instance matrices and casts.
+    const caster = new THREE.InstancedMesh(silhouetteGeometry(spec), shadowOnly, near.instanceMatrix.count);
+    caster.instanceMatrix = near.instanceMatrix; caster.count = 0; caster.castShadow = true; caster.frustumCulled = false;
+    scene.add(caster);
     const farGeo = silhouetteGeometry(spec), far = new THREE.InstancedMesh(farGeo, treeMat, list.length);
     mats.forEach((m, i) => { far.setMatrixAt(i, m); far.setColorAt(i, cols[i]); });
     far.computeBoundingSphere(); far.name = `trees ${kind} far`; scene.add(far);
-    lodKinds.push({list, mats, cols, near, far, shown: new Set()});
+    lodKinds.push({list, mats, cols, near, far, caster, shown: new Set()});
     treeTriangles += farGeo.attributes.position.count / 3 * list.length;
   }
   let lodAt = -1, lodX = 1e9, lodZ = 1e9;
@@ -337,7 +352,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       for (const i of now) if (!k.shown.has(i)) k.far.setMatrixAt(i, ZERO);
       let n = 0;
       for (const i of now) { k.near.setMatrixAt(n, k.mats[i]); k.near.setColorAt(n, k.cols[i]); n++; }
-      k.near.count = n;
+      k.near.count = n; k.caster.count = n;
       k.near.instanceMatrix.needsUpdate = true; if (k.near.instanceColor) k.near.instanceColor.needsUpdate = true;
       k.far.instanceMatrix.needsUpdate = true;
       k.shown = now;
@@ -349,6 +364,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // Softer than the atlas: at true scale the pale granite and paving fill the frame and glare.
   const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x6d8a4a, 1.1), sun = new THREE.DirectionalLight(0xffe7b8, 2.0);
   scene.add(hemi, sun, sun.target);
+  // A shadow box that follows the traveller: 240 m across, so a building's long evening shadow
+  // stays in view. Its centre snaps to whole shadow texels or the shadow edges crawl as you walk.
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, {left: -120, right: 120, top: 120, bottom: -120, near: 10, far: 1600});
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6;
+  const SHADOW_TEXEL = 240 / 2048, lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3(), focus = new THREE.Vector3();
   const worldRain = rain.clone(), worldSnow = snow.clone();
   scene.add(worldRain, worldSnow);
 
@@ -465,6 +488,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   const traveller = createTraveller(bands), magpie = createMagpie(bands), glider = createGlider(bands);
   traveller.root.add(glider); glider.visible = false;
   scene.add(traveller.root, magpie.root);
+  traveller.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   const body = new THREE.Vector3(), lastBody = new THREE.Vector3();
   let heading = 0, speed = 0, seated = null, glide = null, view = 'third', mode = 'walk', ride = null;
 
@@ -788,7 +812,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       glider.visible = mode === 'glide';
       traveller.update(dt, mode === 'glide' ? 0 : speed, mode, t);
       magpie.update(dt, t, body, heading, speed, mode, surface);
-      sun.position.copy(camera.position).addScaledVector(direction, 600); sun.target.position.copy(camera.position);
+      // The shadow box centres on the traveller (or the camera while gliding), snapped to texels
+      // along the light's own axes.
+      focus.copy(glide || mode === 'glide' ? camera.position : body);
+      lightRight.crossVectors(direction, up).normalize(); lightUp.crossVectors(lightRight, direction).normalize();
+      const r = focus.dot(lightRight), u = focus.dot(lightUp);
+      focus.addScaledVector(lightRight, Math.round(r / SHADOW_TEXEL) * SHADOW_TEXEL - r).addScaledVector(lightUp, Math.round(u / SHADOW_TEXEL) * SHADOW_TEXEL - u);
+      sun.position.copy(focus).addScaledVector(direction, 600); sun.target.position.copy(focus);
       sun.intensity = (2.1 - weather.storm * 1.5 - weather.snow * .6) * (1 - weather.dawn * .6);
       sun.color.setRGB(1, 1 - weather.sunset * .3, 1 - weather.sunset * .55);
       hemi.intensity = 1.05 - weather.storm * .35 - weather.dawn * .55;
