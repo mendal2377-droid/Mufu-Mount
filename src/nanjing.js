@@ -117,7 +117,11 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   function leaveHome(){if(!home)return;home.overview=false;home.scene.remove(camera);scene.add(camera);postfx.setScene(scene);orbit.maxPolarAngle=polar;
     for(const r of records){r.home=null;r.pin.classList.remove('edge');}home=null;}
   const music=audio?createMusic(audio):null;
-  function exitWorld(){if(!world)return;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
+  // The ways-to-explore strip: shown inside a Blender world, boat only where there is water.
+  function showWays(){const nav=$('#ways');if(!nav)return;nav.hidden=!world;if(!world)return;
+    nav.querySelector('[data-way="boat"]').hidden=!world.canBoat;
+    const way=state.flying?'fly':world.vehicle;for(const b of nav.children)b.classList.toggle('active',b.dataset.way===way);}
+  function exitWorld(){if(!world)return;$('#ways').hidden=true;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
   async function enterWorld(p,opts){
     const id=WORLDS[p.id].world;
     if(!worlds[id]){toast(`${p.zh} · on the wind…`);
@@ -127,6 +131,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // The visitor may have gone back to the map or elsewhere while it loaded.
     if(!active||state.overview||selected!==p)return;
     exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
+    w.setVehicle('walk');showWays();
     const g=w.meta.walk;worldBounds=new THREE.Box3(new THREE.Vector3(g.x0-150,-60,-(g.y0+g.ny*g.cell)-150),new THREE.Vector3(g.x0+g.nx*g.cell+150,700,-g.y0+150));
     const s=w.spawn(opts.spawn||WORLDS[p.id].spawn);setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
     // Pins and menus arrive by paraglider: the descent shows the whole place and hides any
@@ -282,8 +287,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     const run=game.run,course=gameView.course;
     $('#passport-run-best').textContent=run.best?`Best ${run.best.toFixed(1)} s${run.medal?' · '+run.medal:''} · ${run.runs} run${run.runs>1?'s':''}`:`${course.rings.length} rings · about ${Math.round(course.length/34)} s at cruising speed`;
   }
+  let lastWay='';
   function frameWorld(dt,t,weather){
     lastWeather=weather;
+    const way=state.flying?'fly':world.vehicle;if(way!==lastWay){lastWay=way;showWays();}
     if(music?.playing&&!world.seated&&!world.riding)music.stop();
     music?.update();
     if(world.gliding&&(keys.size>0||worldSkip)){world.endGlide();toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);}
@@ -347,6 +354,11 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     leave(){if(!active)return;exitWorld();flying(false);$('#walk-places').hidden=true;$('#city-places')?.close();active=false;reset();baseScene.add(camera);postfx.setScene(baseScene);
       $('#nanjing-home').hidden=true;$('#city-menu').close();document.body.classList.remove('city-mode');
       $('.brand span').innerHTML='Mufu <small>Choose a place to wander.</small>';$('.brand').setAttribute('aria-label','Mufu home');},
+    // 1 on foot, 2 bike, 3 boat, 4 paraglider.
+    setWay(way){if(!world||world.gliding)return;
+      if(way==='fly'){if(world.vehicle!=='walk')world.setVehicle('walk');if(!state.flying)api.toggleFlight();showWays();return;}
+      if(state.flying)api.toggleFlight();
+      const msg=world.setVehicle(way);if(msg)toast(msg);showWays();},
     toggleFlight(){if(state.overview)api.enter(selected.id);if(!active)return;
       if(world){if(world.gliding)return;
         if(state.flying){if(!world.land()){const s=world.spawn();world.placeAt(s);setArrivalCamera(camera,s.position,s.look);}
@@ -461,5 +473,6 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   $('#city-mufu').onclick=()=>api.enter('mufu');$('#city-weather').onclick=()=>{const moods=['morning','sunset','night','storm','snow','dawn'];onWeather(moods[(moods.indexOf(state.weather)+1)%moods.length]);};
   $('#city-sound').onclick=()=>{$('#sound').click();$('#city-menu').close();};
   $('#nanjing-return').onclick=()=>api.showPlan();
+  for(const b of document.querySelectorAll('#ways button'))b.onclick=e=>{api.setWay(b.dataset.way);e.currentTarget.blur();};
   return api;
 }

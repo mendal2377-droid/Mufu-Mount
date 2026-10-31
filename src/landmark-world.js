@@ -201,6 +201,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0xa8d0ea, .0011);
   const walk = meta.walk, heights = new Int16Array(walkBuf);
+  // Water surfaces (same layout as the walk grid), where a boat can be steered.
+  const waterBuf = walk.water ? await fetch(base + 'water.bin').then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null) : null;
+  const waterHeights = waterBuf ? new Int16Array(waterBuf) : null;
 
   // --- Painted toon materials keyed on palette names ---------------------------------------------
   const cache = new Map(), hazeColor = {value: new THREE.Color(0xa8d0ea)};
@@ -522,6 +525,23 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     if (c < 0 || heights[c] === walk.noWalk) return null;
     return heights[c] / 100;
   }
+  function waterAt(x, z) {
+    if (!waterHeights) return null;
+    const c = cellOf(x, z);
+    if (c < 0 || waterHeights[c] === walk.noWalk) return null;
+    return waterHeights[c] / 100;
+  }
+  // The nearest point (a spiral of rings) where test(x, z) holds, within r metres; null if none.
+  function nearest(test, x, z, r) {
+    for (let d = 0; d <= r; d += 2) {
+      const n = Math.max(1, Math.round(d * 1.2));
+      for (let k = 0; k < n; k++) {
+        const a = 2 * Math.PI * k / n, px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+        if (test(px, pz) !== null) return [px, pz];
+      }
+    }
+    return null;
+  }
   // Smoothed surface for the eye: averages walkable neighbours within half a step, so stairs
   // feel like a steady climb rather than a camera that judders on every riser.
   function surface(x, z) {
@@ -622,6 +642,20 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   traveller.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   const body = new THREE.Vector3(), lastBody = new THREE.Vector3();
   let heading = 0, speed = 0, seated = null, glide = null, view = 'third', mode = 'walk', ride = null;
+  // Ways to explore: on foot, by bike (wherever one can walk: roads, pavements, plazas) or by boat
+  // (anywhere on water.bin). Bike and boat steer like vehicles: W forward, A/D turn.
+  let vehicle = 'walk', vspeed = 0, steerLean = 0;
+  const skiff = (() => {
+    const g = new THREE.Group(), wood = new THREE.MeshToonMaterial({color: 0x8a5a36, gradientMap: bands});
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.5, .5, 4.2), wood);
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(.75, 1.1, 4), wood);
+    bow.rotation.set(Math.PI / 2, Math.PI / 4, 0); bow.scale.set(1, 1, .6); bow.position.set(0, .05, 2.6);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.3, .08, .5), new THREE.MeshToonMaterial({color: 0xc9a46a, gradientMap: bands}));
+    hull.position.y = .05; seat.position.set(0, .32, -.4);
+    g.add(hull, bow, seat); g.visible = false;
+    return g;
+  })();
+  scene.add(skiff);
 
   // --- Pleasure boats (画舫) on a river route: gold roofs, red hulls, lit windows ------------------------
   function pleasureBoat() {
@@ -740,6 +774,29 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   }
   const camDir = new THREE.Vector3(), tmp = new THREE.Vector3();
 
+  // Bike and boat: a speed that builds and coasts, steering that tightens with speed; the bike keeps
+  // to walkable ground (the walk grid's own steps), the boat to water.
+  function drive(keys, dt) {
+    const fwd = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
+    const steer = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
+    const fast = keys.has('ShiftLeft') || keys.has('ShiftRight'), bike = vehicle === 'bike';
+    const top = bike ? (fast ? 9 : 5.5) : (fast ? 5 : 3);
+    vspeed = THREE.MathUtils.damp(vspeed, fwd > 0 ? top : fwd < 0 ? (bike ? 0 : -1.2) : 0, fwd ? 1.4 : bike ? .9 : .5, dt);
+    heading -= steer * dt * (bike ? 1.8 : .9) * THREE.MathUtils.clamp(Math.abs(vspeed) / 2.5, .25, 1);
+    steerLean = THREE.MathUtils.damp(steerLean, -steer * .22 * Math.min(1, Math.abs(vspeed) / 4), 6, dt);
+    const nx = body.x + Math.sin(heading) * vspeed * dt, nz = body.z + Math.cos(heading) * vspeed * dt;
+    let moved = false;
+    if (bike) {
+      if (canStep({x: body.x, z: body.z}, nx, nz)) { body.x = nx; body.z = nz; moved = true; } else vspeed *= .3;
+      const h = surface(body.x, body.z);
+      if (h !== null) body.y = THREE.MathUtils.damp(body.y, h, 14, dt);
+    } else {
+      const w = waterAt(nx, nz);
+      if (w !== null) { body.x = nx; body.z = nz; moved = true; body.y = w; } else vspeed *= -.2;
+    }
+    return moved && Math.abs(vspeed) > .2;
+  }
+
   function feetAt(x, z, fallback) { return surface(x, z) ?? fallback; }
   function glideCurve(feet, look, from = null) {
     // Approach from behind the arrival view: a long descending S-turn that ends running out onto
@@ -811,6 +868,28 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       return null;
     },
     get riding() { return !!ride; },
+    get vehicle() { return vehicle; },
+    get canBike() { return true; },
+    get canBoat() { return !!waterHeights; },
+    // Switch the way of moving. Returns a short message for the toast, or null if it cannot.
+    setVehicle(v) {
+      if (glide || ride || mode === 'glide') return null;
+      seated = null; mode = 'walk';
+      if (v === 'boat') {
+        if (!waterHeights) return null;
+        const at = waterAt(body.x, body.z) !== null ? [body.x, body.z] : nearest(waterAt, body.x, body.z, 90);
+        if (!at) return 'No water near here: walk to the shore first';
+        body.set(at[0], waterAt(at[0], at[1]), at[1]); vehicle = 'boat'; vspeed = 0;
+        return 'Boat · W row · A / D turn · Shift faster · 1 to step ashore';
+      }
+      if (vehicle === 'boat') {
+        const at = nearest(heightAt, body.x, body.z, 60);
+        if (!at) return 'Too far from the shore';
+        body.set(at[0], heightAt(at[0], at[1]), at[1]);
+      }
+      vehicle = v === 'bike' ? 'bike' : 'walk'; vspeed = 0; steerLean = 0;
+      return vehicle === 'bike' ? 'Bike · W pedal · S brake · A / D steer · Shift faster' : 'On foot';
+    },
     // Board the pleasure boat at a dock: it sails the route to its far end, turns and brings the
     // visitor back to the dock. Any walking key steps ashore at once.
     board(dock) {
@@ -849,6 +928,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const side = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
       const fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
       if (glide) return false;
+      if (vehicle !== 'walk') return drive(keys, dt);
       if (ride) { if (forward || side) world.leaveBoat(); return false; }
       if (seated) {
         if (forward || side) { world.stand(); return false; }
@@ -908,7 +988,20 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         camera.rotation.z = 0;
         return;
       }
-      const sitting = mode === 'sit' && !ride, flyingNow = mode === 'glide';
+      const sitting = mode === 'sit' && !ride && vehicle === 'walk', flyingNow = mode === 'glide';
+      if (vehicle !== 'walk' && view === 'third') {
+        if (Math.abs(vspeed) > 1) {
+          const want = heading + Math.PI;
+          let dy = want - camera.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+          camera.rotation.y += dy * (1 - Math.exp(-dt * 2.2));
+        }
+        camera.getWorldDirection(camDir);
+        const eye = body.clone().add(new THREE.Vector3(0, vehicle === 'boat' ? 2.6 : 2.0, 0)).addScaledVector(camDir, vehicle === 'boat' ? -7 : -5.5);
+        const g = surface(eye.x, eye.z);
+        if (g !== null) eye.y = Math.max(eye.y, g + .6);
+        camera.position.lerp(eye, 1 - Math.exp(-dt * 12));
+        return;
+      }
       if (ride && view === 'third') {
         // On the boat: a little behind and above the cabin roof, looking down the river.
         camera.getWorldDirection(camDir);
@@ -942,7 +1035,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       traveller.root.rotation.y = heading;
       traveller.root.visible = view === 'third' || !!glide;
       glider.visible = mode === 'glide';
-      traveller.update(dt, mode === 'glide' ? 0 : speed, mode, t);
+      traveller.update(dt, mode === 'glide' ? 0 : speed, vehicle === 'bike' && mode !== 'glide' ? 'bike' : vehicle === 'boat' ? 'sit' : mode, t);
+      // Lean into a turn on the bike; a boat bobs.
+      traveller.root.rotation.z = vehicle === 'bike' ? steerLean : 0;
+      skiff.visible = vehicle === 'boat';
+      if (skiff.visible) {
+        skiff.position.set(body.x, body.y + Math.sin(t * 1.4) * .05, body.z); skiff.rotation.set(Math.sin(t * 1.1) * .03, heading, 0);
+        traveller.root.position.y = body.y + .55;
+      }
       magpie.update(dt, t, body, heading, speed, mode, surface);
       // The shadow box centres on the traveller (or the camera while gliding), snapped to texels
       // along the light's own axes.

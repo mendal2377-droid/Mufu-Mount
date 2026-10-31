@@ -1951,6 +1951,10 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "BracketRight" || e.code === "BracketLeft") { city.hop(e.code === "BracketRight" ? 1 : -1); e.preventDefault(); return; }
   }
   if (city && e.code === "KeyJ" && !e.repeat && state.ready) { city.passport(true); e.preventDefault(); return; }
+  // Ways to explore inside a world: 1 on foot, 2 bike, 3 boat, 4 paraglider.
+  if(city?.world && !e.repeat && ["Digit1","Digit2","Digit3","Digit4"].includes(e.code)) {
+    city.setWay(["walk","bike","boat","fly"][Number(e.code.slice(5))-1]);e.preventDefault();return;
+  }
   if(city?.active && ["KeyM","KeyT","KeyP"].includes(e.code)) {
     if(e.code==="KeyM" && !e.repeat) city.showPlan();
     e.preventDefault();return;

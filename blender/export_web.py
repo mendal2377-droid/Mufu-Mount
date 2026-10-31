@@ -189,6 +189,8 @@ def walk_grid(trees, grid):
     nx = int((grid['x1'] - grid['x0']) / cell)
     ny = int((grid['y1'] - grid['y0']) / cell)
     heights = [NO_WALK] * (nx * ny)
+    # Water surfaces in the same pass: where a boat can go (water.bin, same layout as walk.bin).
+    water = [NO_WALK] * (nx * ny)
     mats_cache = {}
     walk_count = 0
     # A yawed grid (the bridge deck) runs in its own (u, v) frame, turned about the world origin.
@@ -213,12 +215,15 @@ def walk_grid(trees, grid):
             if name in WALKABLE:
                 heights[j * nx + i] = max(-32000, min(32000, int(round(loc.z * 100))))
                 walk_count += 1
+            elif name == 'water':
+                water[j * nx + i] = max(-32000, min(32000, int(round(loc.z * 100))))
     # Trunks: unwalkable discs round each tree inside the grid.
     for o in trees:
         x, y = o.location.x * cy_ + o.location.y * sy_, -o.location.x * sy_ + o.location.y * cy_
         if not (grid['x0'] - 3 < x < grid['x1'] + 3 and grid['y0'] - 3 < y < grid['y1'] + 3):
             continue
-        r = TRUNK_RADIUS * max(o.scale.x, 0.6)
+        # Lamp posts are thin; a tree's trunk disc would punch holes in the pavements.
+        r = 0.25 if o.data.name == 'proto lamp' else TRUNK_RADIUS * max(o.scale.x, 0.6)
         for jj in range(int((y - r - grid['y0']) / cell), int((y + r - grid['y0']) / cell) + 1):
             for ii in range(int((x - r - grid['x0']) / cell), int((x + r - grid['x0']) / cell) + 1):
                 if 0 <= ii < nx and 0 <= jj < ny:
@@ -228,7 +233,7 @@ def walk_grid(trees, grid):
                         heights[jj * nx + ii] = NO_WALK
     for lc in layers:
         lc.exclude = False
-    return nx, ny, heights, walk_count
+    return nx, ny, heights, walk_count, water
 
 
 def _walk_layers(lc):
@@ -305,15 +310,19 @@ def main():
     static, trees = collect()
     trees_out = tree_records(trees)
     lap('collect')
-    grids, heights, walk_count = [], [], 0
+    grids, heights, walk_count, water = [], [], 0, []
     for g in cfg['grids']:
-        nx, ny, h, n = walk_grid(trees, g)
+        nx, ny, h, n, wet = walk_grid(trees, g)
+        water += wet
         grids.append({'name': g['name'], 'nx': nx, 'ny': ny, 'x0': g['x0'], 'y0': g['y0'], 'cell': g.get('cell', CELL),
                       'offset': len(heights), **({'yaw': g['yaw']} if g.get('yaw') else {})})
         heights += h
         walk_count += n
     lap('walk grids')
     (OUT / 'walk.bin').write_bytes(struct.pack(f'<{len(heights)}h', *heights))
+    has_water = any(v != NO_WALK for v in water)
+    if has_water:
+        (OUT / 'water.bin').write_bytes(struct.pack(f'<{len(water)}h', *water))
     (OUT / 'trees.json').write_text(json.dumps(trees_out, separators=(',', ':')), encoding='utf-8')
     # Trees are recorded; drop them so join/export operators don't walk ~24,000 objects.
     bpy.data.batch_remove(ids=trees)
@@ -327,7 +336,7 @@ def main():
         'zh': cfg['zh'],
         'axes': 'three.js: x = east, y = up, z = south (Blender x, z, -y); metres',
         # Grid in three.js terms: column i -> x = x0 + (i + .5) * cell, row j -> z = -(y0 + (j + .5) * cell).
-        'walk': {'cell': CELL, 'noWalk': NO_WALK, 'grids': grids, 'walkableCells': walk_count},
+        'walk': {'cell': CELL, 'noWalk': NO_WALK, 'grids': grids, 'walkableCells': walk_count, 'water': has_water},
         'labels': cfg.get('labels', {}),
         'origin_wgs84': list(bpy.context.scene.get('origin_wgs84', [])),
         'base_z': bpy.context.scene.get('base_z'),
