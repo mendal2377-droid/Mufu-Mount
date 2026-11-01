@@ -243,6 +243,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const facade = name === 'facade', road = name === 'road_city', walkway = name === 'sidewalk';
     if (facade || name === 'roof_city') mat.vertexColors = true;
     if (facade || road || walkway) mat.defines = {...mat.defines, USE_UV: ''};
+    if (facade) mat.defines.FACADE_TOP = '';
     if (name === 'water') { mat.color.multiplyScalar(1.05); mat.emissive = new THREE.Color(0x0b2f3a); }
     // Lanterns and lit windows glow; the bloom pass turns them into soft lights at dusk.
     if (name === 'lantern') { mat.emissive = new THREE.Color(0xe8473a); mat.emissiveIntensity = .9; }
@@ -262,9 +263,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.cityNight = shared.night || {value: 0}; s.uniforms.cityLit = shared.litShare || {value: 0};
       s.uniforms.cityShops = shared.shopsOpen || {value: 0};
       s.uniforms.skyClip = {value: new THREE.Vector4(...(meta.skyline_clip || [1, -1, 1, -1]))};
-      s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n' + s.vertexShader.replace('#include <worldpos_vertex>',
-        '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops;uniform vec3 hazeColor;uniform vec4 skyClip;varying vec3 vWorldPos;varying float vUp;\n' +
+      s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nattribute float wallTop;varying float vTop;\n#endif\n' + s.vertexShader.replace('#include <worldpos_vertex>',
+        '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;\n#ifdef FACADE_TOP\nvTop=wallTop;\n#endif\n');
+      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops;uniform vec3 hazeColor;uniform vec4 skyClip;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -318,10 +319,29 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             float h=1.-vUv.y,u=vUv.x;     // glTF stores v as 1 - v
             bool walkup=st>.13&&st<.3;
             if(h>=0.&&st<.9){
-              float fh=st>.6?3.0:st>.3?3.3:walkup?2.9:3.3, sp=st>.6?3.6:st>.3?1.6:walkup?3.0:3.2;
+              // Homes vary building by building (the owner: no repeated streets on a bus tour). The
+              // building's own height and wall colour pick a variant: bay width, window size, a
+              // shade of its paint, and one of three looks (below). Offices and old houses keep theirs.
+              bool homes=st<.3;
+              #ifdef FACADE_TOP
+              float bh=lwHash(vec2(vTop*1.37+vColor.r*17.,vColor.g*23.+vColor.b*5.));
+              #else
+              float bh=.5;
+              #endif
+              float bh2=fract(bh*7.13), look=floor(bh*3.);
+              if(homes)diffuseColor.rgb*=.9+.18*bh2;
+              float fh=st>.6?3.0:st>.3?3.3:walkup?2.9:3.0, sp=st>.6?3.6:st>.3?1.6:walkup?2.7+bh2*.8:2.8+bh2*1.3;
+              // Only whole floors under the roof get windows; what is left above is a blank parapet.
+              // Without it the last row was cut by the roof line and read as windows standing up
+              // past the top of the building (the owner saw it).
+              #ifdef FACADE_TOP
+              float roomy=step((floor(h/fh)+1.)*fh,vTop+.15);
+              #else
+              float roomy=1.;
+              #endif
               float fv=fract(h/fh), fu=fract(u/sp);
-              float ww=st>.6?.32:st>.3?.9:.46, wb=st>.6?.36:st>.3?.12:.3, wt=st>.6?.74:st>.3?.92:.78;
-              float win=step(abs(fu-.5),ww*.5)*step(wb,fv)*step(fv,wt);
+              float ww=st>.6?.32:st>.3?.9:.36+.26*fract(bh*13.7), wb=st>.6?.36:st>.3?.12:.3, wt=st>.6?.74:st>.3?.92:.78;
+              float win=step(abs(fu-.5),ww*.5)*step(wb,fv)*step(fv,wt)*roomy;
               bool shop=h<4.2&&(st<.04||st>.22&&st<.3);
               if(shop){float su=fract(u/4.6);win=step(abs(su-.5),.4)*step(.12,h/4.2)*step(h/4.2,.86);}
               float fw=max(fwidth(u/sp),fwidth(h/fh));
@@ -330,7 +350,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
               if(shop)glass=vec3(.28,.24,.2);
               diffuseColor.rgb=mix(diffuseColor.rgb,mix(diffuseColor.rgb*.82,glass,win*.8),k);
               diffuseColor.rgb*=1.-(1.-smoothstep(0.,.08,fv))*.12*k*(st>.6?0.:1.);
-              if(walkup&&!shop){
+              if(walkup&&!shop&&roomy>.5){
                 // Balconies on every other bay: a pale slab and railing across the window's foot,
                 // the room behind darker. And an air conditioner's grey box beside each window.
                 float bay=mod(floor(u/sp),2.);
@@ -339,6 +359,34 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
                 if(fu>.8&&fu<.94&&fv>.42&&fv<.58)diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.86,.84),k*.9);
                 // Old render streaked by rain under each sill.
                 diffuseColor.rgb*=1.-k*.06*smoothstep(.5,0.,fv)*step(abs(fu-.5),.25);
+                // Some compounds put steel security grilles over every window (防盗窗, anti-theft
+                // cages); others a darker tiled ground floor.
+                if(look>1.5&&win>.5)diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.30,.31,.30),k*.7*step(fract(fu*sp/.14),.22));
+                if(look>.5&&look<1.5&&h<fh)diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*.72+vec3(.03,.02,0.),k);
+              }
+              if(homes&&!walkup&&!shop&&roomy>.5){
+                float bay=floor(u/sp);
+                if(look<.5){
+                  // Glazed-in balconies on every third bay: a band of pale glass across the floor
+                  // with a slab under it, as on so many 2000s towers.
+                  if(mod(bay,3.)<1.&&fv>.12&&fv<.84)diffuseColor.rgb=mix(diffuseColor.rgb,mix(glass,vec3(.62,.70,.74),.35),k*.85);
+                  if(mod(bay,3.)<1.&&fv<.12)diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*1.1+.04,k);
+                }else if(look<1.5){
+                  // A stair core every fifth bay: blank wall, a small window at each half landing.
+                  if(mod(bay,5.)>1.5&&mod(bay,5.)<2.5){
+                    float small=step(abs(fu-.5),.1)*step(.45,fract(fv+.5))*step(fract(fv+.5),.62);
+                    diffuseColor.rgb=mix(diffuseColor.rgb,mix(diffuseColor.rgb*.88,glass,small*.8),k);
+                  }else if(fu>.82&&fu<.95&&fv>.4&&fv<.56)diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.86,.84),k*.9);
+                }else{
+                  // A coloured tile band under each row of windows, and a top in that colour.
+                  vec3 accent=mix(vec3(.62,.36,.30),vec3(.36,.46,.58),step(.5,bh2));
+                  #ifdef FACADE_TOP
+                  bool crown=vTop-h<fh*2.;
+                  #else
+                  bool crown=false;
+                  #endif
+                  if(fv<.2||crown&&win<.5)diffuseColor.rgb=mix(diffuseColor.rgb,accent,k*.75);
+                }
               }
               // Each window has its own bedtime: the clock's lit share falls through the night
               // and windows go dark one by one. Shops close at ten. Far windows fade (they fizz),
@@ -374,16 +422,31 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           // Skyline haze: towers fade toward the sky colour with distance, never to nothing.
           if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.45);}`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v10' + (facade ? 'f' : road ? 'r' : walkway ? 'w' : '');
+    mat.customProgramCacheKey = () => 'landmark-paint-v11' + (facade ? 'f' : road ? 'r' : walkway ? 'w' : '');
     cache.set(name, mat);
     return mat;
   }
   let staticTriangles = 0;
+  // Wall UVs are metres along and above the ground, roofs v = -1 (blender/build_core.py extrude).
+  // Each wall triangle of a quad holds a roof-line corner, so the highest h among a vertex's
+  // triangles is its building's roof height: the façade shader stops windows under it.
+  function wallTops(g) {
+    const uv = g.attributes.uv, n = g.attributes.position.count;
+    if (!uv) return;
+    const top = new Float32Array(n).fill(-1), idx = g.index ? g.index.array : null, end = idx ? idx.length : n;
+    for (let t = 0; t < end; t += 3) {
+      const a = idx ? idx[t] : t, b = idx ? idx[t + 1] : t + 1, c = idx ? idx[t + 2] : t + 2;
+      const m = 1 - Math.min(uv.getY(a), uv.getY(b), uv.getY(c));
+      if (m > top[a]) top[a] = m; if (m > top[b]) top[b] = m; if (m > top[c]) top[c] = m;
+    }
+    g.setAttribute('wallTop', new THREE.BufferAttribute(top, 1));
+  }
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
     // Blender's exporter writes a blank COLOR_0 beside the real colours (COLOR_1): use the real ones.
     if (o.geometry.attributes.color_1) { o.geometry.setAttribute('color', o.geometry.attributes.color_1); o.geometry.deleteAttribute('color_1'); }
     o.material = Array.isArray(o.material) ? o.material.map(paint) : paint(o.material);
+    if ([o.material].flat().some(m => m.name === 'facade')) wallTops(o.geometry);
     // Sun shadows: everything receives; buildings, walls, stairs and bridges cast. Ground sheets do
     // not: they only shade themselves, and the terrain is most of the triangles.
     const mat = Array.isArray(o.material) ? o.material[0] : o.material;

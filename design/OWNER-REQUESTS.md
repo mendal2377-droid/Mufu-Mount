@@ -33,13 +33,16 @@ takes effect with the next city build (`./tools/export-scene.sh core`).
 | 25 | The same street views again — is the route real? | Answered (route is real; the bus turned back); fixed: everyone off at the terminus |
 | 26 | Both directions sharing one stop | Fixed: a stop on each side of the road |
 | 27 | Residential districts look like the commercial ones (Wutang Square: old homes) | Built: building types from OSM land use; old walk-up façades. Pending rebuild |
-| 28 | Some windows drawn outside the buildings | **Open** |
+| 28 | Some windows drawn outside the buildings | Fixed: the top row of windows was cut by the roof line; now only whole floors get windows, with a plain parapet above. Checked in close-ups |
 | 29 | Leaves still outside the branches | Fixed: every leaf cluster now hangs on a limb or twig; checked on plane, ginkgo, camphor, cedar, willow |
 | 30 | The boat: only on water; it can float in the air | Fixed: the boat launches only beside water; off water you step ashore |
 | 31 | More real clouds (rain, sun and snow are good) | Fixed: soft cumulus lit from the sun (bright tops, grey bases, silver edges) and a thin high layer; rain and snow untouched. Checked in screenshots |
 | 32 | Buses still leave the road and pass through lamps | Fixed: the whole bus width must be on the road; lamps on a bus path removed (99.3–99.8 % on the road) |
 | 33 | Two lines at a stop, but only one F to board | Fixed: a chooser lists each line, its direction and the next bus, plus "Whichever comes first" |
 | 34 | Stops and metro entrances hidden behind trees | Fixed: trees cleared within 6 m of stops and 7 m of entrances |
+| 35 | Residential buildings: real data for the whole map, or copies of representative ones; no repeated streets on a bus tour | Whole map from real data: each building typed from its OSM tag (3,690 apartments) and the land use round it (pending rebuild). Built and screenshotted: each home varies by its own height and colour (bay width, window size, paint shade; glazed balconies, stair cores, tile bands, security grilles, darker ground floors) |
+| 36 | Wrong blocks cut across the road; lamps in the middle of the road | Two causes found: pavements ran on across the roads they met, and OSM's one-way halves of divided avenues were each built at the whole avenue's width, so the halves overlapped and lamps stood on the other half. Both fixed in the build, with a new audit (lamps against the OSM centrelines: 16,257 of 38,809 failed before the fix). Pending rebuild |
+| 37 | Purple Mountain from real data; landmarks beyond the map stay in their real places, reached by road, with full detail | Answered: the ridge is real (Copernicus 30 m elevation) but only a 60 m backdrop with no roads. **Planned**, in phases: (1) extend the city east over Purple Mountain to Zhongshan Mausoleum, with real roads, paths and terrain, joined to Bus 34 and Metro 2; (2) south to the Old South and Zhonghua Gate; (3) Niushou and Qixia, linked by their real roads |
 
 ## Also owed
 

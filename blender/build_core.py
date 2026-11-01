@@ -527,7 +527,7 @@ def build_roads(coll, skip):
     footpaths. Tunnels are left out; bridges and flyovers rise 7 m over their middle."""
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
-    avenues = []
+    avenues, pavements = [], []
     global carriageways, lamps, planted
     carriageways = []
     planted = []
@@ -550,6 +550,11 @@ def build_roads(coll, skip):
             continue
         lanes = num(t.get('lanes'))
         width = max(WIDTH[kind], lanes * 3.4) if lanes and kind not in FOOT else WIDTH[kind]
+        # OSM maps most avenues here as two one-way halves; each half is one direction's lanes, not
+        # the whole avenue (at full width the halves overlapped, and one half's pavement and lamps
+        # stood on the other: the owner saw lamps mid-road).
+        if t.get('oneway') in ('yes', '-1', '1') and kind not in FOOT:
+            width = lanes * 3.4 if lanes else max(WIDTH[kind] / 2, 6.0)
         bridge = bool(t.get('bridge')) and (num(t.get('layer')) or 1) > 0 and kind not in FOOT
         pts3 = []
         total = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
@@ -566,23 +571,70 @@ def build_roads(coll, skip):
         if kind in AVENUE or kind == 'tertiary':
             planted.append((pts3, width, kind, t.get('name', ''), w['id']))
             for side in (-1, 1):
-                off = ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0))
-                ribbon(bm, uv, [(o.x, o.y, p[2]) for o, p in zip(off, pts3)], 4.0, 1, 0.45)
-                # Street lamps every 28 m from 14 m along this pavement, where its shader draws
-                # their pools of light; the arm reaches out over the road.
-                run, nxt = 0.0, 14.0
-                for i in range(1, len(off)):
-                    seg = (off[i] - off[i - 1]).length
-                    while nxt < run + seg:
-                        q = off[i - 1].lerp(off[i], (nxt - run) / max(seg, 1e-6))
-                        d = off[i] - off[i - 1]
-                        lamps.append((q.x, q.y, pts3[i][2] + 0.45, math.atan2(d.y, d.x) + (math.pi if side > 0 else 0.0)))
-                        nxt += 28.0
-                    run += seg
+                pavements.append((ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0)), pts3, side))
             if kind in AVENUE:
                 avenues.append((pts3, width, kind))
+    # Pavements go down once every carriageway is known, and stop where they cross one: a side
+    # street's pavement ran on across the avenue it meets, and the inner pavement of a divided
+    # avenue lay on its other half, lamps and all (the owner saw grey blocks and lamps mid-road).
+    on_road = carriageway_test()
+    for off, pts3, side in pavements:
+        pts = [(o.x, o.y, p[2]) for o, p in zip(off, pts3)]
+        fine = []
+        for a, b in zip(pts, pts[1:]):
+            k = max(1, int(math.dist(a[:2], b[:2]) / 2.0))
+            fine += [tuple(a[j] + (b[j] - a[j]) * i / k for j in range(3)) for i in range(k)]
+        fine.append(pts[-1])
+        runs, cur = [], []
+        for p in fine:
+            if on_road(p[0], p[1], 1.0):
+                if len(cur) > 1:
+                    runs.append(cur)
+                cur = []
+            else:
+                cur.append(p)
+        if len(cur) > 1:
+            runs.append(cur)
+        for r in runs:
+            if math.dist(r[0][:2], r[-1][:2]) < 6:
+                continue
+            ribbon(bm, uv, r, 4.0, 1, 0.45)
+            # Street lamps every 28 m from 14 m along this pavement, where its shader draws their
+            # pools of light; the arm reaches out over the road. None within 3 m of a carriageway.
+            run, nxt = 0.0, 14.0
+            for i in range(1, len(r)):
+                seg = math.dist(r[i - 1][:2], r[i][:2])
+                while nxt < run + seg:
+                    f = (nxt - run) / max(seg, 1e-6)
+                    x, y = r[i - 1][0] + (r[i][0] - r[i - 1][0]) * f, r[i - 1][1] + (r[i][1] - r[i - 1][1]) * f
+                    if not on_road(x, y, 1.5):
+                        lamps.append((x, y, r[i][2] + 0.45, math.atan2(r[i][1] - r[i - 1][1], r[i][0] - r[i - 1][0]) + (math.pi if side > 0 else 0.0)))
+                    nxt += 28.0
+                run += seg
     o = kit.mesh_object('City roads', bm, coll, ['road_city', 'sidewalk'])
     return o, avenues
+
+
+def carriageway_test(cell=40.0):
+    """on_road(x, y, margin): whether a point lies on any carriageway (within half its width plus
+    margin of the centreline). Segments are hashed on a coarse grid."""
+    grid = {}
+    for pts, width in carriageways:
+        for a, b in zip(pts, pts[1:]):
+            r = width / 2 + 2.0
+            for i in range(int((min(a[0], b[0]) - r) // cell), int((max(a[0], b[0]) + r) // cell) + 1):
+                for j in range(int((min(a[1], b[1]) - r) // cell), int((max(a[1], b[1]) + r) // cell) + 1):
+                    grid.setdefault((i, j), []).append((a, b, width / 2))
+
+    def on_road(x, y, margin):
+        for a, b, half in grid.get((int(x // cell), int(y // cell)), ()):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            L2 = dx * dx + dy * dy
+            t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / L2))
+            if math.hypot(x - a[0] - dx * t, y - a[1] - dy * t) < half + margin:
+                return True
+        return False
+    return on_road
 
 
 # --- Trees ------------------------------------------------------------------------------------------

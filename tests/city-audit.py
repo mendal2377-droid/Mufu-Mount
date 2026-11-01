@@ -213,6 +213,45 @@ for kind, x3, y3, z3, *_ in trees:
 check('trees', wet_trees + road_trees <= max(5, len(trees) // 2000),
       f'{wet_trees} in water, {road_trees} on a carriageway, of {len(trees)}; e.g. {examples[:5]}')
 
+# --- lamps: none standing in a carriageway, measured against the OSM centrelines ------------------
+# The walk grid cannot tell: a pavement strip laid over a road reads as pavement there. So this
+# measures each lamp against the mapped roads themselves (widths as blender/build_core.py WIDTH,
+# lanes x 3.4 m where tagged), 1 m inside the kerb. The owner saw lamps mid-road on divided avenues.
+FEATURES = ROOT / 'research' / WORLD / 'data' / 'features.json'
+if FEATURES.exists():
+    WIDTH = {'trunk': 26.0, 'primary': 22.0, 'secondary': 15.0, 'tertiary': 11.0, 'residential': 7.0, 'unclassified': 7.0,
+             'living_street': 5.5, 'service': 4.5, 'primary_link': 8.0, 'secondary_link': 7.0, 'trunk_link': 9.0, 'tertiary_link': 6.0}
+    F = json.loads(FEATURES.read_text(encoding='utf-8'))
+    segs = {}
+    for w in F.get('ways', []) + F.get('bridges', []):
+        t = w.get('tags', {})
+        kind = w.get('kind') or t.get('highway')
+        if kind not in WIDTH or t.get('tunnel') or str(t.get('layer', '0')).lstrip('-').isdigit() and int(t.get('layer', 0)) < 0:
+            continue
+        try:
+            lanes = float(str(t.get('lanes', '')).split(';')[0])
+        except ValueError:
+            lanes = 0
+        half = max(WIDTH[kind], lanes * 3.4) / 2
+        if t.get('oneway') in ('yes', '-1', '1'):
+            half = (lanes * 3.4 if lanes else max(WIDTH[kind] / 2, 6.0)) / 2
+        for a, b in zip(w['pts'], w['pts'][1:]):
+            for i in range(int(min(a[0], b[0]) // 40) - 1, int(max(a[0], b[0]) // 40) + 2):
+                for j in range(int(min(a[1], b[1]) // 40) - 1, int(max(a[1], b[1]) // 40) + 2):
+                    segs.setdefault((i, j), []).append((a, b, half))
+
+    def in_road(x, y):
+        for a, b, half in segs.get((int(x // 40), int(y // 40)), ()):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            L2 = dx * dx + dy * dy
+            s = 0.0 if L2 == 0 else max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / L2))
+            if math.hypot(x - a[0] - dx * s, y - a[1] - dy * s) < half - 1.0:
+                return True
+        return False
+    lamps = [(x3, -z3) for kind, x3, y3, z3, *_ in trees if kind == 'lamp']
+    mid = [(round(x), round(y)) for x, y in lamps if in_road(x, y)]
+    check('lamps', len(mid) <= max(5, len(lamps) // 500), f'{len(mid)} of {len(lamps)} lamps stand in a carriageway; e.g. {mid[:5]}')
+
 # --- walkability: markers on walkable ground and reachable from the first spawn -----------------
 markers = []
 for group in ('spawns', 'seats', 'bells', 'docks'):
