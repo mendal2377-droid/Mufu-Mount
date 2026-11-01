@@ -1076,6 +1076,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         mode = 'walk'; off(stop);
       });
     },
+    // Stay aboard until a chosen stop, then off onto its pavement.
+    rideTo(dest, off) {
+      transit.setDestination(dest, stop => {
+        body.set(stop.spot[0], heightAt(stop.spot[0], stop.spot[1]) ?? body.y, stop.spot[1]);
+        mode = 'walk'; off(stop);
+      });
+    },
     rideMetro(line, from, to, {onStation, arrive} = {}) {
       if (glide || ride) return null;
       world.setVehicle('walk'); seated = null; mode = 'sit';

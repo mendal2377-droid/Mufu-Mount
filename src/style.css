@@ -442,7 +442,7 @@ select {
 #ways button:hover { opacity: 1; }
 /* The metro: the lines at this station, their stations as stops on a coloured rule. */
 #metro-map { width: min(420px, 92vw); padding: 14px 16px 16px; border-radius: 18px; }
-#metro-map header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#metro-map header { position: static; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 #metro-map header button { font-size: 20px; width: 30px; height: 30px; border-radius: 15px; }
 #metro-lines section { margin-top: 10px; }
 #metro-lines h3 { font-size: 13px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
@@ -454,11 +454,15 @@ select {
 #metro-lines li small { opacity: .6; margin-left: 6px; }
 /* The bus chooser: the lines calling at this stop, each way, with the next bus's time. */
 #bus-pick { width: min(380px, 92vw); padding: 14px 16px 16px; border-radius: 18px; }
-#bus-pick header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+/* Dialog headers sit in the dialog: the page's own header rule fixes headers to the top of the screen. */
+#bus-pick header { position: static; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 #bus-pick header button { font-size: 20px; width: 30px; height: 30px; border-radius: 15px; }
 #bus-lines button { display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 8px 10px; border-radius: 10px; font-size: 13px; gap: 10px; }
 #bus-lines button:hover { background: #10201a14; }
 #bus-lines small { opacity: .65; }
+/* A long line's stops scroll under the header (which says where the bus is going). */
+#bus-lines { max-height: min(60vh, 420px); overflow-y: auto; }
+#bus-lines small { white-space: nowrap; }
 /* Captions sit low and quiet at the bottom, so they never cover the view (the owner's ask). */
 #toast {
   position: fixed;
@@ -1165,7 +1169,7 @@ body.playing .brand small { display: none; }
 .access-pin.compact:focus-visible .pin-label { pointer-events: auto; }
 .access-pin:hover .pin-label, .access-pin:focus-visible .pin-label { visibility: visible; }
 .access-pin:hover, .access-pin:focus-visible { z-index: 4; }
-body.playing header, body.playing .trail-card, body.playing .map-card,
+body.playing > header, body.playing .trail-card, body.playing .map-card,
 body.playing .bottom-panel, body.playing .memory-rail, body.playing .memory-card,
 body.playing .tour-banner, body.playing #resume, body.playing .crosshair { display: none !important; }
 /* The hour slider sits beside the time it sets. */

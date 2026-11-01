@@ -572,7 +572,8 @@ export async function loadTransit(base, {scene, bands, heightAt, roadAt, surface
           // Off here if asked, and at the end of the line everyone gets off: a bus turns at its
           // terminus and goes back the way it came.
           const last = q === run.stops[run.stops.length - 1];
-          if (bus?.b === b && (bus.alight || last)) { const off = bus.off || alightDefault; bus = null; off?.(q.stop, last, b.line); }
+          const there = bus?.b === b && bus.dest && q.stop.name === bus.dest.name;
+          if (bus?.b === b && (bus.alight || last || there)) { const off = bus.off || alightDefault; bus = null; off?.(q.stop, last, b.line); }
         } else if (b.next < 0 || !q) b.next = run.stops.findIndex(q2 => q2.s > b.s);
         if (b.s >= run.r.length) { b.run = 1 - b.run; b.s = 0; b.next = b.line.runs[b.run].stops.findIndex(q2 => q2.s > 0); }
       }
@@ -693,13 +694,32 @@ export async function loadTransit(base, {scene, bands, heightAt, roadAt, surface
         if (!line.runs[runIdx].stops.some(q => q.stop.shelter === shelter)) continue;
         const end = runIdx === 0 ? line.stops[line.stops.length - 1] : line.stops[0];
         if (end.name === shelter.name) continue;
-        out.push({line, end, eta: busEta(line, shelter.name)[runIdx]});
+        out.push({line, run: runIdx, end, eta: busEta(line, shelter.name)[runIdx]});
       }
       return out;
     },
+    // The stops still ahead, with about how long to each: on the bus being ridden, or (before
+    // boarding) on a line's run from this stop. The owner asked to choose where to get off.
+    stopsAhead(line = null, runIdx = null, from = null) {
+      let run, s0, i0;
+      if (bus && !line) {
+        run = bus.b.line.runs[bus.b.run]; s0 = bus.b.s;
+        i0 = run.stops.findIndex(q => q.s > s0 + .5);
+      } else {
+        run = line.runs[runIdx];
+        const k = run.stops.findIndex(q => q.stop.shelter === (from.shelter || from));
+        if (k < 0) return [];
+        s0 = run.stops[k].s; i0 = k + 1;
+      }
+      if (i0 < 0) return [];
+      const fast = BUS_SPEED * 1.6;
+      return run.stops.slice(i0).map((q, n) => ({stop: q.stop, seconds: (q.s - s0) / fast + n * BUS_DWELL}));
+    },
+    // Get off at a chosen stop further along (instead of the next one); off(stop) on arrival.
+    setDestination(stop, off) { if (bus) { bus.dest = stop; bus.alight = false; bus.off = off; } },
     // Where an alighting rider goes when they did not ask to get off (the terminus).
     setAlight(fn) { alightDefault = fn; },
-    requestStop(off) { if (bus) { bus.alight = true; bus.off = off; if (bus.b.wait > 0 && bus.b.at !== bus.from) { off(bus.b.at); bus = null; } } },
+    requestStop(off) { if (bus) { bus.alight = true; bus.dest = null; bus.off = off; if (bus.b.wait > 0 && bus.b.at !== bus.from) { off(bus.b.at); bus = null; } } },
     // Ride the metro from one station to another on the same line. Calls onStation(stop, last) as
     // stations pass and arrive(entrance) at the end.
     rideMetro(line, from, to, {onStation, arrive} = {}) {

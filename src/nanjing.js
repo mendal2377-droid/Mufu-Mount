@@ -316,16 +316,29 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
         b.onclick=()=>{dlg.close();rideMetro(e,st,mufu);};li.append(b);ol.append(li);}
       sec.append(ol);box.append(sec);}
     dlg.showModal();}
-  // The bus chooser at a stop served by several lines (the owner asked for it).
-  function openBusPick(near){const dlg=$('#bus-pick');if(!dlg)return;
-    $('#bus-here').textContent=`${near.stop.en} · ${near.stop.name}`;
+  // The bus chooser (the owner asked to choose the line, and where to get off). At a stop: the lines
+  // calling on this side, each with where it is heading and the next bus; then that line's stops
+  // ahead. On board: where to get off, the next stop first.
+  const busMin=t=>Number.isFinite(t)?(t<60?'under a minute':`about ${Math.round(t/60)} min`):'';
+  function busList(title,items){const dlg=$('#bus-pick');$('#bus-here').textContent=title;
     const box=$('#bus-lines');box.replaceChildren();
-    const min=t=>Number.isFinite(t)?(t<60?'under a minute':`${Math.round(t/60)} min`):'—';
-    const pick=line=>{dlg.close();api.interactWith({...near,picked:{line}});};
-    for(const o of world.transit.linesAt(near.stop)){const b=document.createElement('button');b.type='button';
-      b.innerHTML=`<span>${o.line.en} → ${o.end.en}</span><small>${min(o.eta)}</small>`;b.onclick=()=>pick(o.line);box.append(b);}
-    const any=document.createElement('button');any.type='button';any.innerHTML='<span>Whichever comes first</span><small></small>';any.onclick=()=>pick(null);box.append(any);
-    dlg.showModal();}
+    for(const [label,note,go] of items){const b=document.createElement('button');b.type='button';
+      b.innerHTML=`<span>${label}</span><small>${note}</small>`;b.onclick=()=>{dlg.close();go();};box.append(b);}
+    if(!dlg.open)dlg.showModal();}
+  const stopName=st=>`${st.en} · ${st.name}`;
+  function openBusPick(near){if(!$('#bus-pick'))return;
+    const board=picked=>api.interactWith({...near,picked});
+    const lines=world.transit.linesAt(near.stop).map(o=>[`${o.line.en} → ${o.end.en}`,busMin(o.eta),()=>{
+      const ahead=world.transit.stopsAhead(o.line,o.run,near.stop);
+      busList(`${o.line.en} → ${o.end.en} · Where to get off?`,[['Decide on the bus','F on board',()=>board({line:o.line})],
+        ...ahead.map(a=>[stopName(a.stop),busMin(a.seconds),()=>board({line:o.line,dest:a.stop})])]);}]);
+    if(lines.length>1)lines.push(['Whichever comes first','',()=>board({line:null})]);
+    busList(stopName(near.stop),lines);}
+  const busOff=stop=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');toast(`Off at ${stopName(stop)} · WASD walk`);};
+  function openRidePick(){const ahead=world.transit.stopsAhead();if(!ahead.length||!$('#bus-pick'))return false;
+    busList('Where to get off?',ahead.map((a,n)=>[(n?'':'Next stop: ')+stopName(a.stop),busMin(a.seconds),
+      ()=>{if(n)world.rideTo(a.stop,busOff);else world.getOffBus(busOff);toast(n?`Getting off at ${a.stop.en}`:'Getting off at the next stop');}]));
+    return true;}
   const MUFU_STATIONS=['上元门'];
   function rideMetro(e,to,mufu=false){const s=world.rideMetro(e.line,e.stop,to,{
       onStation:(st,last)=>toast(last?(mufu?`Arriving · ${st.en} ${st.name} · Mufu Mountain is above the station`:`Arriving · ${st.en} ${st.name}`):`${st.en} ${st.name}`),
@@ -491,17 +504,18 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       const tr=world.transit;
       if(tr?.metroRide)return;
       if(mausoleumOffer&&(tr?.busRide||mausoleumAtGate())){mausoleumOffer=false;if(tr?.busRide)world.getOffBus(()=>{});api.enter('zhongshan',{drop:true});toast('Bus 34 · on to the Sun Yat-sen Mausoleum');return;}
-      if(tr?.busRide){world.getOffBus(stop=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');toast(`Off at ${stop.en} ${stop.name} · WASD walk`);});
+      if(tr?.busRide){if(openRidePick())return;world.getOffBus(busOff);
         if(world.transit.busRide)toast('Getting off at the next stop');return;}
       if(tr?.waiting){tr.cancelWait();toast('Stopped waiting');return;}
       const near=picked||world.nearestTransit();
-      // More than one line on this side of the road: choose one, or whichever comes first.
-      if(near?.kind==='bus'&&world.transit.linesAt(near.stop).length>1&&!near.picked){openBusPick(near);return;}
+      // At a stop: choose the line and where to get off first.
+      if(near?.kind==='bus'&&!near.picked&&world.transit.linesAt(near.stop).length){openBusPick(near);return;}
       if(near?.kind==='bus'){const d=world.waitForBus(near.stop,b=>{camera.rotation.set(world.view==='first'?-.04:-.12,world.heading+(world.view==='first'?0:Math.PI),0,'YXZ');
           // Where it is heading: the line's last stop on this run (Bus 34 east to Zhongshan Gate, for the Mausoleum).
           const end=b.run===0?b.line.stops[b.line.stops.length-1]:b.line.stops[0];
           const on=b.line.id==='bus-34'&&end.name==='中山门'?' (on to the Mausoleum)':'';
-          toast(`Aboard ${b.line.en} → ${end.en}${on} · V for a window seat · F to get off at the next stop`);},near.picked?.line||null);
+          const dest=near.picked?.dest;if(dest)world.rideTo(dest,busOff);
+          toast(`Aboard ${b.line.en} → ${end.en}${on} · ${dest?`getting off at ${dest.en}`:'F to choose where to get off'} · V for a window seat`);},near.picked?.line||null);
         toast(d==null?`Waiting at ${near.stop.en}…`:`Waiting at ${near.stop.en} · the bus is about ${Math.max(5,Math.round(d/5/5)*5)} s away · move to stop waiting`);return;}
       if(near?.kind==='metro'){openMetro(near);return;}
       // The pleasure-boat dock: sail the river and come back here.
