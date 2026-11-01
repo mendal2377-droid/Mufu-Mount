@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / 'research' / 'core' / 'data'
 OUT = ROOT / 'public' / 'scenes' / 'core' / 'transit.json'
 ORIGIN = (32.0418, 118.7838)
-X0, X1, Y0, Y1 = -5286, 3626, -1550, 12855       # the core map (tools/research/area-prep.py)
+X0, X1, Y0, Y1 = -5286, 7851, -1550, 12855       # the core map (tools/research/area-prep.py), east over Purple Mountain
 M_LAT = 111320.0
 M_LON = 111320.0 * math.cos(math.radians(ORIGIN[0]))
 

@@ -37,7 +37,9 @@ AREAS = {
     # map runs north past Xuanwu Lake and Xiaguan to the Yangtze (the owner's ask).
     # North to the Yangtze shore round Mufu Mountain and east to Swallow Rock (燕子矶): the detailed
     # Mufu model (public/world) is merged in there (research/mufu-merge/FACTS.md).
-    'core': {'bbox': (32.028, 118.728, 32.158, 118.822), 'origin': (32.0418, 118.7838)},
+    # East over Purple Mountain to the Mausoleum and Linggu (the owner, 1 Nov 2026: landmarks stay at
+    # their real places, reached by road; design/PURPLE-MOUNTAIN-PLAN.md).
+    'core': {'bbox': (32.028, 118.728, 32.158, 118.867), 'origin': (32.0418, 118.7838)},
     # Terrain only, around the core: Purple Mountain to the east, Mufu Mountain on the river.
     'core_far': {'bbox': (31.990, 118.700, 32.185, 118.905), 'origin': (32.0418, 118.7838), 'osm': False},
     'bridge': {'bbox': (32.100, 118.722, 32.130, 118.758), 'origin': (32.1117707, 118.7461623)},
