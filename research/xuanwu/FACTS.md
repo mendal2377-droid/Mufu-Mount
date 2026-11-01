@@ -40,6 +40,41 @@ its edge.
   dry bridge, and a boardwalk 栈道.
 - **10 piers** (`man_made=pier`) for the boats.
 
+## Entrances
+
+| Entrance | Where | Building | Source |
+| --- | --- | --- | --- |
+| 玄武门 Xuanwu Gate (the west gate) | 32.0726, 118.7824 (OSM way 940335843); Metro 1 Xuanwumen | Ming wall gate with **three arches**, opened 1909 (as Fengrun Gate) for the Nanyang Industrial Exposition; tower pavilions on top | OSM; [ctrip travel note](https://gs.ctrip.com/html5/you/travels/9/4098485.html) |
+| 解放门 Jiefang Gate (south) | 32.0641, 118.7914 (OSM ways 1061607219 and 1061610836); Metro 3 and 4 Jimingsi, walk north beside Jiming Temple's yellow wall | Ming wall gate; the wall-top stair entry beside it (way 95918082) | OSM; [wanderinchina](https://www.wanderinchina.com/destinations/nanjing/xuanwu-lake/) |
+| 情侣园 Lovers' Garden / 十里长堤 Ten-li Embankment (east) | Bus to Suojincun; Metro 4 Gangzicun to the Ten-li Embankment gate | Modern park gate: **appearance unknown**, needs photos | ctrip/qunar notes |
+| Six more entrance points, unnamed in OSM | nodes 1038862155 (32.0774, 118.7987), 1685028229 (32.0795, 118.7981), 2847802716 (32.0880, 118.7880), 2847860753 (32.0799, 118.7813), 3727336388 (32.0866, 118.7838); gate 4386530450 (32.0631, 118.8045) | Unknown | research/xuanwu/osm-entrances.json (Overpass, 1 Nov 2026) |
+
+## Water, plants in the water, fish
+
+- **Water level:** the managed summer level is **9.8 m**, with an ecological minimum of 9.6 m and
+  9.9 m at germination time. This is the height the built lake surface should match
+  ([Hohai University, 2023](https://jour.hhu.edu.cn/slsdkjjz/article/abstract/20230308)).
+- **Water plants:** they cover **13.2%** of the lake, submerged plants only 2.1%, against a target of
+  30%. Lotus 荷花 is the emergent plant that has to be *held back* in summer (same source). So the
+  lotus goes in beds along sheltered shores and between the islands, not over open water.
+- **Water lilies:** nearly **40 varieties** shown at Liangzhou's Jinling Potted Landscape Garden and
+  the rockery waterfall ([yzwb, June 2025](https://www.yzwb.net/news/shaonianhi/202506/t20250608_218656.html)).
+- **Water caltrop 菱** gave Lingzhou its name (official site); reeds: not found in sources
+  (**assumption**: a few reed beds at the quieter edges).
+- **Fish:** the lake was called Nanjing's "live fish store". A 1997 study sampled **silver carp 鲢,
+  bighead carp 鳙 and topmouth culter 翘嘴鲌**
+  ([Journal of Lake Sciences, 1997](https://www.sciengine.com/doi/pdf/4B1FD6F85F59449DB90A186F222FB003)).
+  The park releases fish every year
+  ([yzwb, March 2026](https://www.yzwb.net/news/jiangsu/nanjing/202603/t20260327_335998.html)).
+  Koi or red carp: not found in sources (**assumption**, only in the garden ponds if used).
+
+## Walkable ways (OSM, inside the park polygon, way 62354287)
+
+About **29.9 km of footway**, 1.4 km of pedestrian street, 4.9 km of service road, 0.4 km of path,
+0.27 km of steps, and **39 bridges**. The trunk roads inside the polygon (7.9 km) are mostly the
+tunnel and the avenue along its edge. No individual trees are mapped, so planting follows the
+islands' published character.
+
 ## Not in OSM
 
 OSM maps none of the island landmarks above (Lama Temple, Nuona Pagoda, Lansheng Building, Guo Pu
