@@ -35,7 +35,8 @@
     "offset": 482100
    }
   ],
-  "walkableCells": 866777
+  "walkableCells": 866777,
+  "water": true
  },
  "labels": {
   "axis": "the Mausoleum",
@@ -54,6 +55,7 @@
  ],
  "base_z": 87.8,
  "fog": null,
+ "skyline_clip": null,
  "spawns": {
   "axis": {
    "position": [
@@ -465,6 +467,7 @@
    ]
   }
  },
+ "traffic": [],
  "trees": 27703,
  "staticTriangles": 525930,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). Architecture modelled from published dimensions; see research/zhongshan/FACTS.md."

@@ -89,7 +89,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // Qixia is an autumn world: red maples in low gold light.
     qixia:{world:'qixia',spawn:'qixia',weather:'sunset'},
     // Tiny Nanjing, the continuous city from Xinjiekou to the Yangtze (pilot): in at Gulou below Zifeng.
-    zifeng:{world:'core',spawn:'gulou',weather:'sunset'}},worlds={};
+    zifeng:{world:'core',spawn:'gulou',weather:'sunset'},
+    // Mufu Mountain merged into Tiny Nanjing at its real place, in at the hike's start. The menu's
+    // "Detailed Mufu walk" keeps the original morning walk with its photographs.
+    mufu:{world:'core',spawn:'mufu',weather:'morning'}},worlds={};
   let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
   // The home page opens on Tiny Nanjing (the 'core' world) seen from the air, once it has loaded;
   // until then, and if it fails, the illustrated atlas stands in. Pins sit on their true positions.
@@ -132,7 +135,12 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(!active||state.overview||selected!==p)return;
     exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
     w.setVehicle('walk');showWays();
-    const g=w.meta.walk;worldBounds=new THREE.Box3(new THREE.Vector3(g.x0-150,-60,-(g.y0+g.ny*g.cell)-150),new THREE.Vector3(g.x0+g.nx*g.cell+150,700,-g.y0+150));
+    // Flight bounds: the map's own extent (skyline_clip, three.js x and z) where it has one, else
+    // every walk grid (single-grid fields x0/nx are gone: they left the paraglider at NaN).
+    const clip=w.meta.skyline_clip,grids=w.meta.walk.grids||[{...w.meta.walk,cell:w.meta.walk.cell}];
+    worldBounds=clip?new THREE.Box3(new THREE.Vector3(clip[0]-150,-60,clip[2]-150),new THREE.Vector3(clip[1]+150,700,clip[3]+150))
+      :new THREE.Box3(new THREE.Vector3(Math.min(...grids.map(g=>g.x0))-150,-60,Math.min(...grids.map(g=>-(g.y0+g.ny*(g.cell||w.meta.walk.cell))))-150),
+        new THREE.Vector3(Math.max(...grids.map(g=>g.x0+g.nx*(g.cell||w.meta.walk.cell)))+150,700,Math.max(...grids.map(g=>-g.y0))+150));
     const s=w.spawn(opts.spawn||WORLDS[p.id].spawn);setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
     // Pins and menus arrive by paraglider: the descent shows the whole place and hides any
     // remaining load. Programmatic entry (tests, debug) lands at once.
@@ -251,7 +259,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     for(const {p,d} of rows){
       const card=document.createElement('button');card.type='button';card.setAttribute('role','listitem');card.dataset.id=p.id;card.dataset.seal=p.zh.slice(0,1);
       card.className='place-card'+(p.id===here?' here':'')+(game.stamped(p.id)?' sealed':'');
-      const lamps=p.id==='mufu'?'<span>morning walk</span>':`<span class="lamps">${[0,1,2].map(i=>`<i class="${game.has(p.id,i)?'on':''}"></i>`).join('')}</span>`;
+      const lamps=p.id==='mufu'?'<span>in the city · the morning walk is in the menu</span>':`<span class="lamps">${[0,1,2].map(i=>`<i class="${game.has(p.id,i)?'on':''}"></i>`).join('')}</span>`;
       const dist=p.id===here?'you are here':p.id==='mufu'?'':d<1000?`${Math.round(d/10)*10} m`:`${(d/1000).toFixed(1)} km`;
       card.innerHTML=`<b>${p.zh}</b><small>${p.name}</small><span class="where">${lamps}<span>${dist}</span></span>`;
       card.onclick=()=>{$('#city-places').close();api.enter(p.id,{drop:true});};
@@ -280,14 +288,51 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       card.append(facts);
       card.onclick=()=>{facts.hidden=!facts.hidden;};
       const go=document.createElement('a');go.href='#';go.className='go';go.textContent=id==='mufu'?'Open the morning walk →':'Walk there →';go.style.cssText='display:inline-block;margin-top:8px;font-size:11px;color:#ffcb7d;text-decoration:none;';
-      go.onclick=e=>{e.preventDefault();e.stopPropagation();$('#city-passport').close();api.enter(id,{drop:true});};
+      go.onclick=e=>{e.preventDefault();e.stopPropagation();$('#city-passport').close();api.enter(id,id==='mufu'?{walk:true}:{drop:true});};
       card.append(go);
       grid.append(card);
     }
     const run=game.run,course=gameView.course;
     $('#passport-run-best').textContent=run.best?`Best ${run.best.toFixed(1)} s${run.medal?' · '+run.medal:''} · ${run.runs} run${run.runs>1?'s':''}`:`${course.rings.length} rings · about ${Math.round(course.length/34)} s at cruising speed`;
   }
-  let lastWay='';
+  let lastWay='',mausoleumOffer=false;
+  // Standing by the Zhongshan Gate bus stop (Bus 34's terminus on this map).
+  function mausoleumAtGate(){const st=world?.transit?.lines.find(l=>l.id==='bus-34')?.runs.flatMap(r=>r.stops.map(q=>q.stop)).find(s=>s.name==='中山门');
+    return !!st&&Math.hypot(world.body.x-st.spot[0],world.body.z-st.spot[1])<25;}
+  // The metro map at an entrance: every line calling here, its stations in order; pick one to ride.
+  function openMetro(near){const dlg=$('#metro-map');if(!dlg)return;
+    const here=world.transit.entrances.filter(e=>e.stop.osm===near.stop.osm);
+    $('#metro-here').textContent=`${near.stop.en||near.stop.name} · ${near.stop.name}`;
+    const box=$('#metro-lines');box.replaceChildren();
+    for(const e of here){const sec=document.createElement('section');sec.style.setProperty('--line',e.line.colour);
+      sec.innerHTML=`<h3><i></i>${e.line.en}</h3>`;const ol=document.createElement('ol');
+      for(const st of e.line.stops){const li=document.createElement('li'),b=document.createElement('button');b.type='button';
+        // Shangyuanmen (上元门) stands at the foot of Mufu Mountain, merged into the city. Stations
+        // past every walk grid are seen from the train only.
+        const to=world.transit.entrances.find(x=>x.line===e.line&&x.stop===st),mufu=MUFU_STATIONS.includes(st.name);
+        const onFoot=to&&world.ground(to.spot[0],to.spot[1])!==null;
+        b.innerHTML=`${st.en||st.name}<small>${st.name}${mufu?' · for Mufu Mountain':onFoot?'':' · beyond the walkable city'}</small>`;
+        b.disabled=st===e.stop||!onFoot;
+        b.onclick=()=>{dlg.close();rideMetro(e,st,mufu);};li.append(b);ol.append(li);}
+      sec.append(ol);box.append(sec);}
+    dlg.showModal();}
+  // The bus chooser at a stop served by several lines (the owner asked for it).
+  function openBusPick(near){const dlg=$('#bus-pick');if(!dlg)return;
+    $('#bus-here').textContent=`${near.stop.en} · ${near.stop.name}`;
+    const box=$('#bus-lines');box.replaceChildren();
+    const min=t=>Number.isFinite(t)?(t<60?'under a minute':`${Math.round(t/60)} min`):'—';
+    const pick=line=>{dlg.close();api.interactWith({...near,picked:{line}});};
+    for(const o of world.transit.linesAt(near.stop)){const b=document.createElement('button');b.type='button';
+      b.innerHTML=`<span>${o.line.en} → ${o.end.en}</span><small>${min(o.eta)}</small>`;b.onclick=()=>pick(o.line);box.append(b);}
+    const any=document.createElement('button');any.type='button';any.innerHTML='<span>Whichever comes first</span><small></small>';any.onclick=()=>pick(null);box.append(any);
+    dlg.showModal();}
+  const MUFU_STATIONS=['上元门'];
+  function rideMetro(e,to,mufu=false){const s=world.rideMetro(e.line,e.stop,to,{
+      onStation:(st,last)=>toast(last?(mufu?`Arriving · ${st.en} ${st.name} · Mufu Mountain is above the station`:`Arriving · ${st.en} ${st.name}`):`${st.en} ${st.name}`),
+      arrive:x=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');
+        // Mufu Mountain is merged into the city: off at Shangyuanmen, walk up onto it.
+        toast(mufu?`${x.stop.en} · Mufu Mountain · the promenade and the hike start just north · WASD walk`:`${x.stop.en} ${x.stop.name} · ${x.line.en} · WASD walk`);}});
+    if(s)toast(world.view==='first'?`${e.line.en} · to ${to.en} · V to see the line from above`:`${e.line.en} · to ${to.en} · underground, seen from above · V to ride in the carriage`);}
   function frameWorld(dt,t,weather){
     lastWeather=weather;
     const way=state.flying?'fly':world.vehicle;if(way!==lastWay){lastWay=way;showWays();}
@@ -305,10 +350,23 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(state.flying){state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
     state.moving=world.walk(camera,keys,dt);
     world.placeCamera(camera,dt);
+    // Bus 34 runs on from Zhongshan Gate to the Mausoleum (the road built for Sun Yat-sen's funeral
+    // procession): off this map, so at the gate the ride goes on into the Zhongshan scene.
+    const ride=world.transit?.busRide;
+    const atGate=(!!ride&&ride.b.line.id==='bus-34'&&ride.b.wait>0&&ride.b.at?.name==='中山门')||(!ride&&mausoleumOffer&&mausoleumAtGate());
+    if(atGate&&!mausoleumOffer)toast('Zhongshan Gate · Bus 34 goes on to the Sun Yat-sen Mausoleum · F to ride on');
+    mausoleumOffer=atGate;
+    // Off at a terminus (set once per world): say so; at Zhongshan Gate keep the Mausoleum offer.
+    if(world.transit&&!world.onAlight)world.onAlight=(st,last,line)=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');
+      if(line?.id==='bus-34'&&st.name==='中山门'){mausoleumOffer=true;toast('Terminus · Zhongshan Gate · F to take Bus 34 on to the Sun Yat-sen Mausoleum');return;}
+      toast(last?`Terminus · ${st.en} · everyone off · WASD walk`:`Off at ${st.en} · WASD walk`);};
     if(t-lastSeatHint>6&&!world.seated){const gate=world.nearestGate();
       if(gate){lastSeatHint=t;toast(`Moon gate · F to glide to ${world.label(gate.target)}`);}
       else if(world.nearestBell()){lastSeatHint=t;toast('Temple bell · F to ring it');}
       else if(world.nearestDock()){lastSeatHint=t;toast('Pleasure boats · F to go aboard');}
+      else if(!world.transit?.busRide&&!world.transit?.metroRide&&!world.transit?.waiting&&world.nearestTransit()){const tr=world.nearestTransit();lastSeatHint=t;
+        const wait=tr.kind==='metro'?world.transit.nextTrain(tr.line,tr.stop):0,next=wait<60?'next train under a minute':`next train ${Math.round(wait/60)} min`;
+        toast(tr.kind==='bus'?`Bus stop · ${tr.stop.en} ${tr.stop.name} · F to wait for the bus`:`${tr.stop.en} Station · ${tr.line.en} · ${next} · F to enter`);}
       else if(world.nearestSeat(null,2.5)){lastSeatHint=t;toast('F to sit');}}
     const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
   }
@@ -338,7 +396,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // `drop` plays the descent onto the avenue. Pins and menus ask for it;
     // programmatic entry (tests, the debug API) stays instant and deterministic.
     enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');leaveHome();
-      if(id==='mufu'){api.leave();onMufu();return;}
+      if(id==='mufu'&&opts.walk){api.leave();onMufu();return;}
       exitWorld();useScene();reset();clearOrbitMotion(orbit);selected=p;currentRoute=p.route;flying(false);gameView.cancelRun();arrival=null;
       const mood=WORLDS[id]?.weather||p.vista?.weather;
       if(opts.drop&&!userWeather&&mood&&state.weather!==mood)onWeather(mood);
@@ -424,9 +482,28 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       const footstep=state.moving&&!state.flying&&t-lastFootstep>.52;if(footstep)lastFootstep=t;return footstep;
     },resize:frameMap,
     // F: sit on the nearest seat (benches, the Music Stage terraces), or stand up again.
-    interact(){if(!world||state.overview||state.flying||world.gliding)return;
+    // F; or, from the bus chooser, F again with the line picked.
+    interactWith(picked){api.interact(picked);},
+    interact(picked=null){if(!world||state.overview||state.flying||world.gliding)return;
       if(world.seated){world.stand();music?.stop();toast('Standing up');return;}
       if(world.riding){world.leaveBoat();music?.stop();toast('Ashore');return;}
+      // Metro and buses (src/transit.js): wait at a stop and ride; F again gets off at the next stop.
+      const tr=world.transit;
+      if(tr?.metroRide)return;
+      if(mausoleumOffer&&(tr?.busRide||mausoleumAtGate())){mausoleumOffer=false;if(tr?.busRide)world.getOffBus(()=>{});api.enter('zhongshan',{drop:true});toast('Bus 34 · on to the Sun Yat-sen Mausoleum');return;}
+      if(tr?.busRide){world.getOffBus(stop=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');toast(`Off at ${stop.en} ${stop.name} · WASD walk`);});
+        if(world.transit.busRide)toast('Getting off at the next stop');return;}
+      if(tr?.waiting){tr.cancelWait();toast('Stopped waiting');return;}
+      const near=picked||world.nearestTransit();
+      // More than one line on this side of the road: choose one, or whichever comes first.
+      if(near?.kind==='bus'&&world.transit.linesAt(near.stop).length>1&&!near.picked){openBusPick(near);return;}
+      if(near?.kind==='bus'){const d=world.waitForBus(near.stop,b=>{camera.rotation.set(world.view==='first'?-.04:-.12,world.heading+(world.view==='first'?0:Math.PI),0,'YXZ');
+          // Where it is heading: the line's last stop on this run (Bus 34 east to Zhongshan Gate, for the Mausoleum).
+          const end=b.run===0?b.line.stops[b.line.stops.length-1]:b.line.stops[0];
+          const on=b.line.id==='bus-34'&&end.name==='中山门'?' (on to the Mausoleum)':'';
+          toast(`Aboard ${b.line.en} → ${end.en}${on} · V for a window seat · F to get off at the next stop`);},near.picked?.line||null);
+        toast(d==null?`Waiting at ${near.stop.en}…`:`Waiting at ${near.stop.en} · the bus is about ${Math.max(5,Math.round(d/5/5)*5)} s away · move to stop waiting`);return;}
+      if(near?.kind==='metro'){openMetro(near);return;}
       // The pleasure-boat dock: sail the river and come back here.
       const dock=world.nearestDock();
       if(dock&&world.board(dock)){camera.rotation.set(-.1,world.heading+Math.PI,0,'YXZ');   // look down the riverif(audio&&!audio.started&&soundButton)soundButton.click();
@@ -448,7 +525,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // Pins that open a Blender world instead of an atlas walk (tests skip the atlas checks for them).
     get worldPins(){return Object.keys(WORLDS);},
     // V: third person (the traveller and the magpie in view) or first person.
-    toggleView(){if(!world||state.overview)return;toast(world.toggleView()==='third'?'Third person':'First person');},
+    toggleView(){if(!world||state.overview)return;const v=world.toggleView();
+      if(world.transit?.metroRide){toast(v==='first'?'In the carriage · drag to look · V to see the line from above':'Above the city · V to ride in the carriage');return;}
+      if(world.transit?.busRide){if(v==='first')camera.rotation.set(-.04,world.heading,0,'YXZ');toast(v==='first'?'Window seat · drag to look at the street · V to see the bus':'Behind the bus · V for a window seat');return;}
+      toast(v==='third'?'Third person':'First person');},
     // Debug/test seam: stand at a named spawn of the current Blender world (axis, stair, hall, music).
     worldSpawn(name,{glide=false}={}){if(!world)return null;flying(false);const s=world.spawn(name);
       setArrivalCamera(camera,s.position,s.look);camera.near=.1;camera.updateProjectionMatrix();
@@ -470,7 +550,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   refreshPins();
   $('#city-scope').onchange=e=>api.showPlan(e.target.value);$('#city-reset').onclick=frameMap;
   $('#city-map-return').onclick=()=>api.showPlan();$('#city-menu-close').onclick=()=>$('#city-menu').close();
-  $('#city-mufu').onclick=()=>api.enter('mufu');$('#city-weather').onclick=()=>{const moods=['morning','sunset','night','storm','snow','dawn'];onWeather(moods[(moods.indexOf(state.weather)+1)%moods.length]);};
+  $('#city-mufu').onclick=()=>api.enter('mufu',{walk:true});$('#city-weather').onclick=()=>{const moods=['morning','sunset','night','storm','snow','dawn'];onWeather(moods[(moods.indexOf(state.weather)+1)%moods.length]);};
   $('#city-sound').onclick=()=>{$('#sound').click();$('#city-menu').close();};
   $('#nanjing-return').onclick=()=>api.showPlan();
   for(const b of document.querySelectorAll('#ways button'))b.onclick=e=>{api.setWay(b.dataset.way);e.currentTarget.blur();};

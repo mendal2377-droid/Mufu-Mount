@@ -28,7 +28,8 @@
     "yaw": 2.6089525
    }
   ],
-  "walkableCells": 75146
+  "walkableCells": 75146,
+  "water": true
  },
  "labels": {
   "bridge": "the South Bridgehead",
@@ -42,6 +43,7 @@
  ],
  "base_z": 1.0,
  "fog": 0.00032,
+ "skyline_clip": null,
  "spawns": {
   "bridge": {
    "position": [

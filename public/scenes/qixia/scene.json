@@ -26,7 +26,8 @@
     "offset": 92000
    }
   ],
-  "walkableCells": 205517
+  "walkableCells": 205517,
+  "water": true
  },
  "labels": {
   "qixia": "Qixia Temple",
@@ -40,6 +41,7 @@
  ],
  "base_z": 3.0,
  "fog": 0.0007,
+ "skyline_clip": null,
  "spawns": {
   "qixia": {
    "position": [

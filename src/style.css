@@ -440,6 +440,25 @@ select {
 #ways button { font-size: 17px; width: 38px; height: 34px; border-radius: 18px; opacity: .65; }
 #ways button.active { background: #f3ecd9; opacity: 1; }
 #ways button:hover { opacity: 1; }
+/* The metro: the lines at this station, their stations as stops on a coloured rule. */
+#metro-map { width: min(420px, 92vw); padding: 14px 16px 16px; border-radius: 18px; }
+#metro-map header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#metro-map header button { font-size: 20px; width: 30px; height: 30px; border-radius: 15px; }
+#metro-lines section { margin-top: 10px; }
+#metro-lines h3 { font-size: 13px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+#metro-lines h3 i { width: 22px; height: 6px; border-radius: 3px; background: var(--line); }
+#metro-lines ol { list-style: none; margin: 0; padding: 0 0 0 10px; border-left: 4px solid var(--line); }
+#metro-lines li button { display: block; width: 100%; text-align: left; padding: 5px 8px; border-radius: 8px; font-size: 13px; }
+#metro-lines li button:hover:not(:disabled) { background: #10201a14; }
+#metro-lines li button:disabled { font-weight: 600; opacity: 1; }
+#metro-lines li small { opacity: .6; margin-left: 6px; }
+/* The bus chooser: the lines calling at this stop, each way, with the next bus's time. */
+#bus-pick { width: min(380px, 92vw); padding: 14px 16px 16px; border-radius: 18px; }
+#bus-pick header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#bus-pick header button { font-size: 20px; width: 30px; height: 30px; border-radius: 15px; }
+#bus-lines button { display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 8px 10px; border-radius: 10px; font-size: 13px; gap: 10px; }
+#bus-lines button:hover { background: #10201a14; }
+#bus-lines small { opacity: .65; }
 /* Captions sit low and quiet at the bottom, so they never cover the view (the owner's ask). */
 #toast {
   position: fixed;

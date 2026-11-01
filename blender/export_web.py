@@ -82,19 +82,33 @@ SETTINGS = {
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
     },
     'core': {
-        'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates'),
+        'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu'),
         'uv': True,
         # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
-        # the city is for riding and flying.
+        # the city is for riding and flying. A 4 m grid takes steps up to 1 m, the same 25 % slope
+        # the 2.5 m grid allows with 0.65 m (the foot of Mufu Mountain was impassable at 16 %).
         'grids': [{'name': 'centre', 'x0': -1480.0, 'x1': 2080.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 2.5},
-                  {'name': 'north', 'x0': -3600.0, 'x1': 2080.0, 'y0': 2200.0, 'y1': 6000.0, 'cell': 4.0}],
+                  {'name': 'north', 'x0': -3600.0, 'x1': 2080.0, 'y0': 2200.0, 'y1': 6000.0, 'cell': 4.0, 'stepUp': 1.0},
+                  # Line 3's Xiaoshi and Wutang Square up to the foot of Mufu Mountain.
+                  {'name': 'wutang', 'x0': -2600.0, 'x1': 400.0, 'y0': 6000.0, 'y1': 8700.0, 'cell': 4.0, 'stepUp': 1.0},
+                  # Every landmark and station on the map walkable (the owner, 1 November): the west
+                  # (Qingliangshan's ginkgo, Mochou Lake, Hanzhongmen, Line 2 and 4 west), the east
+                  # (the Ming Palace ruins, Nanjing Museum, Gangzicun), the north-west riverside
+                  # (Yijiangmen, Zhongshan Wharf) and Line 1's viaduct stations (Hongshan Zoo,
+                  # Maigaoqiao).
+                  {'name': 'west', 'x0': -5280.0, 'x1': -1480.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 4.0, 'stepUp': 1.0},
+                  {'name': 'east', 'x0': 2080.0, 'x1': 3620.0, 'y0': -1520.0, 'y1': 6000.0, 'cell': 4.0, 'stepUp': 1.0},
+                  {'name': 'riverside', 'x0': -5280.0, 'x1': -3600.0, 'y0': 2200.0, 'y1': 7200.0, 'cell': 4.0, 'stepUp': 1.0},
+                  {'name': 'viaduct', 'x0': 400.0, 'x1': 2600.0, 'y0': 6000.0, 'y1': 7400.0, 'cell': 4.0, 'stepUp': 1.0}],
         'title': 'Tiny Nanjing: from Xinjiekou to the Yangtze',
         'zh': '新街口 · 中山路 · 总统府',
         'fog': 0.00022,      # light haze: Purple Mountain should stand clear in the east
         'labels': {'xinjiekou': 'Xinjiekou', 'zhongshan': 'Zhongshan Road', 'palace': 'the Presidential Palace', 'gulou': 'Gulou'},
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: '
                       'OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, '
-                      'and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed).',
+                      'and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed). '
+                      'Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, '
+                      'balconies and air conditioners are drawn from photographs (assumed).',
     },
     'qixia': {
         'static': ('Ground', 'Water', 'Temple', 'Hill', 'City', 'Gates'),
@@ -214,6 +228,9 @@ def walk_grid(trees, grid):
                 poly = me.polygons[index] if index < len(me.polygons) else None
                 m = me.materials[poly.material_index] if poly and me.materials else None
                 name = m.name.split('.')[0] if m else ''
+                # Merged models flag their own walkable materials (blender/mufu_merge.py).
+                if m is not None and m.get('walkable'):
+                    name = 'road_city' if m.get('road') else 'paving'
                 mats_cache[key] = name
             if name in WALKABLE:
                 # Roads are marked by an odd centimetre (everything else even): the bike keeps to
@@ -317,11 +334,18 @@ def main():
     trees_out = tree_records(trees)
     lap('collect')
     grids, heights, walk_count, water = [], [], 0, []
-    for g in cfg['grids']:
+    grid_list = list(cfg['grids'])
+    # Grids the build adds (Tiny Nanjing: Mufu Mountain's, over the merged model).
+    for extra in json.loads(bpy.context.scene.get('extra_grids', '[]')):
+        grid_list.append(extra)
+    for g in grid_list:
+        if 'x1' not in g:
+            continue
         nx, ny, h, n, wet = walk_grid(trees, g)
         water += wet
         grids.append({'name': g['name'], 'nx': nx, 'ny': ny, 'x0': g['x0'], 'y0': g['y0'], 'cell': g.get('cell', CELL),
-                      'offset': len(heights), **({'yaw': g['yaw']} if g.get('yaw') else {})})
+                      'offset': len(heights), **({'yaw': g['yaw']} if g.get('yaw') else {}),
+                      **({'stepUp': g['stepUp']} if g.get('stepUp') else {})})
         heights += h
         walk_count += n
     lap('walk grids')
@@ -360,6 +384,8 @@ def main():
         # Moving traffic (trains, ships, cars): the build stores routes in Blender metres.
         'traffic': [{**t, 'pts': [to_three(Vector(p)) for p in t['pts']]}
                     for t in json.loads(bpy.context.scene.get('traffic', '[]'))],
+        # Metro and bus lines (tools/research/transit-prep.py writes transit.json beside the scene).
+        'transit': (OUT / 'transit.json').exists(),
         'trees': len(trees_out),
         'staticTriangles': tris,
         'provenance': cfg.get('provenance', 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Outlines: OpenStreetMap contributors (ODbL). '

@@ -26,7 +26,8 @@
     "offset": 341700
    }
   ],
-  "walkableCells": 473882
+  "walkableCells": 473882,
+  "water": true
  },
  "labels": {
   "qinhuai": "the Qinhuai River",
@@ -42,6 +43,7 @@
  ],
  "base_z": 3.0,
  "fog": 0.0007,
+ "skyline_clip": null,
  "spawns": {
   "qinhuai": {
    "position": [
@@ -729,6 +731,7 @@
    ]
   }
  },
+ "traffic": [],
  "trees": 4961,
  "staticTriangles": 653572,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). River, banks, bridges, lanes, walls and house footprints: OpenStreetMap contributors (ODbL). Architecture from published descriptions; see research/oldsouth/FACTS.md."

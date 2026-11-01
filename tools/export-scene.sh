@@ -4,10 +4,14 @@ set -e
 id=${1:-zhongshan}; shift || true
 B=${BLENDER_EXE:-/d/soft/blender/blender.exe}
 flag=--no-render; [ "$1" = "--render" ] && flag=
-"$B" -b --factory-startup --python blender/build_$id.py -- $flag 2>&1 | grep -E "BUILD|RENDERED|Error|Traceback|line "
+"$B" -b --factory-startup --python blender/build_$id.py -- $flag 2>&1 | grep -E "BUILD|MUFU|RENDERED|Error|Traceback|line "
 "$B" -b art-src/$id.blend --python blender/export_web.py -- $id 2>&1 | grep -E "EXPORTED|Error|Traceback|line "
 # --join-meshes false: meshopt quantises positions over each mesh's bounds, and joining every
 # collection into one mesh let the bridge's 80 km far land coarsen the deck to metre steps.
 # --prune-attributes false: the city's façade and road shaders read UVs that no texture uses.
 npx gltf-transform optimize public/scenes/$id/static.raw.glb public/scenes/$id/static.glb \
   --compress meshopt --texture-compress false --simplify false --palette false --join-meshes false --prune-attributes false 2>&1 | tail -1
+# Metro and bus lines (tools/research/transit-prep.py): ground heights along them from this build.
+if [ -f public/scenes/$id/transit.json ]; then
+  "$B" -b art-src/$id.blend --python tools/transit-heights.py -- $id 2>&1 | grep -E "heights|Error|Traceback"
+fi

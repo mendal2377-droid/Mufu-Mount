@@ -15,20 +15,24 @@ plane-tree spacing, the bare ground (the DSM's 150 m minimum).
 """
 import colorsys
 import hashlib
+import json
 import math
 import random
 import sys
+from collections import Counter
 from pathlib import Path
 
 import bmesh
 import bpy
 import numpy as np
 from mathutils import Matrix, Vector
+from mathutils.bvhtree import BVHTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import area_common as ac  # noqa: E402
 import kit  # noqa: E402
 import kit_oldcity as oc  # noqa: E402
+import mufu_merge as mm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_BLEND = ROOT / 'art-src' / 'core.blend'
@@ -52,33 +56,111 @@ def far_z(x, y):
     return FAR.bare_at(x, y) + FAR.base - A.base - (8.0 if FAR.bare_at(x, y) + FAR.base - A.base > 30 else 0.0)  # canopy off the hills
 
 # --- Ground and water -------------------------------------------------------------------------------
-lakes = [w['pts'] for w in F['water']]
+def clip_rect(poly, x0, x1, y0, y1):
+    """Sutherland–Hodgman: the part of a polygon inside a rectangle."""
+    def cut(pts, inside, cross):
+        out = []
+        for i, cur in enumerate(pts):
+            prev = pts[i - 1]
+            if inside(cur):
+                if not inside(prev):
+                    out.append(cross(prev, cur))
+                out.append(cur)
+            elif inside(prev):
+                out.append(cross(prev, cur))
+        return out
+
+    def at_x(x):
+        return lambda a, b: (x, a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]))
+
+    def at_y(y):
+        return lambda a, b: (a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]), y)
+    pts = list(poly[:-1] if poly[0] == poly[-1] else poly)
+    for inside, cross in ((lambda p: p[0] >= x0, at_x(x0)), (lambda p: p[0] <= x1, at_x(x1)),
+                          (lambda p: p[1] >= y0, at_y(y0)), (lambda p: p[1] <= y1, at_y(y1))):
+        if len(pts) < 3:
+            return pts
+        pts = cut(pts, inside, cross)
+    return pts
+
+
+# Water areas clipped to the map: the Yangtze's OSM outline runs 86 km downstream, and the whole
+# ring split into slivers that left the river by Mufu Mountain without a surface (city-audit).
+lakes = [w['pts'] if all(X0 - 300 < x < X1 + 300 and Y0 - 300 < y < Y1 + 300 for x, y in w['pts'])
+         else clip_rect(w['pts'], X0 - 300, X1 + 300, Y0 - 300, Y1 + 300) for w in F['water']]
+# A water area wholly off the map keeps its index as a speck far outside it.
+lakes = [w if len(w) >= 3 else [(X1 + 900, Y1 + 900), (X1 + 901, Y1 + 900), (X1 + 900, Y1 + 901)] for w in lakes]
+
+
+def big_river(w):
+    """The Yangtze and Jiajiang: kilometres across the map (their banks are wharves and dikes)."""
+    return max(x for x, _ in w) - min(x for x, _ in w) > 4000 or max(y for _, y in w) - min(y for _, y in w) > 4000
 # Rivers and canals mapped only as centrelines (the inner Qinhuai's 运渎, the Pearl River) become
-# channels: the line buffered to its OSM width, else a typical width for its kind. Lines already
+# channels: the line buffered to its OSM width, else a typical width for its kind. Stretches already
 # inside a water polygon are left alone (tests/city-audit.py found these missing).
 RIVER_WIDTH = {'river': 14.0, 'canal': 10.0, 'stream': 4.0}
+CHANNELS = {}                  # index in lakes -> (left bank, right bank), drawn as a strip
 _poly_mask = ac.Mask(lakes, A.extent, 4.0)
 for w in F['ways']:
     kind = w.get('tags', {}).get('waterway')
     if w.get('kind') != 'waterway' or kind not in RIVER_WIDTH or len(w['pts']) < 2:
         continue
-    if sum(_poly_mask.at(*p) for p in w['pts']) > len(w['pts']) / 2:
+    # Culverts run under the streets (21 OSM waterway lines, the Jinchuan River's among them):
+    # drawn open they ran under buildings (tools/scene-audit.py).
+    if w['tags'].get('tunnel') or w['tags'].get('layer', '0').startswith('-'):
         continue
     try:
         width = float(str(w.get('tags', {}).get('width', '')).split()[0])
     except (ValueError, IndexError):
         width = RIVER_WIDTH[kind]
-    left, right = ac.polyline_offset(w['pts'], width / 2), ac.polyline_offset(w['pts'], -width / 2)
-    lakes.append([(v.x, v.y) for v in left] + [(v.x, v.y) for v in reversed(right)])
-water_mask = ac.Mask(lakes, A.extent, 4.0)
+    # Only the stretches outside mapped water: the Yangwu moat (杨吴城濠) is a polygon in parts and a
+    # line between them, and skipping whole lines left 30 m+ gaps in it.
+    pts, wet_pt = w['pts'], [_poly_mask.at(*p) for p in w['pts']]
+    runs, run = [], []
+    for k in range(len(pts) - 1):
+        if not (wet_pt[k] and wet_pt[k + 1]):
+            run = run or [pts[k]]
+            run.append(pts[k + 1])
+        elif run:
+            runs.append(run)
+            run = []
+    if run:
+        runs.append(run)
+    for run in runs:
+        left, right = ac.polyline_offset(run, width / 2), ac.polyline_offset(run, -width / 2)
+        CHANNELS[len(lakes)] = (left, right)
+        lakes.append([(v.x, v.y) for v in left] + [(v.x, v.y) for v in reversed(right)])
+
+
+_house_mask = ac.Mask([b['pts'] for b in F['buildings']], A.extent, 2.0)
+
+
+def water_shapes(k):
+    """The polygons that make up lakes[k]: a channel is its strip of quads, never its outline,
+    which self-intersects at bends. Where a mapped building stands on the line the river is
+    culverted under it, tagged or not (tools/scene-audit.py found channels under Xiaguan's houses)."""
+    if k not in CHANNELS:
+        return [lakes[k]]
+    left, right = CHANNELS[k]
+    quads = [[(a.x, a.y), (b.x, b.y), (d.x, d.y), (e.x, e.y)] for a, b, d, e in zip(left, left[1:], right[1:], right)]
+    def probes(q):
+        # The river's own line (start, middle, end of the strip), not its banks: houses line the
+        # canals, and testing the banks culverted open water beside them.
+        (a, b, d, e) = q
+        return [((a[0] + e[0]) / 2, (a[1] + e[1]) / 2), ((b[0] + d[0]) / 2, (b[1] + d[1]) / 2),
+                (sum(p[0] for p in q) / 4, sum(p[1] for p in q) / 4)]
+    return [q for q in quads if not any(_house_mask.at(*p) for p in probes(q))]
+
+
+water_mask = ac.Mask([q for k in range(len(lakes)) for q in water_shapes(k)], A.extent, 4.0)
 # Each water body's level, from the bare ground on its banks; the bed is always below it (a
 # pond's bed once came out above its own surface, from the noisy bare-ground estimate).
 water_level = np.full(water_mask.m.shape, np.inf, dtype=np.float32)
 LAKE_LEVELS = []
-for w in lakes:
+for k, w in enumerate(lakes):
     level = min(A.bare_at(x, y) for x, y in w[::max(1, len(w) // 400)]) - 0.4
     LAKE_LEVELS.append(level)
-    m = ac.Mask([w], A.extent, 4.0).m
+    m = ac.Mask(water_shapes(k), A.extent, 4.0).m
     water_level[m] = np.minimum(water_level[m], level)
 island_mask = ac.Mask([w['pts'] for w in F['islands']], A.extent, 4.0)
 GREEN = {'grass', 'park', 'garden', 'wood', 'flowerbed', 'meadow', 'village_green', 'recreation_ground', 'cemetery', 'scrub', 'forest'}
@@ -92,6 +174,11 @@ def wet(x, y):
     return water_mask.at(x, y) and not island_mask.at(x, y)
 
 
+def dry(x, y, r=3.0):
+    """No water within r: a trunk on the very edge stood in the water cells the boat uses."""
+    return not any(wet(x + dx, y + dy) for dx, dy in ((0, 0), (r, 0), (-r, 0), (0, r), (0, -r)))
+
+
 def zground(x, y):
     return A.bare_at(x, y)
 
@@ -99,11 +186,63 @@ def zground(x, y):
 WATER = {}
 
 
-def ground(x, y):
+def river_strips(name, coll, ring, z, holes, cell=8.0, extra=None):
+    """Water as row strips over a polygon's scanline fill (islands left dry); extra: more cells."""
+    m = ac.Mask([ring], A.extent, cell).m.copy()
+    if holes:
+        m &= ~ac.Mask(holes, A.extent, cell).m
+    if extra is not None:
+        m |= extra
+    bm = bmesh.new()
+    x0, y0 = A.extent[0], A.extent[2]
+    for j in range(m.shape[0]):
+        row = m[j]
+        if not row.any():
+            continue
+        edges = np.flatnonzero(np.diff(np.r_[0, row.astype(np.int8), 0]))
+        ya, yb = y0 + (j - .5) * cell, y0 + (j + .5) * cell
+        for a, b in zip(edges[0::2], edges[1::2]):
+            xa, xb = x0 + (a - .5) * cell, x0 + (b - .5) * cell
+            bm.faces.new([bm.verts.new((xa, ya, z)), bm.verts.new((xb, ya, z)), bm.verts.new((xb, yb, z)), bm.verts.new((xa, yb, z))])
+    return kit.mesh_object(name, bm, coll, ['water'])
+
+
+MUFU = {'zone': None, 'heights': None, 'shallows': None, 'river_k': None}
+
+
+def ground(x, y, step=4.0):
+    """(z, material) of the terrain grid at (x, y). The grid is 12-24 m, wider than many canals, so
+    a vertex within one step of water drops just under the water's level as a stone bank: else the
+    terrain between a dry vertex and a wet one rose through the surface (tests/city-audit.py found
+    a quarter of the moats and the inner Qinhuai covered by lawn and paving)."""
+    # Under the merged Mufu model the city's ground keeps out of sight, just below it.
+    if MUFU['zone'] is not None and MUFU['zone'].at(x, y):
+        h = MUFU['heights'].at(x, y)
+        if h is not None:
+            return min(zground(x, y), h - 2.5), 0
+        if not wet(x, y):
+            # Round a pond the model's faces are cut back: the city's ground fills the gap at the
+            # forest's own height, or the pond sat in a pit (tests/city-audit.py banks).
+            near = [q for d in (6, 12, 24) for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d))
+                    if (q := MUFU['heights'].at(x + dx, y + dy)) is not None]
+            if near:
+                return min(near) - 0.2, 0
+    i, j = int(round((x - water_mask.x0) / water_mask.cell)), int(round((y - water_mask.y0) / water_mask.cell))
     if wet(x, y):
-        i, j = int(round((x - water_mask.x0) / water_mask.cell)), int(round((y - water_mask.y0) / water_mask.cell))
         level = water_level[j, i] if 0 <= i < water_mask.nx and 0 <= j < water_mask.ny else np.inf
         return min(zground(x, y) - 3.0, level - 1.5), 3
+    if island_mask.at(x, y):
+        # Islands stand clear of their lake: the bare-ground estimate put Xuanwu's isles under it.
+        r = int(math.ceil(60.0 / water_mask.cell))
+        near = water_level[max(0, j - r):j + r + 1, max(0, i - r):i + r + 1]
+        if near.size and np.isfinite(near).any():
+            return max(zground(x, y), float(near[np.isfinite(near)].max()) + 0.6), (0 if green_mask.at(x, y) else 1)
+        return zground(x, y), (0 if green_mask.at(x, y) else 1)
+    if step > water_mask.cell:
+        r = int(math.ceil(step / water_mask.cell))
+        near = water_level[max(0, j - r):j + r + 1, max(0, i - r):i + r + 1]
+        if near.size and np.isfinite(near).any():
+            return min(zground(x, y), float(near.min()) - 0.2), 3
     return zground(x, y), (0 if green_mask.at(x, y) else 1)
 
 
@@ -162,9 +301,30 @@ def estimate_height(t, a):
     return 18.0
 
 
+# Districts from OSM land use (the owner, 1 November: the old residential compounds round Wutang
+# Square are not the offices of Xinjiekou): residential, commercial and retail, industrial; and
+# the frontage of the avenues, where ground floors are shops.
+def _landuse(*kinds):
+    return ac.Mask([p['pts'] for p in F['places'] if p.get('pts') and p['tags'].get('landuse') in kinds], A.extent, 8.0)
+
+
+RESIDENTIAL, COMMERCIAL, INDUSTRIAL = _landuse('residential'), _landuse('commercial', 'retail'), _landuse('industrial')
+_front = []
+for _w in F['ways']:
+    if _w.get('kind') in ('trunk', 'primary', 'secondary', 'tertiary') and len(_w['pts']) > 1:
+        _l, _r = ac.polyline_offset(_w['pts'], 28.0), ac.polyline_offset(_w['pts'], -28.0)
+        _front.append([(v.x, v.y) for v in _l] + [(v.x, v.y) for v in reversed(_r)])
+FRONTAGE = ac.Mask(_front, A.extent, 8.0)
+
 # Window style per building, read by the façade shader from the vertex alpha:
-# 0 = residential, .35 = office glass, .7 = old low houses, 1 = blank (stations, halls).
-def style(t, h):
+#   0    flats with shops on the ground floor (on an avenue)
+#   .08  flats without shops (inside a compound)
+#   .18  old walk-up flats (residential land, up to 8 floors): balconies, air conditioners
+#   .26  old walk-up flats with shops below (on an avenue)
+#   .35  office glass (commercial land, office and shop tags, towers)
+#   .7   old low houses
+#   1    blank (stations, halls, sheds)
+def style(t, h, x=None, y=None):
     kind = t.get('building') or ''
     if kind in ('train_station', 'transportation', 'warehouse', 'industrial', 'temple', 'church'):
         return 1.0
@@ -172,7 +332,20 @@ def style(t, h):
         return 0.35
     if h < 8:
         return 0.7
-    return 0.0
+    front = x is not None and FRONTAGE.at(x, y)
+    if x is not None and COMMERCIAL.at(x, y) and h > 14:
+        return 0.35
+    if x is not None and INDUSTRIAL.at(x, y) and kind in ('', 'yes') and h < 16:
+        return 1.0
+    homes = kind in ('apartments', 'residential', 'dormitory', 'house') or x is not None and RESIDENTIAL.at(x, y)
+    if homes and h <= 27:
+        return 0.26 if front else 0.18
+    return 0.0 if front else 0.08
+
+
+# Old walk-ups: the faded render and tile of 1980s-90s compounds (cream, pale pink, grey, pale
+# yellow, grimy white): an assumption from photographs, stated in the provenance.
+WALKUP_WALLS = ['#D9CDB4', '#D7B8AA', '#B7B4AC', '#D8C99A', '#CFCBC0', '#C9B8A0', '#DCD3C2']
 
 
 def hashf(s, k=0):
@@ -217,7 +390,9 @@ def build_buildings(coll, skip, over):
         g = zground(cx, cy)
         wall = lin(colour(t.get('building:colour'), WALLS[int(hashf(b['id']) * len(WALLS))]))
         roof = lin(colour(t.get('roof:colour'), '#5D6670' if h < 8 else ROOFS[int(hashf(b['id'], 1) * len(ROOFS))]))
-        st = style(t, h)
+        st = style(t, h, cx, cy)
+        if .15 < st < .3 and not t.get('building:colour'):
+            wall = lin(WALKUP_WALLS[int(hashf(b['id'], 2) * len(WALKUP_WALLS))])
         wall = (*wall[:3], st)
         roof = (*roof[:3], st)
         # Parts that start 3 m or more up (skybridges, decks over a street) are Overhead: the walk
@@ -294,12 +469,19 @@ def build_infill(coll, blocked, near_road, skip, mark):
                      for v in (-W / 2, 0.0, W / 2)]
             if any(blocked(qx, qy) or wet(qx, qy) or green_mask.at(qx, qy) for qx, qy in probe):
                 continue
-            floors = rnd.choice((6, 6, 6, 7, 7, 7, 11, 18)) if rnd.random() < 0.93 else rnd.choice((24, 28, 32))
+            if RESIDENTIAL.at(px, py):
+                floors = rnd.choice((6, 6, 6, 7, 7)) if rnd.random() < 0.9 else rnd.choice((11, 18))
+            elif COMMERCIAL.at(px, py):
+                floors = rnd.choice((8, 11, 18, 24, 28))
+            else:
+                floors = rnd.choice((6, 6, 6, 7, 7, 7, 11, 18)) if rnd.random() < 0.93 else rnd.choice((24, 28, 32))
             h = floors * 3.0 + 1.2
-            # Nanjing's compounds are mostly white, cream and pale grey; a few warm blocks between.
-            wall = lin(INFILL_WALLS[int(rnd.random() * len(INFILL_WALLS))])
+            st = style({}, h, px, py)
+            # Nanjing's compounds are mostly white, cream and pale grey; old walk-ups faded.
+            walls = WALKUP_WALLS if .15 < st < .3 else INFILL_WALLS
+            wall = lin(walls[int(rnd.random() * len(walls))])
             roof = lin(ROOFS[int(rnd.random() * len(ROOFS))] if h > 25 else rnd.choice(('#8FA0A6', '#A9AAA3', '#7E9AA8')))
-            if extrude(bm, uv, col, pts, zground(px, py), 0.0, h, (*wall[:3], 0.0), (*roof[:3], 0.0)):
+            if extrude(bm, uv, col, pts, zground(px, py), 0.0, h, (*wall[:3], st), (*roof[:3], st)):
                 n += 1
                 mark(pts)
         y += step
@@ -487,12 +669,101 @@ def main():
             o.matrix_world = Matrix.Translation((pal.x, pal.y, pal_z)) @ o.matrix_world
             target.objects.link(o)
 
+    # Mufu Mountain: the app's own detailed model at its real place (blender/mufu_merge.py). Its land
+    # replaces the city's there: OSM buildings, roads, infill and trees keep out, the city's ground
+    # lies just under it, and the walk grid covers it.
+    c['Mufu'] = bpy.data.collections.new('Mufu')
+    root.children.link(c['Mufu'])
+    mparts, mtrees = mm.load()
+    # The model's land where the real mountain is: inside OSM's Mufu Mountain wood (幕府山) or
+    # north of the old map's edge along the river. Its woodland reaches a kilometre further south,
+    # over the streets round Wutang Square, which stay the city's.
+    wood = next((p['pts'] for p in F['places'] if p['id'] == 62344629 and p.get('pts')), None)
+    wood_mask = ac.Mask([wood], A.extent, 8.0) if wood else None
+    zone = mm.Coverage(mparts, A.extent, allow=lambda x, y: y > 8432.0 or (wood_mask is not None and wood_mask.at(x, y)))
+    river, river_k = mm.river_level(lakes, LAKE_LEVELS, ac.point_in_poly)
+    z0 = river if river is not None else 0.0
+    # On the mountain OSM's roads and paths are the true ones (the owner, 1 November): the model's
+    # own hike paths inside OSM's Mufu Mountain wood give way to them. Along the river the model's
+    # Yongji Avenue and promenade are the truer, and stay.
+    def on_mountain(x, y):
+        return wood_mask is not None and wood_mask.at(x, y)
+    mobjects = mm.build(mparts, c['Mufu'], z0, lambda x, y: zone.at(x, y) and X0 < x < X1 and Y0 < y < Y1,
+                        drop=lambda name, x, y: name.startswith('Hike |') and on_mountain(x, y))
+    MUFU['zone'], MUFU['heights'] = zone, mm.Heights(mobjects)
+    laid = mm.drape_paths(F['ways'], lambda x, y: on_mountain(x, y) and zone.at(x, y), MUFU['heights'],
+                          {name: colour for name, colour, _, _ in mparts}, c['Mufu'])
+    print('MUFU PATHS', {k: round(v) for k, v in laid.items()}, 'm', flush=True)
+    # Mufu Mountain's own ponds and reservoirs (OSM, 劳山水库 among them): each at the level of the
+    # model's ground on its banks, cut out of the model so the water shows.
+    ponds = []
+    for k, w in enumerate(lakes):
+        if k in CHANNELS or big_river(w):
+            continue
+        ring = w[::max(1, len(w) // 60)]
+        # Any pond that touches the model's land: one half on the model, half on the city, stood
+        # metres above the model's ground beside it (tests/city-audit.py banks).
+        if not any(zone.at(x, y) for x, y in ring):
+            continue
+        # The lowest ground on its shore, the model's or (at the model's edge) the city's own.
+        banks = [h if (h := MUFU['heights'].at(x, y)) is not None else zground(x, y) for x, y in ring]
+        if banks:
+            LAKE_LEVELS[k] = min(banks) - 0.4
+            m = ac.Mask([w], A.extent, 4.0).m
+            water_level[m] = LAKE_LEVELS[k]
+            ponds.append(w)
+    if ponds:
+        mm.cut_ponds(mobjects, ponds, ac.point_in_poly)
+        MUFU['heights'] = mm.Heights(mobjects)
+    print('MUFU PONDS', len(ponds), flush=True)
+    # The model's own river edge lies a few metres inland of OSM's: wherever its ground is below its
+    # waterline, the Yangtze's water covers it too, as the original app's river did.
+    river_ring = lakes[river_k] if river_k is not None else None
+    river_mask = ac.Mask([river_ring], A.extent, 8.0) if river_ring else None
+
+    def near_river(x, y):
+        return river_mask is not None and any(river_mask.at(x + dx, y + dy) for dx in (-40, 0, 40) for dy in (-40, 0, 40))
+    shallows = np.zeros_like(ac.Mask([], A.extent, 8.0).m)
+    sx0, sy0 = A.extent[0], A.extent[2]
+    mx0, mx1, my0, my1 = zone.bbox()
+    for j in range(int((my0 - sy0) / 8), int((my1 - sy0) / 8) + 1):
+        for i in range(int((mx0 - sx0) / 8), int((mx1 - sx0) / 8) + 1):
+            x, y = sx0 + i * 8.0, sy0 + j * 8.0
+            if 0 <= j < shallows.shape[0] and 0 <= i < shallows.shape[1] and zone.at(x, y):
+                if not near_river(x, y):
+                    continue
+                # The model's ground, or where it has gaps at its riverside the city's own (hidden
+                # 2.5 m under it), at nine points of the cell: any of them below the waterline makes
+                # the cell river (single samples stepped over the model's low shore rocks).
+                for ox in (-3.0, 0.0, 3.0):
+                    for oy in (-3.0, 0.0, 3.0):
+                        h = MUFU['heights'].at(x + ox, y + oy)
+                        g = h if h is not None else ground(x + ox, y + oy, 8.0)[0]
+                        if g < z0 - 0.05:
+                            shallows[j, i] = True
+                            break
+                    if shallows[j, i]:
+                        break
+    MUFU['shallows'], MUFU['river_k'] = shallows, river_k
+    print('MUFU SHALLOWS', int(shallows.sum()), 'cells', flush=True)
+
+    def in_mufu(x, y):
+        return zone.at(x, y)
+
+    def skip(x, y):
+        return in_palace(x, y) or in_mufu(x, y)
+    mx0, mx1, my0, my1 = zone.bbox()
+    scene['extra_grids'] = json.dumps([{'name': 'mufu', 'x0': max(X0, mx0 - 20), 'x1': min(X1, mx1 + 20), 'y0': max(Y0, my0 - 20),
+                                        'y1': min(Y1, my1 + 20), 'cell': 3.0, 'stepUp': 1.3}])
+    print('MUFU', {'parts': len(mobjects), 'tris': sum(len(o.data.polygons) for o in mobjects), 'river': round(z0, 2),
+                   'scale': round(mm.SCALE, 4), 'turn': round(math.degrees(mm.TURN), 2), 'bbox': [round(v) for v in (mx0, mx1, my0, my1)]}, flush=True)
+
     # Detailed ground over the centre (Xinjiekou to Gulou and the Palace); coarser out to the river.
     patch = ((-1500.0, 2100.0), (-1530.0, 3400.0))
-    ac.terrain_patch('Terrain core', c['Ground'], patch[0], patch[1], ground, ['lawn', 'city_paving', 'lawn', 'canal_stone'], step=12.0)
+    ac.terrain_patch('Terrain core', c['Ground'], patch[0], patch[1], lambda x, y: ground(x, y, 12.0), ['lawn', 'city_paving', 'lawn', 'canal_stone'], step=12.0)
     ac.terrain_patch('Terrain outer', c['Ground'], (X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24),
-                     lambda x, y: ground(x, y) if not (patch[0][0] + 6 < x < patch[0][1] - 6 and patch[1][0] + 6 < y < patch[1][1] - 6)
-                     else (ground(x, y)[0] - 2.0, ground(x, y)[1]), ['lawn', 'city_paving', 'lawn', 'canal_stone'], step=24.0)
+                     lambda x, y: ground(x, y, 24.0) if not (patch[0][0] + 6 < x < patch[0][1] - 6 and patch[1][0] + 6 < y < patch[1][1] - 6)
+                     else (ground(x, y, 24.0)[0] - 2.0, ground(x, y, 24.0)[1]), ['lawn', 'city_paving', 'lawn', 'canal_stone'], step=24.0)
     # Beyond the map: coarse ground to the horizon, forested hills with one-crown canopy trees.
     kit.PALETTE.setdefault('far_ground', '#8E9478')
     ac.outer_apron('Landscape', c['Far'], FAR, (((X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24)),), far_z, step=60.0, material='far_ground')
@@ -512,14 +783,27 @@ def main():
     for k, w in enumerate(lakes):
         # From the bare ground on the banks, not the surface model: its minimum caught roofs and
         # trees and floated one surface 8 m up, over Jiefang South Road (tests/road-audit.py).
-        ac.polygon_mesh(f'Water {k}', c['Water'], [w], LAKE_LEVELS[k], 'water')
+        if k in CHANNELS:
+            # A strip of quads: ear-clipping the channel's outline self-intersected at bends and
+            # spread water over the land beside it (tests/city-audit.py: willows in water).
+            ac.polygon_mesh(f'Water {k}', c['Water'], water_shapes(k), LAKE_LEVELS[k], 'water')
+            continue
+        # Islands are holes: Xuanwu Lake's isles and their buildings stand clear of its surface.
+        holes = [i['pts'] for i in F['islands'] if ac.point_in_poly(*i['pts'][0], w)]
+        if big_river(w):
+            # The Yangtze and Jiajiang: their stitched outlines are too tangled to triangulate (the
+            # river by Mufu Mountain came out without a surface), so their water is laid from the
+            # same scanline fill as the water mask, in 8 m strips.
+            river_strips(f'Water {k}', c['Water'], w, LAKE_LEVELS[k], holes, extra=MUFU['shallows'] if k == MUFU.get('river_k') else None)
+            continue
+        ac.water_mesh(f'Water {k}', c['Water'], w, LAKE_LEVELS[k], holes=holes)
     ac.polygon_mesh('Pitches', c['Ground'], pitches, 0.0, 'pitch')
     for o in c['Ground'].objects:
         if o.name.startswith('Pitches'):
             for v in o.data.vertices:
                 v.co.z = zground(v.co.x, v.co.y) + 0.08
-    city, n_b, tris = build_buildings(c['City'], in_palace, c['Overhead'])
-    roads, avenues = build_roads(c['Roads'], in_palace)
+    city, n_b, tris = build_buildings(c['City'], skip, c['Overhead'])
+    roads, avenues = build_roads(c['Roads'], skip)
     lamp_proto = lamp_prototype(c['Prototypes'])
     for x, y, z, ang in lamps:
         kit.place(lamp_proto, c['Trees'], (x, y, z), ang)
@@ -534,7 +818,7 @@ def main():
             l, r = ac.polyline_offset(pts, w / 2 + 0.6), ac.polyline_offset(pts, -w / 2 - 0.6)
             road_polys.append([(v.x, v.y) for v in l] + [(v.x, v.y) for v in reversed(r)])
     rmask = ac.Mask(road_polys, A.extent, 2.0)
-    blocked = lambda x, y: bmask.at(x, y) or rmask.at(x, y)  # noqa: E731
+    blocked = lambda x, y: bmask.at(x, y) or rmask.at(x, y) or in_mufu(x, y)  # noqa: E731
 
     # A tree needs its whole crown clear of buildings, not just its trunk (crowns pierced walls).
     def crown_clear(x, y, r=4.5):
@@ -564,7 +848,7 @@ def main():
             for i in range(int((min(xs) - bmask.x0) / bmask.cell), int((max(xs) - bmask.x0) / bmask.cell) + 2):
                 if 0 <= i < bmask.nx and 0 <= j < bmask.ny and ac.point_in_poly(bmask.x0 + i * bmask.cell, bmask.y0 + j * bmask.cell, pts):
                     bmask.m[j, i] = True
-    infill = build_infill(c['City'], blocked, near_road, in_palace, mark)
+    infill = build_infill(c['City'], blocked, near_road, skip, mark)
     trees = 0
     # Street trees by research (research/plants/FACTS.md): plane on the roads the city names as
     # plane avenues, cherries on Jiming Temple Road; every other road one species along its whole
@@ -591,7 +875,7 @@ def main():
                 seg = (off[i] - off[i - 1]).length
                 while nxt < run + seg:
                     q = off[i - 1].lerp(off[i], (nxt - run) / max(seg, 1e-6))
-                    if not blocked(q.x, q.y) and crown_clear(q.x, q.y) and not wet(q.x, q.y) and not in_palace(q.x, q.y):
+                    if not blocked(q.x, q.y) and crown_clear(q.x, q.y) and dry(q.x, q.y) and not in_palace(q.x, q.y):
                         kit.place(protos[sp], c['Trees'], (q.x, q.y, zground(q.x, q.y)), rnd.uniform(0, 6.28), rnd.uniform(0.85, 1.1))
                         species_count[sp] = species_count.get(sp, 0) + 1
                         trees += 1
@@ -612,14 +896,14 @@ def main():
             zones.append((ac.Mask([poly], A.extent, 4.0), mix))
 
     def zone_ok(mix):
-        return lambda x, y: not blocked(x, y) and crown_clear(x, y, 3.0) and not wet(x, y) and any(m.at(x, y) for m, k in zones if k is mix)
+        return lambda x, y: not blocked(x, y) and crown_clear(x, y, 3.0) and dry(x, y) and any(m.at(x, y) for m, k in zones if k is mix)
     for mask, mix in zones:
         n = int(mask.m.sum() * 16 / 140)         # about one tree per 140 m² of the place
         trees += ac.scatter(protos, c['Trees'], rnd, mix, min(n, 3000), patch[0], patch[1], zone_ok(mix), zground, groves=max(6, n // 30))
     # Lake shores: willows above all, cherries and camphor between (Xuanwu's banks, the moats).
     shore = 0
     for w in lakes:
-        if len(w) > 4000:
+        if big_river(w):
             continue                                 # the Yangtze: its banks are wharves and dikes
         for a, b in zip(w, w[1:]):
             L = math.dist(a, b)
@@ -627,8 +911,8 @@ def main():
                 px, py = a[0] + (b[0] - a[0]) * (k + .5) * 10 / L, a[1] + (b[1] - a[1]) * (k + .5) * 10 / L
                 nx, ny = -(b[1] - a[1]) / L, (b[0] - a[0]) / L
                 for side in (1, -1):
-                    qx, qy = px + nx * side * 4.0, py + ny * side * 4.0
-                    if not wet(qx, qy) and not blocked(qx, qy) and crown_clear(qx, qy, 2.5):
+                    qx, qy = px + nx * side * 6.0, py + ny * side * 6.0
+                    if dry(qx, qy) and not blocked(qx, qy) and crown_clear(qx, qy, 2.5):
                         r = rnd.random()
                         kit.place(protos['willow' if r < .65 else 'cherry' if r < .8 else 'camphor'], c['Trees'], (qx, qy, zground(qx, qy)),
                                   rnd.uniform(0, 6.28), rnd.uniform(.85, 1.1))
@@ -638,25 +922,103 @@ def main():
     # Other green spaces: the census mix of the city's own trees.
     kinds = ['camphor', 'camphor', 'plane', 'scholar', 'ginkgo', 'metasequoia', 'cedar', 'privet', 'wingnut']
     trees += ac.scatter(protos, c['Trees'], rnd, kinds, 9000, patch[0], patch[1],
-                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and not wet(x, y) and not in_palace(x, y)
+                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and dry(x, y) and not in_palace(x, y)
                         and not any(m.at(x, y) for m, _ in zones), zground, groves=500)
     print('SPECIES', species_count, 'shore', shore, flush=True)
+    # The model's own trees, at their places, as the Mufu Mountain wood's researched mix
+    # (ZONES: research/plants/FACTS.md).
+    mix, placed = ZONES[62344629], 0
+    for x, y, z, sc in mtrees:
+        if not (X0 < x < X1 and Y0 < y < Y1) or not zone.at(x, y) or not dry(x, y):
+            continue                     # (the model's trees stood in the ponds it did not have)
+        h = MUFU['heights'].at(x, y)
+        kit.place(protos[mix[int(hashf(int(x * 7 + y * 13), 3) * len(mix)) % len(mix)]], c['Trees'],
+                  (x, y, h if h is not None else z + z0), rnd.uniform(0, 6.28), max(.6, min(1.4, sc)))
+        placed += 1
+    trees += placed
+    print('MUFU TREES', placed, flush=True)
+
+    # Last, no tree or lamp under a roof (tools/scene-audit.py found lamps on pavements that OSM
+    # buildings cover, and trees inside infill and hero buildings): a ray up from each foot.
+    dg = bpy.context.evaluated_depsgraph_get()
+    roofs = []
+    for coll in (c['City'], c['Buildings']):
+        for o in coll.all_objects:
+            if o.type == 'MESH' and len(o.data.polygons):
+                inv = o.matrix_world.inverted()
+                roofs.append((BVHTree.FromObject(o, dg), inv, inv.to_3x3()))
+    # Roads and water as BVHs (world space: both are built in place); roads first, for bridges.
+    floors = [(BVHTree.FromPolygons([v.co for v in o.data.vertices], [f.vertices[:] for f in o.data.polygons]), o.data)
+              for o in list(c['Roads'].objects) + list(c['Water'].objects)
+              + [m for m in c['Mufu'].objects if m.active_material and m.active_material.get('road')]
+              if o.type == 'MESH' and len(o.data.polygons)]
+    # And every tree stands on the ground as built (terrain, paving, the model's ground): trees were
+    # placed on the satellite heights, and the banks lowered by water left some in the air (the
+    # owner saw them floating).
+    grounds = [(BVHTree.FromPolygons([v.co for v in o.data.vertices], [f.vertices[:] for f in o.data.polygons]))
+               for o in list(c['Ground'].objects) + list(c['Roads'].objects)
+               + [m for m in c['Mufu'].objects if m.active_material and m.active_material.get('walkable')]
+               if o.type == 'MESH' and len(o.data.polygons)]
+    up, culled = Vector((0, 0, 1)), Counter()
+    for o in list(c['Trees'].objects):
+        if o.data.name == 'proto far':
+            continue
+        top = None
+        for t in grounds:
+            hit = t.ray_cast(o.location + Vector((0, 0, 3.0)), Vector((0, 0, -1)), 10.0)   # not up onto a bridge over it
+            if hit[0] is not None and (top is None or hit[0].z > top):
+                top = hit[0].z
+        if top is not None and o.data.name != 'proto lamp':
+            o.location.z = top
+        foot = o.location + Vector((0, 0, 0.5))
+        kind = o.data.name.replace('proto ', '')
+        # Not on a carriageway (roads the tree masks missed: service roads, junction mouths) and
+        # not on water (lamps excepted: they stand on bridges).
+        under = ''
+        for t, me in floors:
+            hit = t.ray_cast(o.location + Vector((0, 0, 3.0)), Vector((0, 0, -1)), 6.0)
+            if hit[0] is not None:
+                mat = me.materials[me.polygons[hit[2]].material_index]
+                under = 'road_city' if mat.get('road') else mat.name.split('.')[0]
+                break
+        if under == 'water' and kind != 'lamp' or under == 'road_city':
+            culled[kind + ' on ' + under] += 1
+            bpy.data.objects.remove(o)
+            continue
+        if any(t.ray_cast(inv @ foot, (r3 @ up).normalized())[0] is not None for t, inv, r3 in roofs):
+            culled[o.data.name.replace('proto ', '')] += 1
+            bpy.data.objects.remove(o)
+    trees -= sum(n for k, n in culled.items() if k != 'lamp')
+    print('CULLED under roofs', dict(culled), flush=True)
 
     # Markers: Xinjiekou looking up Zhongshan Road; the road itself; the Palace gate; Gulou.
     pk = c['Markers']
     xj = Vector((-460.0, 150.0))       # on the pavement; -445 was inside 南京新百's footprint
     ac.add_point(pk, 'Spawn xinjiekou', (xj.x, xj.y, zground(*xj)), (-460.0, 900.0, zground(-460, 900) + 20))
     zs = Vector((-430.0, 1100.0))
+    # Off any trunk or lamp: a street tree's stamp left the old spot unwalkable (tests/city-audit.py).
+    while bmask.at(*zs) or any((o.location.xy - zs).length < 2.5 for o in c['Trees'].objects):
+        zs.x -= 3.0
     ac.add_point(pk, 'Spawn zhongshan', (zs.x, zs.y, zground(*zs)), (-460.0, 1900.0, zground(-460, 1900) + 8))
     pg = pal + Vector((9.5, -200.0))
-    ac.add_point(pk, 'Spawn palace', (pg.x, pg.y, pal_z), (pal.x + 9.5, pal.y - 100.0, pal_z + 8))
+    # On the street before the gate, at its own height (the Palace's ground is 2.7 m higher;
+    # tests/worlds-browser.mjs found the marker floating).
+    ac.add_point(pk, 'Spawn palace', (pg.x, pg.y, zground(pg.x, pg.y)), (pal.x + 9.5, pal.y - 100.0, pal_z + 8))
+    # Mufu Mountain: where the model's hike starts (its 'Hike start' view), and Wutang Square by
+    # the Line 3 station.
+    hs = mm.to_city(np.array([[1385.95, -943.81]]))[0]
+    ahead = mm.to_city(np.array([[1385.95 - 0.2085 * 30, -943.81 + 0.9764 * 30]]))[0]
+    hz = MUFU['heights'].at(*hs)
+    ac.add_point(pk, 'Spawn mufu', (hs[0], hs[1], hz if hz is not None else zground(*hs)), (ahead[0], ahead[1], (hz or 0) + 1.6))
+    wt = Vector((-1065.0, 7860.0))
+    ac.add_point(pk, 'Spawn wutang', (wt.x, wt.y, zground(*wt)), (-1065.0, 8200.0, zground(-1065, 8200) + 10))
     gl = Vector((-470.0, 2000.0))
     ac.add_point(pk, 'Spawn gulou', (gl.x, gl.y, zground(*gl)), (-600.0, 2100.0, zground(-600, 2100) + 10))
     for n, (target, at, toward) in enumerate((('palace', xj + Vector((14.0, 30.0)), xj + Vector((14.0, 60.0))),
                                              ('xinjiekou', pg + Vector((20.0, 10.0)), pg + Vector((40.0, 10.0))))):
         d = (toward - at).normalized()
         g = kit.moon_gate(f'Moon gate {n}', c['Gates'])
-        z = zground(*at) if target == 'palace' else pal_z
+        z = zground(*at)
         g.matrix_world = Matrix.Translation((at.x, at.y, z)) @ Matrix.Rotation(math.atan2(-d.x, d.y), 4, 'Z')
         ac.add_point(pk, f'Gate {target}@{n}', (at.x, at.y, z), (at.x + d.x * 10, at.y + d.y * 10, z))
 

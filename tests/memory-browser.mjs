@@ -2,6 +2,7 @@
 // loads and opens as you reach it, the guided morning walk advances, and the
 // light moves from first light towards mid-morning while it does.
 import { chromium } from "@playwright/test";
+import { openMufu } from "./open-mufu.mjs";
 import fs from "node:fs/promises";
 
 
@@ -47,6 +48,7 @@ try {
   await page.waitForFunction(() => window.__mufu?.state.ready, null, {
     timeout: 120000,
   });
+  await openMufu(page);
   await page.evaluate(() => {
     localStorage.removeItem("mufu-memories");
     window.__mufu.memories.reset();

@@ -161,35 +161,52 @@ void main(){
   col = mix(col, cloud, body * mask * bodyAmount);
   col += sunTint * rim * mask * towardSun * 0.9 * clarity;
 
-  // --- painted cumulus ---------------------------------------------------
+  // --- cumulus ------------------------------------------------------------
+  // Soft, lit cloud (the owner: "make the cloud more real"): a density from layered noise with a
+  // finer, eroding detail at the edges; light marched a few steps towards the sun through that
+  // density, so the side facing it is bright and the underside a cool grey; a silver rim where the
+  // sun is behind a thin edge; and a thin high deck above for depth. A bank of cloud stands round
+  // the horizon, scattered cumulus overhead, both drifting.
   if (uPainted > 0.0) {
     float az2 = atan(d.z, d.x);
-    // A bank of towering cloud right round the horizon, tops billowing, bases flat.
-    float bank = 0.0, ceil2 = 0.0;
-    if (h < 0.62) {
-      float bankTop = 0.20 + 0.30 * fbm3(vec2(az2 * 1.7, 3.7));
-      float puff = fbm3(vec2(az2 * 8.0 + time * 0.0015, h * 10.0));
-      ceil2 = bankTop + (puff - 0.5) * 0.24;
-      bank = smoothstep(ceil2 + 0.010, ceil2 - 0.010, h) * smoothstep(0.004, 0.030, h);
+    // The field overhead, on a plane that foreshortens towards the horizon.
+    vec2 cp2 = d.xz / max(d.y + 0.10, 0.10) * 0.85 + vec2(time * 0.0030, time * 0.0009);
+    float base = fbm3(cp2 * 0.75 + 5.0) * 0.72 + noise(cp2 * 2.3) * 0.28;
+    float detail = noise(cp2 * 6.1 + time * 0.004) * 0.6 + noise(cp2 * 13.0) * 0.4;
+    float dens = smoothstep(0.50, 0.70, base - (detail - 0.5) * 0.10) * smoothstep(0.12, 0.34, h);
+    // The bank round the horizon: towering tops, flat bases.
+    float bankTop = 0.18 + 0.30 * fbm3(vec2(az2 * 1.7, 3.7));
+    float puff = fbm3(vec2(az2 * 8.0 + time * 0.0015, h * 10.0)) + (noise(vec2(az2 * 30.0, h * 40.0)) - 0.5) * 0.25;
+    float ceil2 = bankTop + (puff - 0.5) * 0.24;
+    float bankD = smoothstep(ceil2 + 0.03, ceil2 - 0.03, h) * smoothstep(0.004, 0.04, h) * (1.0 - smoothstep(0.42, 0.62, h));
+    float D = max(dens, bankD);
+    if (D > 0.002) {
+      // Light: how much cloud lies between this point and the sun (three steps along its direction
+      // on the cloud plane; for the bank, straight up its tower).
+      vec2 toSun = normalize(sd.xz + vec2(1e-4)) * 0.22;
+      float occ = 0.0;
+      for (int k = 1; k <= 3; k++) {
+        vec2 q = cp2 + toSun * float(k);
+        occ += smoothstep(0.50, 0.72, fbm3(q * 0.75 + 5.0) * 0.72 + noise(q * 2.3) * 0.28);
+      }
+      occ /= 3.0;
+      float towerLight = bankD > dens ? clamp(1.0 - (ceil2 - h) / 0.22, 0.0, 1.0) : 0.0;
+      float light = bankD > dens ? mix(0.35, 1.0, towerLight) * (0.75 + 0.25 * towardSunAz) : exp(-occ * 2.2) * (0.8 + 0.2 * towardSunAz);
+      // Thick middles are darker underneath; thin edges let light through (the silver rim).
+      float thick = smoothstep(0.0, 1.0, D);
+      vec3 litC = mix(vec3(1.00, 0.99, 0.96), vec3(1.00, 0.78, 0.60), dusk);
+      vec3 shdC = mix(vec3(0.60, 0.67, 0.78), vec3(0.45, 0.34, 0.52), dusk);
+      vec3 paint = mix(shdC, litC, clamp(light * (1.1 - thick * 0.35), 0.0, 1.0));
+      float rim = (1.0 - thick) * pow(max(0.0, cosSun), 6.0) * clarity;
+      paint += litC * rim * 0.55;
+      // Softer, wispier edges than the cel bands: coverage rises gently with density.
+      float alpha = smoothstep(0.0, 0.55, D) * uPainted * (1.0 - storm) * (1.0 - snow * 0.7) * 0.96;
+      col = mix(col, paint * (1.0 - night * 0.84), alpha);
     }
-    // Scattered cumulus drifting overhead, on a plane that foreshortens to the horizon.
-    float field = 0.0, over = 0.0;
-    if (h > 0.16) {
-      vec2 cp2 = d.xz / max(d.y + 0.10, 0.10) * 0.85 + vec2(time * 0.0030, 0.0);
-      field = fbm3(cp2 * 0.75 + 5.0) * 0.78 + noise(cp2 * 2.3) * 0.22;
-      over = smoothstep(0.560, 0.605, field) * smoothstep(0.18, 0.40, h);
-    }
-    float cu = max(bank * (1.0 - smoothstep(0.42, 0.62, h)), over);
-    // Cel shading: bright crowns, a mid band, and a blue shadowed underside.
-    float lift = bank > over ? clamp(1.0 - (ceil2 - h) / 0.20, 0.0, 1.0)
-                             : clamp((field - 0.60) * 14.0 + 0.45, 0.0, 1.0);
-    float sunSide = 0.55 + 0.45 * towardSunAz;
-    float tone = floor(clamp(lift * 0.85 + sunSide * 0.25, 0.0, 0.999) * 3.0) / 2.0;
-    vec3 litC = mix(vec3(1.00, 0.99, 0.95), vec3(1.00, 0.80, 0.68), dusk);
-    vec3 midC = mix(vec3(0.84, 0.92, 0.99), vec3(0.93, 0.62, 0.62), dusk);
-    vec3 shdC = mix(vec3(0.54, 0.68, 0.88), vec3(0.42, 0.30, 0.56), dusk);
-    vec3 paint = tone < 0.5 ? mix(shdC, midC, tone * 2.0) : mix(midC, litC, (tone - 0.5) * 2.0);
-    col = mix(col, paint * (1.0 - night * 0.84), cu * uPainted * (1.0 - storm) * (1.0 - snow * 0.7) * (0.92));
+    // A thin high deck: faint streaks well above, slower, for depth.
+    vec2 hi2 = d.xz / max(d.y, 0.06) * 0.35 + vec2(time * 0.0012, 0.0);
+    float streak = smoothstep(0.62, 0.86, fbm3(vec2(hi2.x * 0.5 + hi2.y * 0.15, hi2.y * 2.2))) * smoothstep(0.25, 0.55, h);
+    col = mix(col, mix(vec3(0.95, 0.96, 0.98), vec3(1.0, 0.82, 0.70), dusk) * (1.0 - night * 0.85), streak * 0.28 * uPainted * (1.0 - storm));
   }
 
   // --- horizon haze ------------------------------------------------------

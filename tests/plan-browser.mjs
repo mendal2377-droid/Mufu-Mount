@@ -1,4 +1,5 @@
 import { chromium } from "@playwright/test";
+import { openMufu } from "./open-mufu.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 
@@ -17,6 +18,7 @@ try {
   page.on("console", m => { if(m.type() === "error" && !/fonts.googleapis|ERR_CERT|pointer lock|PointerLock/i.test(m.text())) errors.push(m.text()); });
   await page.goto(process.env.MUFU_TEST_URL || "http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.__mufu?.state.ready, null, { timeout: 120000 });
+  await openMufu(page);
   console.log("Landscape loaded");
   await page.evaluate(() => window.__mufu.step(16, .1));
   const initial = await page.evaluate(() => window.__mufu.getStats());

@@ -26,7 +26,8 @@
     "offset": 359100
    }
   ],
-  "walkableCells": 438003
+  "walkableCells": 438003,
+  "water": true
  },
  "labels": {
   "jiming": "Jiming Temple",
@@ -41,6 +42,7 @@
  ],
  "base_z": 7.220760822296143,
  "fog": 0.00042,
+ "skyline_clip": null,
  "spawns": {
   "jiming": {
    "position": [
@@ -197,6 +199,7 @@
    ]
   }
  },
+ "traffic": [],
  "trees": 26425,
  "staticTriangles": 336845,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Lake, islands, walls, streets and buildings: OpenStreetMap contributors (ODbL). Architecture modelled from published descriptions; see research/north/FACTS.md."

@@ -1943,7 +1943,7 @@ window.addEventListener("keydown", (e) => {
   ) {
     endTour(false);
   }
-  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open || $("#city-passport").open || $("#city-places").open) return;
+  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open || $("#city-passport").open || $("#city-places").open || $("#metro-map")?.open || $("#bus-pick")?.open) return;
   if (city?.active && !e.repeat && state.ready) {
     if (e.code === "KeyG") { city.openPlaces(true); e.preventDefault(); return; }
     if (e.code === "KeyF") { city.interact(); e.preventDefault(); return; }

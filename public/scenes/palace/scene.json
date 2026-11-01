@@ -17,7 +17,8 @@
     "offset": 0
    }
   ],
-  "walkableCells": 256050
+  "walkableCells": 256050,
+  "water": true
  },
  "labels": {
   "palace": "the Presidential Palace gate",
@@ -30,6 +31,7 @@
  ],
  "base_z": 1.4899451732635498,
  "fog": 0.0006,
+ "skyline_clip": null,
  "spawns": {
   "palace": {
    "position": [

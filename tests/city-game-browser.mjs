@@ -80,7 +80,7 @@ try {
     const visible = !document.querySelector('#walk-places').hidden;
     document.body.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyG', key: 'g', bubbles: true}));
     const open = document.querySelector('#city-places').open;
-    const cards = [...document.querySelectorAll('.place-card')].map(c => c.dataset.id);
+    const cards = [...document.querySelectorAll('#places-grid .place-card')].map(c => c.dataset.id);   // the home list's grouped cards share the class
     const nearest = cards[1];
     document.querySelector(`.place-card[data-id="${nearest}"]`).click();
     m.step(60, .1);

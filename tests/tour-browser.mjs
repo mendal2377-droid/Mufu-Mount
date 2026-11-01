@@ -2,6 +2,7 @@
 // actually travels, the leg caption and progress advance, the sky moves from
 // first light towards evening, and any movement key hands control back.
 import { chromium } from "@playwright/test";
+import { openMufu } from "./open-mufu.mjs";
 import fs from "node:fs/promises";
 
 
@@ -28,6 +29,7 @@ try {
   await page.waitForFunction(() => window.__mufu?.state.ready, null, {
     timeout: 180000,
   });
+  await openMufu(page);
 
   // Home is now an orbitable plan; camera tours begin after choosing a pin.
   const homePlan = await page.evaluate(() => ({

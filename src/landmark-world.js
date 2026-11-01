@@ -4,6 +4,8 @@ import {MeshoptDecoder} from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import {createSkyDome} from './sky.js';
 import {flightStep} from './kite.js';
 import {createTraveller, createMagpie, createGlider} from './traveller.js';
+import {loadTransit} from './transit.js';
+import {paintedTree} from './painted-trees.js';
 
 // A landmark scene modelled in Blender (blender/build_<id>.py, exported by blender/export_web.py)
 // and streamed on arrival. Unlike the atlas it is in true metres: the walker's eye is 1.65 m, the
@@ -314,12 +316,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             #endif
             diffuseColor.a=1.;
             float h=1.-vUv.y,u=vUv.x;     // glTF stores v as 1 - v
+            bool walkup=st>.13&&st<.3;
             if(h>=0.&&st<.9){
-              float fh=st>.6?3.0:3.3, sp=st>.6?3.6:st>.3?1.6:3.2;
+              float fh=st>.6?3.0:st>.3?3.3:walkup?2.9:3.3, sp=st>.6?3.6:st>.3?1.6:walkup?3.0:3.2;
               float fv=fract(h/fh), fu=fract(u/sp);
               float ww=st>.6?.32:st>.3?.9:.46, wb=st>.6?.36:st>.3?.12:.3, wt=st>.6?.74:st>.3?.92:.78;
               float win=step(abs(fu-.5),ww*.5)*step(wb,fv)*step(fv,wt);
-              bool shop=h<4.2&&st<.6;
+              bool shop=h<4.2&&(st<.04||st>.22&&st<.3);
               if(shop){float su=fract(u/4.6);win=step(abs(su-.5),.4)*step(.12,h/4.2)*step(h/4.2,.86);}
               float fw=max(fwidth(u/sp),fwidth(h/fh));
               float k=1.-smoothstep(.12,.38,fw);
@@ -327,6 +330,16 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
               if(shop)glass=vec3(.28,.24,.2);
               diffuseColor.rgb=mix(diffuseColor.rgb,mix(diffuseColor.rgb*.82,glass,win*.8),k);
               diffuseColor.rgb*=1.-(1.-smoothstep(0.,.08,fv))*.12*k*(st>.6?0.:1.);
+              if(walkup&&!shop){
+                // Balconies on every other bay: a pale slab and railing across the window's foot,
+                // the room behind darker. And an air conditioner's grey box beside each window.
+                float bay=mod(floor(u/sp),2.);
+                if(bay<.5&&fv>.06&&fv<.34&&abs(fu-.5)<.47)diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*1.12+.03,k);
+                if(bay<.5&&fv>.31&&fv<.36&&abs(fu-.5)<.47)diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.55,.56,.55),k);
+                if(fu>.8&&fu<.94&&fv>.42&&fv<.58)diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.86,.86,.84),k*.9);
+                // Old render streaked by rain under each sill.
+                diffuseColor.rgb*=1.-k*.06*smoothstep(.5,0.,fv)*step(abs(fu-.5),.25);
+              }
               // Each window has its own bedtime: the clock's lit share falls through the night
               // and windows go dark one by one. Shops close at ten. Far windows fade (they fizz),
               // less so at night, when the lit city should sparkle into the distance.
@@ -361,7 +374,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           // Skyline haze: towers fade toward the sky colour with distance, never to nothing.
           if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.45);}`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v9' + (facade ? 'f' : road ? 'r' : walkway ? 'w' : '');
+    mat.customProgramCacheKey = () => 'landmark-paint-v10' + (facade ? 'f' : road ? 'r' : walkway ? 'w' : '');
     cache.set(name, mat);
     return mat;
   }
@@ -392,6 +405,26 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   }
 
   // --- Trees: one instanced draw per kind, swaying with the shared clock --------------------------
+  // Metro and buses on real lines (src/transit.js; Tiny Nanjing only), loaded before the trees: its
+  // stops and entrances need clear ground round them, its buses a clear path.
+  const transit = meta.transit ? await loadTransit(base, {scene, bands, heightAt, roadAt, surface, nearest}) : null;
+  if (transit) {
+    const clear = transit.clearings();
+    const keep = t => !clear.some(([x, z, r]) => Math.abs(t[1] - x) < r && Math.abs(t[3] - z) < r && Math.hypot(t[1] - x, t[3] - z) < r);
+    for (let i = trees.length - 1; i >= 0; i--) {
+      const t = trees[i];
+      if (t[0] === 'far' || keep(t)) continue;
+      // The owner found stops and entrances behind trees: the tree goes, and the ground its trunk
+      // was stamped out of the walk grid becomes walkable again (the height of the ground round it).
+      for (let dz = -1.75; dz <= 1.75; dz += .5) for (let dx = -1.75; dx <= 1.75; dx += .5) {
+        const c = cellOf(t[1] + dx, t[3] + dz);
+        if (c < 0 || heights[c] !== walk.noWalk) continue;
+        const ring = [[3, 0], [-3, 0], [0, 3], [0, -3]].map(([ox, oz]) => heightAt(t[1] + ox, t[3] + oz)).filter(h => h !== null);
+        if (ring.length >= 2) heights[c] = Math.round(ring.reduce((a, b) => a + b) / ring.length * 100) & ~1;
+      }
+      trees.splice(i, 1);
+    }
+  }
   const byKind = {};
   for (const t of trees) (byKind[t[0]] ||= []).push(t);
   // Trunks in a 10 m hash, so the chase camera can step in front of a tree instead of staring at
@@ -473,6 +506,10 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   const NEAR_R = 280, NEAR_CAP = 2500;
   const lodKinds = [];
   let treeTriangles = 0;
+  // Street lamps on a carriageway (dual carriageways: one side's pavement lamps fell on the other
+  // carriageway) are left out: three of four road cells round the post.
+  if (byKind.lamp) byKind.lamp = byKind.lamp.filter(t => [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]
+    .filter(([dx, dz]) => roadAt(t[1] + dx, t[3] + dz) !== null).length < 3 && !transit?.onBusPath(t[1], t[3]));
   for (const [kind, list] of Object.entries(byKind)) {
     const spec = TREES[kind] || TREES.broadleaf, geo = treeGeometry(spec, 101 + kind.length * 17);
     // Per-tree tint: far crowns pick from the canopy palette so the forest reads as painted
@@ -481,6 +518,18 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const tints = spec.far ? ['#5A8A3C', '#6E9B3E', '#47733A', '#86A84A', '#3E6A3E'].map(h => new THREE.Color(h)) : null;
     const tint = new THREE.Color(), mats = [], cols = [];
     list.forEach(t => {
+      // On the ground the walker stands on, where a walk grid knows it (and it is near: a tree on
+      // a roof garden or a bridge keeps its own height).
+      // The trunk's own cell is stamped unwalkable, so the ground just round it: the lowest of a
+      // ring of samples, so no side of the trunk floats.
+      if (!spec.far && !spec.lamp) {
+        let g = null;
+        for (const [dx, dz] of [[2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5], [4, 0], [-4, 0], [0, 4], [0, -4]]) {
+          const h = heightAt(t[1] + dx, t[3] + dz);
+          if (h !== null && Math.abs(h - t[2]) < 6) g = g === null ? h : Math.min(g, h);
+        }
+        if (g !== null) t[2] = g;
+      }
       q.setFromAxisAngle(up, t[4]); sc.setScalar(t[5]); pos.set(t[1], t[2], t[3]);
       mats.push(new THREE.Matrix4().compose(pos, q, sc));
       const r = Math.abs(Math.sin(t[1] * 12.9898 + t[3] * 78.233)) % 1;
@@ -488,7 +537,10 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       cols.push(tint.clone());
     });
     const lod = !spec.far && !spec.lotus && !spec.flower && list.length > 60;
-    const near = new THREE.InstancedMesh(geo, spec.lamp ? lampMat : treeMaterial(kind, spec), lod ? Math.min(list.length, NEAR_CAP) : list.length);
+    // Up close, the painted tree where there is one (src/painted-trees.js; the plane first).
+    const painted = !spec.far && !spec.lamp ? paintedTree(kind, spec, {bands, shared, seasons: SEASONS}) : null;
+    const near = new THREE.InstancedMesh(painted ? painted.geometry : geo, painted ? painted.materials : spec.lamp ? lampMat : treeMaterial(kind, spec),
+      lod ? Math.min(list.length, NEAR_CAP) : list.length);
     near.name = `trees ${kind}`;
     if (!lod) {
       mats.forEach((m, i) => { near.setMatrixAt(i, m); near.setColorAt(i, cols[i]); });
@@ -608,9 +660,17 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     }
     return sum / n;
   }
+  // A grid may allow a taller step than STEP_UP: Mufu Mountain's 3 m grid climbs stairs and slopes
+  // a finer grid would take in several steps (blender/export_web.py, stepUp).
+  function stepAt(x, z) {
+    const c = cellOf(x, z);
+    if (c < 0) return STEP_UP;
+    for (const g of walk.grids) if (c >= g.offset && c < g.offset + g.nx * g.ny) return g.stepUp || STEP_UP;
+    return STEP_UP;
+  }
   function canStep(from, x, z) {
     const h0 = heightAt(from.x, from.z), h1 = heightAt(x, z);
-    return h1 !== null && (h0 === null || Math.abs(h1 - h0) <= STEP_UP);
+    return h1 !== null && (h0 === null || Math.abs(h1 - h0) <= stepAt(x, z));
   }
 
   // --- Pigeons over the Music Stage: circle, glide, settle on the lawn, take off again ---------------
@@ -827,6 +887,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     }
   }
   const camDir = new THREE.Vector3(), tmp = new THREE.Vector3();
+  // Metro and buses on real lines (src/transit.js; Tiny Nanjing only).
+  const seatPose = {};
 
   // Bike and boat: a speed that builds and coasts, steering that tightens with speed; the bike keeps
   // to walkable ground (the walk grid's own steps), the boat to water.
@@ -891,6 +953,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         look: [s.look[0], h + EYE, s.look[2]]};
     },
     ground: (x, z) => surface(x, z),
+    // For route-finding in tests (tests/mufu-journey-browser.mjs): the walk grid as it is.
+    grid: {height: (x, z) => heightAt(x, z), road: (x, z) => roadAt(x, z), stepUp: (x, z) => stepAt(x, z)},
     get body() { return body; },
     get heading() { return heading; },
     get view() { return view; },
@@ -901,6 +965,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     placeAt(s) {
       body.fromArray(s.feet); lastBody.copy(body); heading = Math.atan2(s.look[0] - s.feet[0], s.look[2] - s.feet[2]);
       seated = null; glide = null; mode = 'walk';
+      // Arriving anywhere is on foot: a boat kept from before hovered over the new place's ground.
+      if (vehicle === 'boat') { vehicle = 'walk'; vspeed = 0; }
     },
     // from: glide from where the traveller stands (a moon gate) instead of the arrival approach.
     startGlide(s, {from = null, seconds = from ? 18 : 15} = {}) {
@@ -929,6 +995,36 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       return null;
     },
     get riding() { return !!ride; },
+    transit,
+    // Bus and metro (src/transit.js): what is near, and the rides. Messages come back through
+    // the callbacks for the toast.
+    nearestTransit(radius = 6) { return transit?.nearest(body.x, body.z, radius) || null; },
+    waitForBus(stop, boarded, line = null) {
+      // At the terminus everyone gets off: onto the stop's pavement, and the page is told (world.onAlight).
+      transit.setAlight((st, last, line) => {
+        body.set(st.spot[0], heightAt(st.spot[0], st.spot[1]) ?? body.y, st.spot[1]); mode = 'walk';
+        world.onAlight?.(st, last, line);
+      });
+      return transit.waitAt(stop, b => { seated = null; boarded(b); }, line);
+    },
+    getOffBus(off) {
+      transit.requestStop(stop => {
+        body.set(stop.spot[0], heightAt(stop.spot[0], stop.spot[1]) ?? body.y, stop.spot[1]);
+        mode = 'walk'; off(stop);
+      });
+    },
+    rideMetro(line, from, to, {onStation, arrive} = {}) {
+      if (glide || ride) return null;
+      world.setVehicle('walk'); seated = null; mode = 'sit';
+      return transit.rideMetro(line, from, to, {onStation, arrive: e => {
+        // Out of the entrance's open end, onto the pavement in front of it.
+        const r = e.line.route, k = Math.round(THREE.MathUtils.clamp(e.stop.s / 2, 0, r.n - 1)), h = r.hs[k];
+        const out = nearest(heightAt, e.spot[0] + Math.sin(h) * 4.5, e.spot[1] + Math.cos(h) * 4.5, 12) || e.spot;
+        body.set(out[0], heightAt(out[0], out[1]) ?? e.y, out[1]); lastBody.copy(body); mode = 'walk';
+        heading = h;
+        arrive?.(e);
+      }});
+    },
     get vehicle() { return vehicle; },
     get canBike() { return true; },
     get canBoat() { return !!waterHeights; },
@@ -994,6 +1090,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const side = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
       const fast = keys.has('ShiftLeft') || keys.has('ShiftRight');
       if (glide) return false;
+      if (transit?.busRide || transit?.metroRide) return false;
+      if (transit?.waiting && (forward || side)) transit.cancelWait();
       if (vehicle !== 'walk') return drive(keys, dt);
       if (ride) { if (forward || side) world.leaveBoat(); return false; }
       if (seated) {
@@ -1054,6 +1152,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         camera.rotation.z = 0;
         return;
       }
+      if (transit?.metroCamera(camera, dt, view)) return;
+      if (transit?.busRide && view === 'third') {
+        // On the bus: behind and above its roof, looking along the street.
+        camera.getWorldDirection(camDir);
+        const eye = body.clone().add(new THREE.Vector3(0, 4.2, 0)).addScaledVector(camDir, -13);
+        camera.position.lerp(eye, 1 - Math.exp(-dt * 8));
+        return;
+      }
       const sitting = mode === 'sit' && !ride && vehicle === 'walk', flyingNow = mode === 'glide';
       if (vehicle !== 'walk' && view === 'third') {
         if (Math.abs(vspeed) > 1) {
@@ -1097,15 +1203,25 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         body.copy(glide.curve.getPointAt(e)); heading = Math.atan2(tan.x, tan.z);
         if (k >= 1) world.endGlide();
       }
+      if (transit) {
+        transit.update(dt, weather.night || 0, camera.position.y - (surface(camera.position.x, camera.position.z) ?? (mode === 'glide' ? 10 : body.y)), body, camera);
+        if (transit.seat(seatPose)) { body.set(seatPose.x, seatPose.y, seatPose.z); heading = seatPose.h; mode = 'sit'; }
+      }
       speed = dt > 0 ? Math.hypot(body.x - lastBody.x, body.z - lastBody.z) / dt : 0;
       lastBody.copy(body);
       traveller.root.position.copy(body);
       traveller.root.rotation.y = heading;
-      traveller.root.visible = view === 'third' || !!glide;
+      traveller.root.visible = (view === 'third' || !!glide) && !transit?.busRide && !transit?.metroRide;
       glider.visible = mode === 'glide';
       traveller.update(dt, mode === 'glide' ? 0 : speed, vehicle === 'bike' && mode !== 'glide' ? 'bike' : vehicle === 'boat' ? 'sit' : mode, t);
       // Lean into a turn on the bike; a boat bobs.
       traveller.root.rotation.z = vehicle === 'bike' ? steerLean : 0;
+      // The boat only on water: anywhere else the traveller steps ashore (the owner saw it in the air).
+      if (vehicle === 'boat' && waterAt(body.x, body.z) === null) {
+        vehicle = 'walk'; vspeed = 0;
+        const at = nearest(heightAt, body.x, body.z, 40);
+        if (at) body.set(at[0], heightAt(at[0], at[1]), at[1]);
+      }
       skiff.visible = vehicle === 'boat';
       if (skiff.visible) {
         skiff.position.set(body.x, body.y + Math.sin(t * 1.4) * .05, body.z); skiff.rotation.set(Math.sin(t * 1.1) * .03, heading, 0);
@@ -1131,6 +1247,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const haze = meta.fog ?? .0011;
       // From the home page's height the street haze would bury the city: a fifth of it up there.
       scene.fog.density = (world.overview ? haze * .2 : mode === 'glide' ? haze * .45 : haze) + weather.storm * .004 + weather.snow * .003;
+      // In the metro carriage: the tunnel's own dark, whatever the weather above.
+      if (transit?.inCarriage) { scene.fog.color.setRGB(.07, .08, .085); scene.fog.density = .006; }
       sky.position.copy(camera.position);
       hazeColor.value.copy(scene.fog.color);
       worldRain.position.copy(camera.position); worldSnow.position.copy(camera.position);
@@ -1139,6 +1257,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       updatePetals(t, dt, body);
       updateTreeLod(t, glide || mode === 'glide' ? camera.position : body);
       updateTraffic(dt);
+      // A metro train passing under the walker shakes the view a little.
+      if (transit && !glide && mode !== 'glide' && !transit.metroRide) rumble = Math.max(rumble, transit.rumbleAt(body.x, body.z) * .6);
       for (const b of boats) {
         b.u += b.dir * 1.4 * dt / b.route.length;
         if (b.u > 1) { b.u = 1; b.dir = -1; } else if (b.u < 0) { b.u = 0; b.dir = 1; }

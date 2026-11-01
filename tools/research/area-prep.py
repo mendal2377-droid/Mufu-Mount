@@ -35,9 +35,11 @@ AREAS = {
     'qixia': {'bbox': (32.142, 118.938, 32.166, 118.970), 'origin': (32.15386, 118.95302)},
     # Origin: Xinjiekou, the skyline's origin, so the city core and the shared skyline line up. The
     # map runs north past Xuanwu Lake and Xiaguan to the Yangtze (the owner's ask).
-    'core': {'bbox': (32.028, 118.728, 32.118, 118.810), 'origin': (32.0418, 118.7838)},
+    # North to the Yangtze shore round Mufu Mountain and east to Swallow Rock (燕子矶): the detailed
+    # Mufu model (public/world) is merged in there (research/mufu-merge/FACTS.md).
+    'core': {'bbox': (32.028, 118.728, 32.158, 118.822), 'origin': (32.0418, 118.7838)},
     # Terrain only, around the core: Purple Mountain to the east, Mufu Mountain on the river.
-    'core_far': {'bbox': (31.990, 118.700, 32.145, 118.905), 'origin': (32.0418, 118.7838), 'osm': False},
+    'core_far': {'bbox': (31.990, 118.700, 32.185, 118.905), 'origin': (32.0418, 118.7838), 'osm': False},
     'bridge': {'bbox': (32.100, 118.722, 32.130, 118.758), 'origin': (32.1117707, 118.7461623)},
 }
 
@@ -130,7 +132,7 @@ def main(area):
         if t.get('natural') == 'water' or t.get('water') or t.get('waterway') in ('riverbank',):
             feats['water'].append(rec)
         elif t.get('waterway') in ('river', 'canal', 'stream'):
-            feats['ways'].append({**rec, 'kind': 'waterway', 'tags': {k: t[k] for k in ('waterway', 'width') if k in t}})
+            feats['ways'].append({**rec, 'kind': 'waterway', 'tags': {k: t[k] for k in ('waterway', 'width', 'tunnel', 'layer') if k in t}})
         elif t.get('barrier') == 'city_wall' or t.get('historic') in ('citywalls', 'city_wall'):
             feats['wall'].append(rec)
         elif t.get('building') or t.get('building:part'):

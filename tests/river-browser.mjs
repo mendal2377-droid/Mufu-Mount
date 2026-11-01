@@ -1,4 +1,5 @@
 import { chromium } from "@playwright/test";
+import { openMufu } from "./open-mufu.mjs";
 import fs from "node:fs/promises";
 
 async function menuClick(page, selector) {
@@ -28,6 +29,7 @@ try {
   await p.waitForFunction(() => window.__mufu?.state.ready, null, {
     timeout: 120000,
   });
+  await openMufu(p);
   await p.click("#access-0");
   await p.evaluate(() => document.exitPointerLock());
   await menuClick(p, "#river-watch");

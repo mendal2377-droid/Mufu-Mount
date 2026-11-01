@@ -17,7 +17,8 @@
     "offset": 0
    }
   ],
-  "walkableCells": 111296
+  "walkableCells": 111296,
+  "water": true
  },
  "labels": {
   "niushou": "the plaza of Niushou Mountain",
@@ -30,6 +31,7 @@
  ],
  "base_z": 20.2627010345459,
  "fog": 0.0006,
+ "skyline_clip": null,
  "spawns": {
   "niushou": {
    "position": [

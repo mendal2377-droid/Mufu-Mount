@@ -11,7 +11,7 @@ from pathlib import Path
 import bmesh
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Vector, geometry
 
 import kit
 
@@ -128,6 +128,33 @@ def polygon_mesh(name, coll, polys, z, material, inset=0.0):
     for f in bm.faces:
         if f.normal.z < 0:
             f.normal_flip()
+    return kit.mesh_object(name, bm, coll, [material])
+
+
+def water_mesh(name, coll, poly, z, material='water', holes=()):
+    """A lake's surface that never leaves its outline. Ear-clipping the stitched OSM rings (they
+    touch and cross themselves) laid sheets of water over the shore (tests/city-audit.py: willows
+    in water); scanfill, then only triangles whose centre is inside the outline and outside every
+    hole are kept."""
+    pts = poly[:-1] if poly[0] == poly[-1] else poly
+    # Holes only filter triangles: given to the tessellator, islands touching the shore broke
+    # Xuanwu Lake down to a tenth of its surface.
+    rings = [pts] + [h[:-1] if h[0] == h[-1] else h for h in holes]
+    flat = pts
+    bm = bmesh.new()
+    vs = [bm.verts.new((x, y, z)) for x, y in flat]
+    for a, b, c in geometry.tessellate_polygon([[Vector((x, y, 0)) for x, y in pts]]):
+        cx, cy = (flat[a][0] + flat[b][0] + flat[c][0]) / 3, (flat[a][1] + flat[b][1] + flat[c][1]) / 3
+        if not point_in_poly(cx, cy, pts) or any(point_in_poly(cx, cy, h) for h in rings[1:]):
+            continue
+        try:
+            f = bm.faces.new((vs[a], vs[b], vs[c]))
+        except ValueError:
+            continue
+        f.normal_update()
+        if f.normal.z < 0:
+            f.normal_flip()
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.01)
     return kit.mesh_object(name, bm, coll, [material])
 
 
