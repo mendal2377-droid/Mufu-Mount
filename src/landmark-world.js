@@ -979,7 +979,10 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       // when there is road again within 12 m ahead.
       const fits = (h) => {
         const sx = Math.sin(h), sz = Math.cos(h), px = body.x + sx * vspeed * dt, pz = body.z + sz * vspeed * dt;
-        const onRoad = !hasRoads || roadAt(px, pz) !== null || roadAt(px + sx * 6, pz + sz * 6) !== null || roadAt(px + sx * 12, pz + sz * 12) !== null;
+        // Road here, ahead, or within 3 m to either side: on the 4 m grids a road crossing at a slant
+        // is a one-cell diagonal, and the bike fell off its corners.
+        const onRoad = !hasRoads || roadAt(px, pz) !== null || roadAt(px + sx * 6, pz + sz * 6) !== null || roadAt(px + sx * 12, pz + sz * 12) !== null
+          || roadAt(px + sz * 3, pz - sx * 3) !== null || roadAt(px - sz * 3, pz + sx * 3) !== null;
         return canStep({x: body.x, z: body.z}, px, pz) && onRoad ? [px, pz] : null;
       };
       // Straight on; or, blocked by a trunk or post, veer a little round it rather than stop dead.

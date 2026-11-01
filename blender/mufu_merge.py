@@ -196,10 +196,12 @@ PATHS = {
 LINKS = ('trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service')
 
 
-def drape_paths(ways, inside, heights, colours, coll, step=2.0):
+def drape_paths(ways, inside, heights, colours, coll, step=2.0, grade=None):
     """OSM's roads, paths and steps on the mountain, laid over the model's ground as walkable
     ribbons in the model's own path materials. Only the stretches where inside(x, y).
-    Returns metres laid, by kind."""
+    Returns metres laid, by kind. With grade (rise per metre), each ribbon is graded: never below
+    the ground, never steeper than grade, rising early to meet higher ground ahead (a city road
+    meeting the model's Yongji Avenue on its 1 m embankment)."""
     from collections import defaultdict
     runs = defaultdict(list)
     laid = defaultdict(float)
@@ -230,12 +232,26 @@ def drape_paths(ways, inside, heights, colours, coll, step=2.0):
         bm = bmesh.new()
         for run in rs:
             left, right = _offset(run, width / 2), _offset(run, -width / 2)
+            if grade:
+                # The highest ground across the ribbon at each point, then eased both ways so no
+                # stretch is steeper than the grade.
+                z = []
+                for c0, l, r in zip(run, left, right):
+                    hs = [h for h in (heights.at(*c0), heights.at(*l), heights.at(*r)) if h is not None]
+                    z.append(max(hs))
+                for k in range(len(z) - 2, -1, -1):
+                    z[k] = max(z[k], z[k + 1] - grade * math.dist(run[k], run[k + 1]))
+                for k in range(1, len(z)):
+                    z[k] = max(z[k], z[k - 1] - grade * math.dist(run[k], run[k - 1]))
             row = []
             for l, r in zip(left, right):
-                hl, hr = heights.at(*l), heights.at(*r)
-                hc = heights.at(*run[len(row)])
-                hl = hl if hl is not None else hc
-                hr = hr if hr is not None else hc
+                if grade:
+                    hl = hr = z[len(row)]
+                else:
+                    hl, hr = heights.at(*l), heights.at(*r)
+                    hc = heights.at(*run[len(row)])
+                    hl = hl if hl is not None else hc
+                    hr = hr if hr is not None else hc
                 row.append((bm.verts.new((l[0], l[1], hl + .07)), bm.verts.new((r[0], r[1], hr + .07))))
             for (a, b), (c, d) in zip(row, row[1:]):
                 bm.faces.new((a, b, d, c))

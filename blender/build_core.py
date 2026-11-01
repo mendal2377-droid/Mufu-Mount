@@ -799,7 +799,7 @@ def main():
             if len(seg) >= 3:
                 links.append({'kind': k, 'pts': seg})
     linked = mm.drape_paths(links, lambda x, y: zone.at(x, y), MUFU['heights'],
-                            {name: colour for name, colour, _, _ in mparts}, c['Mufu'])
+                            {name: colour for name, colour, _, _ in mparts}, c['Mufu'], grade=0.08)
     print('MUFU LINKS', len(links), {k: round(v) for k, v in linked.items()}, 'm', flush=True)
     # Mufu Mountain's own ponds and reservoirs (OSM, 劳山水库 among them): each at the level of the
     # model's ground on its banks, cut out of the model so the water shows.
@@ -1094,6 +1094,20 @@ def main():
             culled[kind + ' on ' + under] += 1
             bpy.data.objects.remove(o)
             continue
+        # A trunk with road on three sides within 2.5 m stands in the carriageway's edge (the city
+        # audit's own test, tests/city-audit.py trees).
+        if kind != 'lamp':
+            sides = 0
+            for dx, dy in ((2.5, 0), (-2.5, 0), (0, 2.5), (0, -2.5)):
+                for t, me in floors:
+                    hit = t.ray_cast(o.location + Vector((dx, dy, 3.0)), Vector((0, 0, -1)), 6.0)
+                    if hit[0] is not None:
+                        sides += bool(me.materials[me.polygons[hit[2]].material_index].get('road'))
+                        break
+            if sides >= 3:
+                culled[kind + ' at a road edge'] += 1
+                bpy.data.objects.remove(o)
+                continue
         if any(t.ray_cast(inv @ foot, (r3 @ up).normalized())[0] is not None for t, inv, r3 in roofs):
             culled[o.data.name.replace('proto ', '')] += 1
             bpy.data.objects.remove(o)
