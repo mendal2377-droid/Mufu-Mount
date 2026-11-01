@@ -196,12 +196,16 @@ PATHS = {
 LINKS = ('trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service')
 
 
-def drape_paths(ways, inside, heights, colours, coll, step=2.0, grade=None):
+def drape_paths(ways, inside, heights, colours, coll, step=2.0, grade=None, ground=None):
     """OSM's roads, paths and steps on the mountain, laid over the model's ground as walkable
     ribbons in the model's own path materials. Only the stretches where inside(x, y).
     Returns metres laid, by kind. With grade (rise per metre), each ribbon is graded: never below
     the ground, never steeper than grade, rising early to meet higher ground ahead (a city road
-    meeting the model's Yongji Avenue on its 1 m embankment)."""
+    meeting the model's Yongji Avenue on its 1 m embankment). With ground(x, y), the city's ground
+    stands in where the model has none, so a ribbon can start below the model's edge and climb."""
+    def h_at(x, y):
+        h = heights.at(x, y)
+        return h if h is not None or ground is None else ground(x, y)
     from collections import defaultdict
     runs = defaultdict(list)
     laid = defaultdict(float)
@@ -220,7 +224,7 @@ def drape_paths(ways, inside, heights, colours, coll, step=2.0, grade=None):
         dense.append(tuple(w['pts'][-1]))
         run = []
         for q in dense + [None]:
-            if q is not None and inside(*q) and heights.at(*q) is not None:
+            if q is not None and inside(*q) and h_at(*q) is not None:
                 run.append(q)
                 continue
             if len(run) >= 3:
@@ -237,7 +241,7 @@ def drape_paths(ways, inside, heights, colours, coll, step=2.0, grade=None):
                 # stretch is steeper than the grade.
                 z = []
                 for c0, l, r in zip(run, left, right):
-                    hs = [h for h in (heights.at(*c0), heights.at(*l), heights.at(*r)) if h is not None]
+                    hs = [h for h in (h_at(*c0), h_at(*l), h_at(*r)) if h is not None]
                     z.append(max(hs))
                 for k in range(len(z) - 2, -1, -1):
                     z[k] = max(z[k], z[k + 1] - grade * math.dist(run[k], run[k + 1]))

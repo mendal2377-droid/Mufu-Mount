@@ -799,7 +799,8 @@ def main():
             if len(seg) >= 3:
                 links.append({'kind': k, 'pts': seg})
     linked = mm.drape_paths(links, lambda x, y: zone.at(x, y), MUFU['heights'],
-                            {name: colour for name, colour, _, _ in mparts}, c['Mufu'], grade=0.08)
+                            {name: colour for name, colour, _, _ in mparts}, c['Mufu'], grade=0.08,
+                            ground=lambda x, y: zground(x, y) + 0.3)
     print('MUFU LINKS', len(links), {k: round(v) for k, v in linked.items()}, 'm', flush=True)
     # Mufu Mountain's own ponds and reservoirs (OSM, 劳山水库 among them): each at the level of the
     # model's ground on its banks, cut out of the model so the water shows.
@@ -1102,7 +1103,8 @@ def main():
                 for t, me in floors:
                     hit = t.ray_cast(o.location + Vector((dx, dy, 3.0)), Vector((0, 0, -1)), 6.0)
                     if hit[0] is not None:
-                        sides += bool(me.materials[me.polygons[hit[2]].material_index].get('road'))
+                        mat = me.materials[me.polygons[hit[2]].material_index]
+                        sides += bool(mat.get('road')) or mat.name.split('.')[0] == 'road_city'
                         break
             if sides >= 3:
                 culled[kind + ' at a road edge'] += 1
