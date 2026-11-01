@@ -77,7 +77,9 @@ try {
     }
     // Drive along a path for up to `frames`; returns where it got to.
     function drive(path, mode, frames, dt = 0.1) {
-      let i = 0, stuck = 0, best = Infinity, top = -Infinity;
+      // A leg is driven in chunks: carry on from where the last chunk left the route, not its start.
+      let i = window.__drivePath === path ? window.__driveI : 0, stuck = 0, best = i - 1, top = -Infinity;
+      window.__drivePath = path;
       for (let f = 0; f < frames; f++) {
         const b = w.body;
         // Nearest point ahead in a window, then aim 6 m beyond it.
@@ -97,11 +99,15 @@ try {
           hold(["KeyW", ...(Math.abs(err) < 0.25 ? ["ShiftLeft"] : []), ...(err < -0.06 ? ["KeyD"] : err > 0.06 ? ["KeyA"] : [])]);
         }
         m.step(1, dt);
-        if (left < best - 0.5) { best = left; stuck = 0; } else if (++stuck > 400) { hold([]); return { done: false, stuck: true, frames: f, at: [b.x, b.y, b.z], left, top }; }
+        window.__driveI = i;
+        if (window.__trace && f % 40 === 0) window.__trace.push([f, i, Math.round(b.x), Math.round(b.z), Math.round(tx), Math.round(tz)]);
+        // Progress is along the path, not straight at the goal: a real path may swing away from it
+        // (round a building or a pond) for longer than the stuck limit.
+        if (i > best) { best = i; stuck = 0; } else if (++stuck > 400) { hold([]); return { done: false, stuck: true, frames: f, at: [b.x, b.y, b.z], left, top }; }
       }
       hold([]);
       const b = w.body;
-      return { done: false, frames, at: [b.x, b.y, b.z], left: best, top };
+      return { done: false, frames, at: [b.x, b.y, b.z], left: Math.hypot(path[path.length - 1][0] - b.x, path[path.length - 1][1] - b.z), top };
     }
     // The top of Mufu Mountain: the highest walkable point over the mountain, on an 8 m scan.
     function summit() {
@@ -125,7 +131,8 @@ try {
 
   const shot = (name) => page.screenshot({ path: `test-results/shots/journey-${name}.png` });
   const leg = async (name, from, to, mode, frames) => {
-    const r = await page.evaluate(([from, to, mode]) => { const res = window.__journey.route(from, to, mode); window.__leg = res.path; return { found: !!res.path, length: res.path?.length, seen: res.seen }; }, [from, to, mode]);
+    if (process.env.TRACE) await page.evaluate(() => { window.__traceOn = true; });
+    const r = await page.evaluate(([from, to, mode]) => { const res = window.__journey.route(from, to, mode); window.__leg = res.path; if (window.__traceOn) window.__trace = []; return { found: !!res.path, length: res.path?.length, seen: res.seen }; }, [from, to, mode]);
     assert.ok(r.found, `${name}: a ${mode} route exists (${r.seen} cells searched)`);
     let out = null;
     for (let spent = 0; spent < frames && !out?.done; spent += 600) {
@@ -133,6 +140,7 @@ try {
       if (out.stuck) break;
     }
     report.legs.push({ name, mode, route: r, result: out });
+    if (process.env.TRACE) console.log('path', JSON.stringify(await page.evaluate(() => window.__leg.filter((p) => Math.hypot(p[0] - window.__mufu.city.world.body.x, p[1] - window.__mufu.city.world.body.z) < 40).map((p) => [...p.map(Math.round), window.__mufu.city.world.grid.road(p[0], p[1]) !== null ? "r" : "-"]))), 'trace', JSON.stringify(await page.evaluate(() => window.__trace)));
     console.log(name, JSON.stringify({ route: r, result: { ...out, at: out.at.map((v) => +v.toFixed(1)), left: out.left && +out.left.toFixed(1), top: +out.top.toFixed(1) } }));
     return out;
   };

@@ -107,7 +107,7 @@ SETTINGS = {
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: '
                       'OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, '
                       'and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed). '
-                      'Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, '
+                      'Building types follow OSM land use (residential, commercial, industrial); the old walk-ups\' colours, '
                       'balconies and air conditioners are drawn from photographs (assumed).',
     },
     'qixia': {

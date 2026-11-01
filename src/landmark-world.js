@@ -471,22 +471,29 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // Metro and buses on real lines (src/transit.js; Tiny Nanjing only), loaded before the trees: its
   // stops and entrances need clear ground round them, its buses a clear path.
   const transit = meta.transit ? await loadTransit(base, {scene, bands, heightAt, roadAt, surface, nearest}) : null;
-  if (transit) {
-    const clear = transit.clearings();
-    const keep = t => !clear.some(([x, z, r]) => Math.abs(t[1] - x) < r && Math.abs(t[3] - z) < r && Math.hypot(t[1] - x, t[3] - z) < r);
-    for (let i = trees.length - 1; i >= 0; i--) {
-      const t = trees[i];
-      if (t[0] === 'far' || keep(t)) continue;
-      // The owner found stops and entrances behind trees: the tree goes, and the ground its trunk
-      // was stamped out of the walk grid becomes walkable again (the height of the ground round it).
-      for (let dz = -1.75; dz <= 1.75; dz += .5) for (let dx = -1.75; dx <= 1.75; dx += .5) {
-        const c = cellOf(t[1] + dx, t[3] + dz);
-        if (c < 0 || heights[c] !== walk.noWalk) continue;
-        const ring = [[3, 0], [-3, 0], [0, 3], [0, -3]].map(([ox, oz]) => heightAt(t[1] + ox, t[3] + oz)).filter(h => h !== null);
-        if (ring.length >= 2) heights[c] = Math.round(ring.reduce((a, b) => a + b) / ring.length * 100) & ~1;
-      }
-      trees.splice(i, 1);
+  // A tree taken out: the ground its trunk was stamped out of the walk grid becomes walkable again,
+  // at the height of the ground round it, and road (an odd centimetre) where the ground round it is.
+  function uproot(t) {
+    for (let dz = -1.75; dz <= 1.75; dz += .5) for (let dx = -1.75; dx <= 1.75; dx += .5) {
+      const c = cellOf(t[1] + dx, t[3] + dz);
+      if (c < 0 || heights[c] !== walk.noWalk) continue;
+      const ring = [[3, 0], [-3, 0], [0, 3], [0, -3]].map(([ox, oz]) => [heightAt(t[1] + ox, t[3] + oz), roadAt(t[1] + ox, t[3] + oz)]).filter(([h]) => h !== null);
+      if (ring.length < 2) continue;
+      const cm = Math.round(ring.reduce((a, [h]) => a + h, 0) / ring.length * 100) & ~1;
+      heights[c] = ring.filter(([, r]) => r !== null).length >= 2 ? cm | 1 : cm;
     }
+  }
+  const clear = transit ? transit.clearings() : [];
+  const inClearing = t => clear.some(([x, z, r]) => Math.abs(t[1] - x) < r && Math.abs(t[3] - z) < r && Math.hypot(t[1] - x, t[3] - z) < r);
+  // A trunk in the edge of a carriageway: road on two sides of it within 2 m. The Mufu model's trees
+  // along Yongji Avenue stood so, and stopped the bike dead (tests/mufu-journey-browser.mjs).
+  const inRoad = t => t[0] !== 'lamp' && [[2, 0], [-2, 0], [0, 2], [0, -2]].filter(([dx, dz]) => roadAt(t[1] + dx, t[3] + dz) !== null).length >= 2;
+  let uprooted = 0;
+  for (let i = trees.length - 1; i >= 0; i--) {
+    const t = trees[i];
+    if (t[0] === 'far') continue;
+    // The owner found stops and entrances behind trees, and trees in the road.
+    if (inClearing(t) || inRoad(t)) { uproot(t); trees.splice(i, 1); uprooted++; }
   }
   const byKind = {};
   for (const t of trees) (byKind[t[0]] ||= []).push(t);
@@ -970,10 +977,15 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       // paths) any walkable ground will do.
       // Junctions: a crossing road's pavement lies over the carriageway, so a short gap is fine
       // when there is road again within 12 m ahead.
-      const sx = Math.sin(heading), sz = Math.cos(heading);
-      const onRoad = !hasRoads || roadAt(nx, nz) !== null || roadAt(nx + sx * 6, nz + sz * 6) !== null || roadAt(nx + sx * 12, nz + sz * 12) !== null;
-      const ok = canStep({x: body.x, z: body.z}, nx, nz) && onRoad;
-      if (ok) { body.x = nx; body.z = nz; moved = true; } else vspeed *= .3;
+      const fits = (h) => {
+        const sx = Math.sin(h), sz = Math.cos(h), px = body.x + sx * vspeed * dt, pz = body.z + sz * vspeed * dt;
+        const onRoad = !hasRoads || roadAt(px, pz) !== null || roadAt(px + sx * 6, pz + sz * 6) !== null || roadAt(px + sx * 12, pz + sz * 12) !== null;
+        return canStep({x: body.x, z: body.z}, px, pz) && onRoad ? [px, pz] : null;
+      };
+      // Straight on; or, blocked by a trunk or post, veer a little round it rather than stop dead.
+      let to = fits(heading);
+      for (const d of [.26, -.26, .52, -.52, 1.05, -1.05, 1.57, -1.57]) if (!to) to = fits(heading + d);
+      if (to) { body.x = to[0]; body.z = to[1]; moved = true; } else vspeed *= .3;
       const h = surface(body.x, body.z);
       if (h !== null) body.y = THREE.MathUtils.damp(body.y, h, 14, dt);
     } else {
@@ -1183,9 +1195,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         heading += dh * (1 - Math.exp(-dt * 10));
         dir.multiplyScalar((fast ? RUN : WALK) * dt);
         const from = {x: body.x, z: body.z};
+        // Blocked: slide along whichever way is free, at least half the step, so a walker brushing a
+        // trunk's corner slips past instead of creeping to a stop (the slide shrank to nothing as
+        // the way ahead turned parallel to the blocked edge).
+        const len = Math.hypot(dir.x, dir.z), sx = Math.sign(dir.x) * Math.max(Math.abs(dir.x), len * .5), sz = Math.sign(dir.z) * Math.max(Math.abs(dir.z), len * .5);
         if (canStep(from, body.x + dir.x, body.z + dir.z)) { body.x += dir.x; body.z += dir.z; moved = true; }
-        else if (canStep(from, body.x + dir.x, body.z)) { body.x += dir.x; moved = true; }
-        else if (canStep(from, body.x, body.z + dir.z)) { body.z += dir.z; moved = true; }
+        else if (Math.abs(dir.x) >= Math.abs(dir.z) && canStep(from, body.x + sx, body.z)) { body.x += sx; moved = true; }
+        else if (dir.z !== 0 && canStep(from, body.x, body.z + sz)) { body.z += sz; moved = true; }
+        else if (dir.x !== 0 && canStep(from, body.x + sx, body.z)) { body.x += sx; moved = true; }
       }
       const h = surface(body.x, body.z);
       if (h !== null) body.y = THREE.MathUtils.damp(body.y, h, 14, dt);
@@ -1345,7 +1362,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       }
     },
     stats() {
-      return {id, staticTriangles, treeTriangles, trees: trees.length, walkCells: walk.walkableCells, seats: seats.length,
+      return {id, staticTriangles, treeTriangles, trees: trees.length, uprooted, walkCells: walk.walkableCells, seats: seats.length,
         seated: !!seated, gliding: !!glide, view, mode, body: body.toArray().map(v => +v.toFixed(2)), materials: cache.size};
     },
   };

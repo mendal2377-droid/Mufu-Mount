@@ -557,34 +557,48 @@ def build_roads(coll, skip):
         if len(pts) < 2:
             continue
         pts = densify(pts)
-        if skip(*pts[len(pts) // 2]):
-            continue
-        lanes = num(t.get('lanes'))
-        width = max(WIDTH[kind], lanes * 3.4) if lanes and kind not in FOOT else WIDTH[kind]
-        # OSM maps most avenues here as two one-way halves; each half is one direction's lanes, not
-        # the whole avenue (at full width the halves overlapped, and one half's pavement and lamps
-        # stood on the other: the owner saw lamps mid-road).
-        if t.get('oneway') in ('yes', '-1', '1') and kind not in FOOT:
-            width = lanes * 3.4 if lanes else max(WIDTH[kind] / 2, 6.0)
-        bridge = bool(t.get('bridge')) and (num(t.get('layer')) or 1) > 0 and kind not in FOOT
-        pts3 = []
-        total = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
-        run = 0.0
-        for i, p in enumerate(pts):
-            if i:
-                run += math.dist(pts[i - 1], p)
-            rise = 7.0 * max(0.0, math.sin(math.pi * min(run / total, 1.0))) ** 0.5 if bridge and total > 60 else 0.0
-            pts3.append((p[0], p[1], zground(*p) + rise))
-        foot = kind in FOOT
-        if not foot:
-            carriageways.append(([p[:2] for p in pts3], width))
-        ribbon(bm, uv, pts3, width, 1 if foot else 0, 0.3 + 0.015 * order.get(kind, 0))
-        if kind in AVENUE or kind == 'tertiary':
-            planted.append((pts3, width, kind, t.get('name', ''), w['id']))
-            for side in (-1, 1):
-                pavements.append((ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0)), pts3, side))
-            if kind in AVENUE:
-                avenues.append((pts3, width, kind))
+        # Cut out the stretches inside a skipped area (the Mufu model's own roads) and keep the rest:
+        # skipping a whole way by its midpoint dropped Yongji Avenue's last 200 m to the Shangyuanmen
+        # junction, outside the model, and the bike could not reach the station.
+        runs, cur = [], []
+        for q in pts:
+            if skip(*q):
+                if len(cur) > 1:
+                    runs.append(cur)
+                cur = []
+            else:
+                cur.append(q)
+        if len(cur) > 1:
+            runs.append(cur)
+        for pts in runs:
+            if sum(math.dist(a, b) for a, b in zip(pts, pts[1:])) < 8:
+                continue
+            lanes = num(t.get('lanes'))
+            width = max(WIDTH[kind], lanes * 3.4) if lanes and kind not in FOOT else WIDTH[kind]
+            # OSM maps most avenues here as two one-way halves; each half is one direction's lanes, not
+            # the whole avenue (at full width the halves overlapped, and one half's pavement and lamps
+            # stood on the other: the owner saw lamps mid-road).
+            if t.get('oneway') in ('yes', '-1', '1') and kind not in FOOT:
+                width = lanes * 3.4 if lanes else max(WIDTH[kind] / 2, 6.0)
+            bridge = bool(t.get('bridge')) and (num(t.get('layer')) or 1) > 0 and kind not in FOOT
+            pts3 = []
+            total = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
+            run = 0.0
+            for i, p in enumerate(pts):
+                if i:
+                    run += math.dist(pts[i - 1], p)
+                rise = 7.0 * max(0.0, math.sin(math.pi * min(run / total, 1.0))) ** 0.5 if bridge and total > 60 else 0.0
+                pts3.append((p[0], p[1], zground(*p) + rise))
+            foot = kind in FOOT
+            if not foot:
+                carriageways.append(([p[:2] for p in pts3], width))
+            ribbon(bm, uv, pts3, width, 1 if foot else 0, 0.3 + 0.015 * order.get(kind, 0))
+            if kind in AVENUE or kind == 'tertiary':
+                planted.append((pts3, width, kind, t.get('name', ''), w['id']))
+                for side in (-1, 1):
+                    pavements.append((ac.polyline_offset([p[:2] for p in pts3], side * (width / 2 + 2.0)), pts3, side))
+                if kind in AVENUE:
+                    avenues.append((pts3, width, kind))
     # Pavements go down once every carriageway is known, and stop where they cross one: a side
     # street's pavement ran on across the avenue it meets, and the inner pavement of a divided
     # avenue lay on its other half, lamps and all (the owner saw grey blocks and lamps mid-road).
