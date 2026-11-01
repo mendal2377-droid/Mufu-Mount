@@ -207,6 +207,10 @@ def drape_paths(ways, inside, heights, colours, coll, step=2.0):
         kind = w.get('kind')
         if kind not in PATHS or len(w['pts']) < 2:
             continue
+        # Tunnels stay underground (the Yanziji Yangtze tunnel runs under the mountain).
+        t = w.get('tags', {})
+        if t.get('tunnel') or str(t.get('layer', '0')).startswith('-'):
+            continue
         dense = []
         for a, b in zip(w['pts'], w['pts'][1:]):
             n = max(1, int(math.dist(a, b) / step))

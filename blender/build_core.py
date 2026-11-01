@@ -855,7 +855,9 @@ def main():
     print('MUFU SHALLOWS', int(shallows.sum()), 'cells', flush=True)
 
     def in_mufu(x, y):
-        return zone.at(x, y)
+        # Only where the model really has ground: its zone is drawn a few cells wider, and in that
+        # margin the city's road stopped short of the model's (Yongji Avenue at Shangyuanmen).
+        return zone.at(x, y) and MUFU['heights'].at(x, y) is not None
 
     def skip(x, y):
         return in_palace(x, y) or in_mufu(x, y)
