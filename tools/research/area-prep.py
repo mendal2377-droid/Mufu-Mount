@@ -124,6 +124,11 @@ def main(area):
                     for pts in stitch([ring(m['geometry']) for m in el.get('members', [])
                                        if m.get('geometry') and m['role'] == role]):
                         feats[key].append({'id': el['id'], 'name': name, 'pts': pts})
+            elif t.get('natural') == 'wood' or t.get('landuse') == 'forest':
+                # Woods mapped as multipolygons: Purple Mountain's forest is one (relation 16455205).
+                for pts in stitch([ring(m['geometry']) for m in el.get('members', [])
+                                   if m.get('geometry') and m['role'] == 'outer']):
+                    feats['places'].append({'id': el['id'], 'name': name, 'tags': t, 'pts': pts})
             continue
         g = el.get('geometry')
         if not g:

@@ -179,7 +179,18 @@ def dry(x, y, r=3.0):
     return not any(wet(x + dx, y + dy) for dx, dy in ((0, 0), (r, 0), (-r, 0), (0, r), (0, -r)))
 
 
+# Purple Mountain's forest (OSM relation 16455205, inside the Zhongshan Scenic Area). The bare-ground
+# estimate's 150 m minimum, there to strip buildings off the streets, would shave its summits by
+# 50-60 m (Purple Mountain 388 m, not 448). There, the surface model less a thin canopy, which on
+# 1 Nov sat 6-12 m under OSM's surveyed peaks (design/PURPLE-MOUNTAIN-PLAN.md).
+MOUNTAIN_WOODS = (16455205,)
+_mountain = [p['pts'] for p in F['places'] if p['id'] in MOUNTAIN_WOODS and p.get('pts')]
+MOUNTAIN = ac.Mask(_mountain, A.extent, 8.0) if _mountain else None
+
+
 def zground(x, y):
+    if MOUNTAIN is not None and MOUNTAIN.at(x, y):
+        return max(A.bare_at(x, y), A.dsm_at(x, y) - 4.0)
     return A.bare_at(x, y)
 
 
