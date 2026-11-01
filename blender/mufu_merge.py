@@ -189,7 +189,11 @@ PATHS = {
     'track': (3.0, 'Hike | earth and leaf litter'), 'path': (1.8, 'Hike | earth and leaf litter'),
     'footway': (2.2, 'Hike | weathered limestone paving'), 'steps': (2.0, 'Hike | weathered limestone paving'),
     'pedestrian': (3.0, 'Hike | weathered limestone paving'), 'cycleway': (2.2, 'Hike | weathered limestone paving'),
+    'secondary': (9.0, 'Yongji Avenue asphalt'), 'primary': (10.0, 'Yongji Avenue asphalt'),
+    'trunk': (12.0, 'Yongji Avenue asphalt'),
 }
+# City roads carried into the model where they meet it (build_core.py, the links to its own roads).
+LINKS = ('trunk', 'primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'service')
 
 
 def drape_paths(ways, inside, heights, colours, coll, step=2.0):

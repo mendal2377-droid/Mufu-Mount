@@ -771,6 +771,36 @@ def main():
     laid = mm.drape_paths(F['ways'], lambda x, y: on_mountain(x, y) and zone.at(x, y), MUFU['heights'],
                           {name: colour for name, colour, _, _ in mparts}, c['Mufu'])
     print('MUFU PATHS', {k: round(v) for k, v in laid.items()}, 'm', flush=True)
+    # Where a city road runs into the model, its first stretch inside is laid over the model's ground
+    # too, until it meets the model's own road: the model, fitted by scale and turn, put its Yongji
+    # Avenue some 50 m off OSM's, and the bike could not cross from one to the other at Shangyuanmen.
+    links = []
+    for w in F['ways']:
+        k = w.get('kind')
+        if k not in mm.LINKS or len(w['pts']) < 2:
+            continue
+        dense = []
+        for a, b in zip(w['pts'], w['pts'][1:]):
+            n = max(1, int(math.dist(a, b) / 2.0))
+            dense += [(a[0] + (b[0] - a[0]) * j / n, a[1] + (b[1] - a[1]) * j / n) for j in range(n)]
+        dense.append(tuple(w['pts'][-1]))
+        inside = [zone.at(*q) and not on_mountain(*q) for q in dense]
+        for i in range(1, len(dense)):
+            if inside[i] == inside[i - 1]:
+                continue
+            # Entering (or, read backwards, leaving) the model: up to 80 m inside from the edge.
+            step = 1 if inside[i] else -1
+            j, seg, run = (i if inside[i] else i - 1), [], 0.0
+            while 0 <= j < len(dense) and inside[j] and run < 80:
+                if seg:
+                    run += math.dist(seg[-1], dense[j])
+                seg.append(dense[j])
+                j += step
+            if len(seg) >= 3:
+                links.append({'kind': k, 'pts': seg})
+    linked = mm.drape_paths(links, lambda x, y: zone.at(x, y), MUFU['heights'],
+                            {name: colour for name, colour, _, _ in mparts}, c['Mufu'])
+    print('MUFU LINKS', len(links), {k: round(v) for k, v in linked.items()}, 'm', flush=True)
     # Mufu Mountain's own ponds and reservoirs (OSM, 劳山水库 among them): each at the level of the
     # model's ground on its banks, cut out of the model so the water shows.
     ponds = []
