@@ -22,47 +22,76 @@ export const OUTFITS = {
   rose: {jacket: 0xc76a6a, trousers: 0x2f3b4a, pack: 0x5e8f3a, hat: 0xe9d7b0, band: 0x34405a},
 };
 
+// The traveller is a duck (the owner: "Nanjing is famous for its duck", 盐水鸭 salted duck and
+// roast duck): a round white cartoon duck with an orange bill and webbed feet, wings for arms, and
+// still the traveller's sun hat, scarf and backpack. About 1.6 m to the hat's top, so cameras,
+// seats and the bike fit as before.
 export function createTraveller(bands, outfit = OUTFITS.ochre) {
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
-  const skin = toon(bands, 0xe8c4a0), jacket = toon(bands, outfit.jacket), trousers = toon(bands, outfit.trousers);
-  const shoe = toon(bands, 0x5a4030), pack = toon(bands, outfit.pack), hat = toon(bands, outfit.hat), band = toon(bands, outfit.band);
-  // Legs from the hips.
-  const legL = capsule(.075, .72, trousers), legR = capsule(.075, .72, trousers);
-  for (const [leg, x] of [[legL, -.1], [legR, .1]]) {
-    leg.position.set(x, .9, 0);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(.11, .07, .24), shoe);
-    foot.position.set(0, -.86, .05);
+  const feather = toon(bands, 0xf6f2e6), orange = toon(bands, 0xf09a2a), dark = toon(bands, 0x1c1c22);
+  const shine = new THREE.MeshBasicMaterial({color: 0xffffff}), blush = toon(bands, 0xf2a2a0);
+  const pack = toon(bands, outfit.pack), hat = toon(bands, outfit.hat), band = toon(bands, outfit.band);
+  // Short orange legs from the hips, each with a flat webbed foot.
+  const legL = capsule(.05, .26, orange), legR = capsule(.05, .26, orange);
+  const webGeo = new THREE.BufferGeometry();
+  // A three-toed paddle: a fan of triangles from the ankle forward.
+  webGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+    0, 0, -.03, -.11, 0, .19, -.04, 0, .15, 0, 0, -.03, -.04, 0, .15, 0, 0, .21,
+    0, 0, -.03, 0, 0, .21, .04, 0, .15, 0, 0, -.03, .04, 0, .15, .11, 0, .19], 3));
+  webGeo.computeVertexNormals();
+  const web = toon(bands, 0xf09a2a, {side: THREE.DoubleSide});
+  for (const [leg, x] of [[legL, -.14], [legR, .14]]) {
+    leg.position.set(x, .4, .02);
+    const foot = new THREE.Mesh(webGeo, web);
+    foot.position.set(0, -.38, .02);
     leg.add(foot);
     body.add(leg);
   }
-  // Torso, backpack, arms, head and sun hat.
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.17, .38, 3, 10), jacket);
-  torso.position.y = 1.2; torso.scale.set(1.08, 1, .78);
-  const backpack = new THREE.Mesh(new THREE.BoxGeometry(.32, .42, .18), pack);
-  backpack.position.set(0, 1.22, -.19);
-  const roll = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .34, 8), toon(bands, 0x6e9a3e));
-  roll.rotation.z = Math.PI / 2; roll.position.set(0, 1.47, -.2);
-  body.add(torso, backpack, roll);
-  const armL = capsule(.055, .5, jacket), armR = capsule(.055, .5, jacket);
-  for (const [arm, x] of [[armL, -.24], [armR, .24]]) {
-    arm.position.set(x, 1.42, 0);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), skin);
-    hand.position.y = -.64;
-    arm.add(hand);
+  // A round body with a perky tail; the backpack and bedroll on its back.
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(.42, 20, 16), feather);
+  torso.position.y = .78; torso.scale.set(1, 1.02, 1.12);
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(.13, .3, 10), feather);
+  tail.position.set(0, .98, -.48); tail.rotation.x = -2.1;
+  const backpack = new THREE.Mesh(new THREE.BoxGeometry(.34, .34, .16), pack);
+  backpack.position.set(0, .86, -.44); backpack.rotation.x = .15;
+  const roll = new THREE.Mesh(new THREE.CylinderGeometry(.065, .065, .34, 8), toon(bands, 0x6e9a3e));
+  roll.rotation.z = Math.PI / 2; roll.position.set(0, 1.07, -.45);
+  body.add(torso, tail, backpack, roll);
+  // Wings for arms: soft flattened paddles from the shoulders.
+  const armL = capsule(.1, .26, feather), armR = capsule(.1, .26, feather);
+  for (const [arm, x] of [[armL, -.4], [armR, .4]]) {
+    arm.position.set(x, .98, 0);
+    arm.children[0].scale.set(.45, 1, 1);
     body.add(arm);
   }
+  // The scarf round the neck, in the hat-band colour.
+  const scarf = new THREE.Mesh(new THREE.TorusGeometry(.2, .055, 8, 18), band);
+  scarf.rotation.x = Math.PI / 2; scarf.position.y = 1.13;
+  body.add(scarf);
+  // A big round head: wide bill, bright eyes with a shine, pink cheeks; the sun hat on top.
   const head = new THREE.Group();
-  head.position.y = 1.58;
-  const face = new THREE.Mesh(new THREE.SphereGeometry(.12, 14, 10), skin);
-  face.position.y = .02;
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(.27, .27, .018, 20), hat);
-  brim.position.y = .1;
-  const crown = new THREE.Mesh(new THREE.CylinderGeometry(.12, .14, .11, 16), hat);
-  crown.position.y = .16;
-  const ribbon = new THREE.Mesh(new THREE.CylinderGeometry(.142, .142, .03, 16), band);
-  ribbon.position.y = .125;
-  head.add(face, brim, crown, ribbon);
+  head.position.y = 1.32;
+  const face = new THREE.Mesh(new THREE.SphereGeometry(.27, 20, 16), feather);
+  const bill = new THREE.Mesh(new THREE.SphereGeometry(.13, 14, 10), orange);
+  bill.scale.set(1.25, .38, 1.15); bill.position.set(0, -.05, .27);
+  head.add(face, bill);
+  for (const x of [-.11, .11]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), dark);
+    eye.position.set(x, .06, .23); eye.scale.set(1, 1.25, .6);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(.014, 6, 5), shine);
+    glint.position.set(x + .012, .085, .255);
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), blush);
+    cheek.position.set(x * 1.75, -.04, .2); cheek.scale.set(1, .6, .4);
+    head.add(eye, glint, cheek);
+  }
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(.32, .32, .018, 22), hat);
+  brim.position.y = .2; brim.rotation.x = -.08;
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(.14, .17, .13, 16), hat);
+  crown.position.y = .27;
+  const ribbon = new THREE.Mesh(new THREE.CylinderGeometry(.172, .172, .03, 16), band);
+  ribbon.position.y = .225;
+  head.add(brim, crown, ribbon);
   body.add(head);
   // A bicycle for riding the avenues: two spoked wheels, a dark frame, bars and saddle. It shows
   // in 'bike' mode; the rider sits on it and pedals.
@@ -89,7 +118,7 @@ export function createTraveller(bands, outfit = OUTFITS.ochre) {
 
   let phase = 0, sitK = 0, glideK = 0, bikeK = 0;
   return {
-    root, height: 1.72,
+    root, height: 1.6,
     // speed in m/s; mode: 'walk' | 'sit' | 'glide' | 'bike'
     update(dt, speed, mode, t) {
       sitK = THREE.MathUtils.damp(sitK, mode === 'sit' ? 1 : 0, 6, dt);
@@ -102,23 +131,27 @@ export function createTraveller(bands, outfit = OUTFITS.ochre) {
         for (const w of wheels) w.rotation.x -= speed * dt / .33;
         const crank = (phase += dt * speed * 1.6);
         legL.rotation.x = -1.0 + Math.sin(crank) * .55; legR.rotation.x = -1.0 + Math.sin(crank + Math.PI) * .55;
-        armL.rotation.x = armR.rotation.x = -1.05; armL.rotation.z = armR.rotation.z = 0;
-        body.position.set(0, .02, -.32); body.rotation.x = .32;
-        head.rotation.x = -.25; head.rotation.y = 0;
+        armL.rotation.x = armR.rotation.x = -1.25; armL.rotation.z = -.3; armR.rotation.z = .3;
+        // The duck's hips are low: lift it onto the saddle.
+        body.position.set(0, .5, -.3); body.rotation.set(.18, 0, 0);
+        head.rotation.x = -.2; head.rotation.y = 0;
         return;
       }
       const stride = Math.min(1, speed / 1.7), run = THREE.MathUtils.clamp((speed - 2) / 2.6, 0, 1);
-      phase += dt * (speed > .05 ? 2.1 + speed * 1.9 : 0);
-      const swing = Math.sin(phase) * (.45 + run * .35) * stride * (1 - sitK) * (1 - glideK);
+      phase += dt * (speed > .05 ? 3.2 + speed * 2.4 : 0);   // short legs: quicker steps
+      const swing = Math.sin(phase) * (.3 + run * .2) * stride * (1 - sitK) * (1 - glideK);
       legL.rotation.x = swing - sitK * 1.45 + glideK * Math.sin(t * 1.3) * .15;
       legR.rotation.x = -swing - sitK * 1.45 + glideK * Math.sin(t * 1.3 + 1) * .15;
-      armL.rotation.x = -swing * .8 - glideK * 2.7 + sitK * .3;
-      armR.rotation.x = swing * .8 - glideK * 2.7 + sitK * .3;
-      armL.rotation.z = -glideK * .25; armR.rotation.z = glideK * .25;
-      // Bob while walking; lower onto the seat; lean into a run.
-      body.position.y = Math.abs(Math.cos(phase)) * .045 * stride * (1 - sitK) - sitK * .42;
-      body.position.z = sitK * -.12;
-      body.rotation.x = run * .14 * (1 - sitK);
+      // Wings swing a little and flap out when running; up on the risers when gliding.
+      armL.rotation.x = -swing * .6 - glideK * 2.7 + sitK * .3;
+      armR.rotation.x = swing * .6 - glideK * 2.7 + sitK * .3;
+      const flap = run * (.35 + Math.sin(phase * 2) * .25);
+      armL.rotation.z = -glideK * .25 - flap - .12; armR.rotation.z = glideK * .25 + flap + .12;
+      // The waddle: a roll from foot to foot and a bob; settle onto a seat; lean into a run.
+      body.position.y = Math.abs(Math.cos(phase)) * .05 * stride * (1 - sitK) - sitK * .2;
+      body.position.z = sitK * -.1;
+      body.rotation.x = run * .18 * (1 - sitK);
+      body.rotation.z = Math.sin(phase) * .13 * stride * (1 - sitK) * (1 - glideK);
       head.rotation.x = sitK * -.08 + Math.sin(t * .6) * .02;
       head.rotation.y = speed < .05 && !glideK ? Math.sin(t * .35) * .35 : 0;
     },
