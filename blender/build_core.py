@@ -503,8 +503,10 @@ def build_infill(coll, blocked, near_road, skip, mark):
 # --- Roads ------------------------------------------------------------------------------------------
 WIDTH = {'trunk': 26.0, 'primary': 22.0, 'secondary': 15.0, 'tertiary': 11.0, 'residential': 7.0, 'unclassified': 7.0,
          'living_street': 5.5, 'service': 4.5, 'pedestrian': 7.0, 'footway': 2.6, 'cycleway': 3.0, 'path': 2.0,
-         'primary_link': 8.0, 'secondary_link': 7.0, 'trunk_link': 9.0, 'tertiary_link': 6.0}
-FOOT = {'pedestrian', 'footway', 'path', 'cycleway', 'steps'}
+         'primary_link': 8.0, 'secondary_link': 7.0, 'trunk_link': 9.0, 'tertiary_link': 6.0,
+         # Purple Mountain's stairways and dirt tracks (the city had no use for them before).
+         'steps': 2.4, 'track': 3.0}
+FOOT = {'pedestrian', 'footway', 'path', 'cycleway', 'steps', 'track'}
 AVENUE = {'trunk', 'primary', 'secondary'}
 
 
@@ -1034,7 +1036,20 @@ def main():
     trees += ac.scatter(protos, c['Trees'], rnd, kinds, 9000, patch[0], patch[1],
                         lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and dry(x, y) and not in_palace(x, y)
                         and not any(m.at(x, y) for m, _ in zones), zground, groves=500)
-    print('SPECIES', species_count, 'shore', shore, flush=True)
+    # Purple Mountain's forest (OSM relation 16455205). Its secondary forest has turned from planted
+    # Masson pine to deciduous broadleaf: in forest-gap surveys sweetgum (枫香) is in every plot, then
+    # castor aralia, white oak, Chinese pistache and cork oak; conifers about 10 % of the reserve,
+    # broadleaf about 49 % (2002). As this build's kinds: sweetgum as the maple (green, then red in
+    # autumn), oaks and pistache as broadleaf, pine as cedar. About one tree per 1,000 m².
+    # Sources: design/PURPLE-MOUNTAIN-PLAN.md.
+    mountain_trees = 0
+    if MOUNTAIN is not None:
+        kinds = ['maple_autumn'] * 7 + ['broadleaf'] * 5 + ['broadleaf_shade'] * 3 + ['broadleaf_sun'] * 2 + ['cedar'] * 2 + ['camphor']
+        mountain_trees = ac.scatter(protos, c['Trees'], rnd, kinds, 30000, (3600.0, X1 - 30), (Y0 + 30, 6000.0),
+                                    lambda x, y: MOUNTAIN.at(x, y) and not blocked(x, y) and dry(x, y) and crown_clear(x, y, 3.0),
+                                    zground, clump=45.0, groves=3000)
+        trees += mountain_trees
+    print('SPECIES', species_count, 'shore', shore, 'mountain', mountain_trees, flush=True)
     # The model's own trees, at their places, as the Mufu Mountain wood's researched mix
     # (ZONES: research/plants/FACTS.md).
     mix, placed = ZONES[62344629], 0

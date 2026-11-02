@@ -30,8 +30,8 @@ LINES = [
     ('bus', '25', None, 'Bus 25', 'Along Zhongshan Road: Xinjiekou, Gulou'),
     # The city's axis: Zhongshan Wharf on the Yangtze along Zhongshan North Road, Zhongshan Road and
     # Zhongshan East Road to the Sun Yat-sen Mausoleum, the road built in 1928-29 for Sun Yat-sen's
-    # funeral procession. On this map, from the wharf to Zhongshan Gate (the owner's ask).
-    ('bus', '34', None, 'Bus 34', 'Zhongshan Wharf to Zhongshan Gate along the Zhongshan Road axis, on to the Sun Yat-sen Mausoleum'),
+    # funeral procession. Now the whole route, the wharf to the Mausoleum car park (the owner's ask).
+    ('bus', '34', None, 'Bus 34', 'Zhongshan Wharf along the Zhongshan Road axis, through Zhongshan Gate, to the Sun Yat-sen Mausoleum'),
 ]
 STOP_NEAR = {'subway': 120.0, 'bus': 40.0}
 # Lines stop at the Yangtze: the map reaches over the river by Mufu Mountain, but Line 3's
@@ -55,6 +55,10 @@ PINYIN = {
     '玄武湖公园': 'Xuanwu Lake Park', '玄武门地铁站南': 'Xuanwumen Station South', '珠江路': 'Zhujiang Lu', '珠江路南站': 'Zhujiang Lu South',
     '珠江路南站;赛百味': 'Zhujiang Lu South', '萨家湾': 'Sajiawan', '虹桥': 'Hongqiao', '西流湾公园': 'Xiliuwan Park',
     '长江路': 'Changjiang Lu', '鼓楼北站': 'Gulou North', '鼓楼医院': 'Gulou Hospital',
+    # East over Purple Mountain (the map widened on 3 Nov 2026).
+    '苜蓿园': 'Muxuyuan', '钟灵街': 'Zhonglingjie', '蒋王庙': 'Jiangwangmiao', '王家湾': 'Wangjiawan',
+    '卫桥': 'Weiqiao', '卫岗': 'Weigang', '下马坊': 'Xiamafang', '博爱园': "Bo'ai Garden",
+    '中山陵停车场': 'Sun Yat-sen Mausoleum Car Park', '上行观光车起点站': 'Scenic Shuttle (Uphill) Start',
 }
 STREETS = {'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'residential', 'unclassified'}
 FEATURES = json.loads((ROOT / 'research' / 'core' / 'data' / 'features.json').read_text(encoding='utf-8'))
@@ -117,8 +121,16 @@ def route_through_stops(rel):
             if near and math.dist(near, k) < 15:
                 graph[k][near] = graph[near][k] = math.dist(near, k)
     keys = list(graph)
-    # Stops, or where a relation lists only its platforms (Bus 34), those.
-    stops = [xy(m['lat'], m['lon']) for m in rel['members'] if m['type'] == 'node' and m['role'].startswith('stop') and 'lat' in m]         or [xy(m['lat'], m['lon']) for m in rel['members'] if m['type'] == 'node' and m['role'].startswith('platform') and 'lat' in m]
+    # Stops, or where a relation has no stop-role nodes (Bus 34), every stop node it lists in route
+    # order: its platforms, and the four at the Mausoleum end mapped with no role at all (Weigang,
+    # Xiamafang, Bo'ai Garden and the Mausoleum car park), twins within 30 m kept once.
+    stops = [xy(m['lat'], m['lon']) for m in rel['members'] if m['type'] == 'node' and m['role'].startswith('stop') and 'lat' in m]
+    if not stops:
+        for m in rel['members']:
+            if m['type'] == 'node' and 'lat' in m and (m['role'] == '' or m['role'].startswith('platform')):
+                q = xy(m['lat'], m['lon'])
+                if not stops or math.dist(stops[-1], q) > 30:
+                    stops.append(q)
     # Only those on this map.
     stops = [q for q in stops if X0 < q[0] < X1 and Y0 < q[1] < Y1] or stops
 

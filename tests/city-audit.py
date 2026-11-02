@@ -252,6 +252,33 @@ if FEATURES.exists():
     mid = [(round(x), round(y)) for x, y in lamps if in_road(x, y)]
     check('lamps', len(mid) <= max(5, len(lamps) // 500), f'{len(mid)} of {len(lamps)} lamps stand in a carriageway; e.g. {mid[:5]}')
 
+# --- peaks: the built ground at each OSM summit near its surveyed height -------------------------
+# Purple Mountain's ground is the surface model less a thin canopy (blender/build_core.py zground);
+# the city's bare-ground filter would have cut its summits by 50-60 m. Held to 12 m: the 30 m model
+# sits 6-12 m under the surveyed tops (design/PURPLE-MOUNTAIN-PLAN.md). The highest walkable ground
+# within 40 m stands for the summit (its own cell may be a trunk).
+peaks, off_peaks = 0, []
+base = meta.get('base_z') or 0.0
+for p in feats.get('places', []):
+    t = p.get('tags', {})
+    if t.get('natural') != 'peak' or 'ele' not in t or 'p' not in p:
+        continue
+    try:
+        ele = float(str(t['ele']).split()[0])
+    except ValueError:
+        continue
+    x, y = p['p']
+    vals = [value(WALK, x + dx, y + dy) for dx in range(-40, 41, 4) for dy in range(-40, 41, 4) if dx * dx + dy * dy <= 1600]
+    vals = [v for v in vals if v not in (None, NO)]
+    if not vals:
+        continue
+    peaks += 1
+    built = max(vals) / 100 + base
+    if abs(built - ele) > 12:
+        off_peaks.append((p.get('name') or p['id'], ele, round(built, 1)))
+check('peaks', peaks == 0 or not off_peaks,
+      f'{peaks - len(off_peaks)} of {peaks} OSM summits within 12 m of their surveyed height' + (f'; off: {off_peaks[:6]}' if off_peaks else ''))
+
 # --- walkability: markers on walkable ground and reachable from the first spawn -----------------
 markers = []
 for group in ('spawns', 'seats', 'bells', 'docks'):

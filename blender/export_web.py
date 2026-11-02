@@ -99,7 +99,10 @@ SETTINGS = {
                   {'name': 'west', 'x0': -5280.0, 'x1': -1480.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 4.0, 'stepUp': 1.0},
                   {'name': 'east', 'x0': 2080.0, 'x1': 3620.0, 'y0': -1520.0, 'y1': 6000.0, 'cell': 4.0, 'stepUp': 1.0},
                   {'name': 'riverside', 'x0': -5280.0, 'x1': -3600.0, 'y0': 2200.0, 'y1': 7200.0, 'cell': 4.0, 'stepUp': 1.0},
-                  {'name': 'viaduct', 'x0': 400.0, 'x1': 2600.0, 'y0': 6000.0, 'y1': 7400.0, 'cell': 4.0, 'stepUp': 1.0}],
+                  {'name': 'viaduct', 'x0': 400.0, 'x1': 2600.0, 'y0': 6000.0, 'y1': 7400.0, 'cell': 4.0, 'stepUp': 1.0},
+                  # Purple Mountain to the Mausoleum (design/PURPLE-MOUNTAIN-PLAN.md): its stairs and hill
+                  # paths climb steeper than the city's streets, up to 40 % over a 4 m cell.
+                  {'name': 'zijin', 'x0': 3620.0, 'x1': 7860.0, 'y0': -1520.0, 'y1': 6000.0, 'cell': 4.0, 'stepUp': 1.6}],
         'title': 'Tiny Nanjing: from Xinjiekou to the Yangtze',
         'zh': '新街口 · 中山路 · 总统府',
         'fog': 0.00022,      # light haze: Purple Mountain should stand clear in the east
