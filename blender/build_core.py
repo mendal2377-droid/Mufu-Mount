@@ -1193,6 +1193,9 @@ def main():
         trees += mountain_trees
     zs_trees = 0
     for kind, x, y, z, rot, sc in (ZS.trees if ZS is not None else ()):
+        # The world never drew Zixia Lake (紫霞湖) by Xiaoling; the city has it from OSM.
+        if not dry(x, y):
+            continue
         kit.place(protos[kind], c['Trees'], (x, y, z), rot, sc)
         zs_trees += 1
     trees += zs_trees

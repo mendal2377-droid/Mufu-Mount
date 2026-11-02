@@ -20,6 +20,7 @@ to that rule, so no step shows at the patch's edge.
 import math
 from pathlib import Path
 
+import bmesh
 import bpy
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
@@ -52,7 +53,7 @@ class ZhongshanMerge:
         self.rects = [(x0 + self.dx, x1 + self.dx, y0 + self.dy, y1 + self.dy) for (x0, x1), (y0, y1) in PATCHES]
         self.tree = None
         self.trees = []          # (kind, x, y, z, rotation, scale) of the world's own planting
-        self.spawns = []         # (name, location, rotation)
+        self.spawns = []         # (name, location, rotation): its spawns and seats
 
     def append(self, colls, terrain_coll, kinds):
         """Append the world's patches and buildings into colls[name] (one city collection per world
@@ -74,6 +75,12 @@ class ZhongshanMerge:
         for o in moved:
             if o.parent is None:
                 o.location += Vector((self.dx, self.dy, self.dz))
+        bpy.context.view_layer.update()
+        # The world ran Lingyuan Road and its paths on past its patches, floating a metre over its
+        # coarse apron; here the city's own roads take over at the patch edge.
+        for o in moved:
+            if o.type == 'MESH' and o.name.split('.')[0].endswith((' roads', ' paths')):
+                self.clip(o)
         # Its planting (avenue cedars, the plane necklace round Meiling, the Sacred Way's pines and
         # its forest) on its patches only: the far canopy and the outer forest give way to the
         # city's, planted from the canopy height map.
@@ -83,8 +90,11 @@ class ZhongshanMerge:
             if kind != 'far' and kind in kinds and self.inside(x, y):
                 self.trees.append((kind, x, y, o.location.z + self.dz, o.rotation_euler.z, o.scale.x))
         for o in lib['Markers'].objects:
-            if o.name.startswith('Spawn '):
-                self.spawns.append(('Spawn zs-' + o.name[6:], o.location + Vector((self.dx, self.dy, self.dz)), o.rotation_euler.z))
+            # Spawns and seats (the Music Stage's 15 benches, Meiling's terrace); its moon gates, the
+            # world's shortcuts between its own sights, are left out: the city has its roads and Bus 34.
+            kind, _, rest = o.name.partition(' ')
+            if kind in ('Spawn', 'Seat'):
+                self.spawns.append((f'{kind} zs-{rest}', o.location + Vector((self.dx, self.dy, self.dz)), o.rotation_euler.z))
         # Drop the appended collections and whatever was only in them (the world's 27,700 trees among
         # it: in one batch, as removing them one by one is quadratic).
         kept = set(moved)
@@ -99,6 +109,17 @@ class ZhongshanMerge:
             polys += [[base + i for i in f.vertices] for f in o.data.polygons]
         self.tree = BVHTree.FromPolygons(verts, polys) if polys else None
         return moved
+
+    def clip(self, o):
+        """Drop o's faces whose centre lies off every patch."""
+        m = o.matrix_world
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        off = [f for f in bm.faces if not self.inside(*(m @ f.calc_center_median()).xy, 0.0)]
+        bmesh.ops.delete(bm, geom=off, context='FACES')
+        bm.to_mesh(o.data)
+        bm.free()
+        return len(off)
 
     def inside(self, x, y, margin=EDGE):
         return any(x0 + margin < x < x1 - margin and y0 + margin < y < y1 - margin for x0, x1, y0, y1 in self.rects)

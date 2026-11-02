@@ -747,7 +747,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   }
 
   // --- Pigeons over the Music Stage: circle, glide, settle on the lawn, take off again ---------------
-  const musicSpawn = meta.spawns.music, seats = Object.entries(meta.seats).map(([k, v]) => ({id: k, ...v}));
+  // In Tiny Nanjing the Music Stage is the Zhongshan world merged onto Purple Mountain (zs-).
+  const musicSpawn = meta.spawns.music || meta.spawns['zs-music'], seats = Object.entries(meta.seats).map(([k, v]) => ({id: k, ...v}));
   const stage = musicSpawn ? new THREE.Vector3(...musicSpawn.look) : null;
   const pigeons = [];
   if (stage) {

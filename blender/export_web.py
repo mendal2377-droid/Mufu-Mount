@@ -35,10 +35,11 @@ SCENE_ID = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else 'zhongsha
 OUT = ROOT / 'public' / 'scenes' / SCENE_ID
 OUT.mkdir(parents=True, exist_ok=True)
 
-WALKABLE = {'paving', 'paving_joint', 'granite', 'granite_shade', 'lawn', 'forest_floor', 'boardwalk',
+WALKABLE = {'paving', 'paving_joint', 'granite', 'granite_shade', 'lawn', 'forest_floor', 'boardwalk', 'road',
             'road_city', 'sidewalk', 'city_paving', 'pitch'}
 NO_WALK = -32768
-ROADS = {'road_city'}
+# road: the Zhongshan world's Lingyuan Road (blender/zhongshan_meiling.py), merged into the city.
+ROADS = {'road_city', 'road'}
 CELL = 1.0
 TRUNK_RADIUS = 0.9
 
@@ -82,7 +83,7 @@ SETTINGS = {
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
     },
     'core': {
-        'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu'),
+        'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu', 'Zhongshan'),
         'uv': True,
         # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
         # the city is for riding and flying. A 4 m grid takes steps up to 1 m, the same 25 % slope
