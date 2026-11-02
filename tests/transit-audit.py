@@ -39,7 +39,8 @@ def value(x, y):
             u, v = x * c + y * s, -x * s + y * c
         i, j = int((u - g['x0']) // g['cell']), int((v - g['y0']) // g['cell'])
         if 0 <= i < g['nx'] and 0 <= j < g['ny']:
-            return WALK[g['offset'] + j * g['nx'] + i]
+            v = WALK[g['offset'] + j * g['nx'] + i]
+            return v if v == NO else v + int(g.get('zOff', 0)) * 100
     return None
 
 

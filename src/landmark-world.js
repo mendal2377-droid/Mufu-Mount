@@ -222,6 +222,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0xa8d0ea, .0011);
   const walk = meta.walk, heights = new Int16Array(walkBuf);
+  // cellZ: the whole metres the last cellOf's grid stores its heights above (zOff, for ground over
+  // the Int16 centimetres' 320 m: Purple Mountain). Declared here: cellOf runs while the world loads.
+  let cellZ = 0;
   // Water surfaces (same layout as the walk grid), where a boat can be steered.
   const waterBuf = walk.water ? await fetch(base + 'water.bin').then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null) : null;
   const waterHeights = waterBuf ? new Int16Array(waterBuf) : null;
@@ -475,11 +478,11 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // at the height of the ground round it, and road (an odd centimetre) where the ground round it is.
   function uproot(t) {
     for (let dz = -1.75; dz <= 1.75; dz += .5) for (let dx = -1.75; dx <= 1.75; dx += .5) {
-      const c = cellOf(t[1] + dx, t[3] + dz);
+      const c = cellOf(t[1] + dx, t[3] + dz), z0 = cellZ;
       if (c < 0 || heights[c] !== walk.noWalk) continue;
       const ring = [[3, 0], [-3, 0], [0, 3], [0, -3]].map(([ox, oz]) => [heightAt(t[1] + ox, t[3] + oz), roadAt(t[1] + ox, t[3] + oz)]).filter(([h]) => h !== null);
       if (ring.length < 2) continue;
-      const cm = Math.round(ring.reduce((a, [h]) => a + h, 0) / ring.length * 100) & ~1;
+      const cm = Math.round((ring.reduce((a, [h]) => a + h, 0) / ring.length - z0) * 100) & ~1;
       heights[c] = ring.filter(([, r]) => r !== null).length >= 2 ? cm | 1 : cm;
     }
   }
@@ -686,26 +689,26 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       let u = x, v = -z;
       if (g.yaw) { const c = Math.cos(g.yaw), s = Math.sin(g.yaw); u = x * c - z * s; v = -x * s - z * c; }
       const c = g.cell || walk.cell, i = Math.floor((u - g.x0) / c), j = Math.floor((v - g.y0) / c);
-      if (i >= 0 && j >= 0 && i < g.nx && j < g.ny) return g.offset + j * g.nx + i;
+      if (i >= 0 && j >= 0 && i < g.nx && j < g.ny) { cellZ = g.zOff || 0; return g.offset + j * g.nx + i; }
     }
     return -1;
   }
   function heightAt(x, z) {
     const c = cellOf(x, z);
     if (c < 0 || heights[c] === walk.noWalk) return null;
-    return heights[c] / 100;
+    return heights[c] / 100 + cellZ;
   }
   // Road cells carry an odd centimetre in the walk grid (blender/export_web.py).
   function roadAt(x, z) {
     const c = cellOf(x, z);
-    return c >= 0 && heights[c] !== walk.noWalk && (heights[c] & 1) ? heights[c] / 100 : null;
+    return c >= 0 && heights[c] !== walk.noWalk && (heights[c] & 1) ? heights[c] / 100 + cellZ : null;
   }
   const hasRoads = heights.some(h => h !== walk.noWalk && (h & 1));
   function waterAt(x, z) {
     if (!waterHeights) return null;
     const c = cellOf(x, z);
     if (c < 0 || waterHeights[c] === walk.noWalk) return null;
-    return waterHeights[c] / 100;
+    return waterHeights[c] / 100 + cellZ;
   }
   // The nearest point (a spiral of rings) where test(x, z) holds, within r metres; null if none.
   function nearest(test, x, z, r) {

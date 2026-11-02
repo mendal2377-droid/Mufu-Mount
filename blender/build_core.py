@@ -186,11 +186,32 @@ def dry(x, y, r=3.0):
 MOUNTAIN_WOODS = (16455205,)
 _mountain = [p['pts'] for p in F['places'] if p['id'] in MOUNTAIN_WOODS and p.get('pts')]
 MOUNTAIN = ac.Mask(_mountain, A.extent, 8.0) if _mountain else None
+# The 30 m cells round the sharpest tops off further: on 3 Nov Toutuo Ridge was built at 411 m
+# against its surveyed 425. Each OSM peak with an ele on the mountain lifts the ground to that
+# height, fading out over SUMMIT_R (a cosine).
+SUMMIT_R = 250.0
+SUMMITS = []
+for _p in F['places'] if MOUNTAIN is not None else ():
+    _t = _p.get('tags', {})
+    if _t.get('natural') != 'peak' or 'ele' not in _t or not _p.get('p') or not MOUNTAIN.at(*_p['p']):
+        continue
+    try:
+        _lift = float(str(_t['ele']).split()[0]) - A.base - (A.dsm_at(*_p['p']) - 4.0)
+    except ValueError:
+        continue
+    if _lift > 0:
+        SUMMITS.append((_p['p'][0], _p['p'][1], _lift))
+print('SUMMITS', [(round(x), round(y), round(l, 1)) for x, y, l in SUMMITS])
 
 
 def zground(x, y):
     if MOUNTAIN is not None and MOUNTAIN.at(x, y):
-        return max(A.bare_at(x, y), A.dsm_at(x, y) - 4.0)
+        z = max(A.bare_at(x, y), A.dsm_at(x, y) - 4.0)
+        for sx, sy, lift in SUMMITS:
+            d = math.hypot(x - sx, y - sy)
+            if d < SUMMIT_R:
+                z += lift * 0.5 * (1 + math.cos(math.pi * d / SUMMIT_R))
+        return z
     return A.bare_at(x, y)
 
 
@@ -247,14 +268,22 @@ def ground(x, y, step=4.0):
         r = int(math.ceil(60.0 / water_mask.cell))
         near = water_level[max(0, j - r):j + r + 1, max(0, i - r):i + r + 1]
         if near.size and np.isfinite(near).any():
-            return max(zground(x, y), float(near[np.isfinite(near)].max()) + 0.6), (0 if green_mask.at(x, y) else 1)
-        return zground(x, y), (0 if green_mask.at(x, y) else 1)
+            return max(zground(x, y), float(near[np.isfinite(near)].max()) + 0.6), land(x, y)
+        return zground(x, y), land(x, y)
     if step > water_mask.cell:
         r = int(math.ceil(step / water_mask.cell))
         near = water_level[max(0, j - r):j + r + 1, max(0, i - r):i + r + 1]
         if near.size and np.isfinite(near).any():
             return min(zground(x, y), float(near.min()) - 0.2), 3
-    return zground(x, y), (0 if green_mask.at(x, y) else 1)
+    return zground(x, y), land(x, y)
+
+
+def land(x, y):
+    """Terrain material: 2 forest floor on Purple Mountain (under a closed canopy, not lawn), 0 lawn
+    in green spaces, 1 city paving."""
+    if MOUNTAIN is not None and MOUNTAIN.at(x, y):
+        return 2
+    return 0 if green_mask.at(x, y) else 1
 
 
 # --- Buildings --------------------------------------------------------------------------------------
@@ -872,10 +901,10 @@ def main():
 
     # Detailed ground over the centre (Xinjiekou to Gulou and the Palace); coarser out to the river.
     patch = ((-1500.0, 2100.0), (-1530.0, 3400.0))
-    ac.terrain_patch('Terrain core', c['Ground'], patch[0], patch[1], lambda x, y: ground(x, y, 12.0), ['lawn', 'city_paving', 'lawn', 'canal_stone'], step=12.0)
+    ac.terrain_patch('Terrain core', c['Ground'], patch[0], patch[1], lambda x, y: ground(x, y, 12.0), ['lawn', 'city_paving', 'forest_floor', 'canal_stone'], step=12.0)
     ac.terrain_patch('Terrain outer', c['Ground'], (X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24),
                      lambda x, y: ground(x, y, 24.0) if not (patch[0][0] + 6 < x < patch[0][1] - 6 and patch[1][0] + 6 < y < patch[1][1] - 6)
-                     else (ground(x, y, 24.0)[0] - 2.0, ground(x, y, 24.0)[1]), ['lawn', 'city_paving', 'lawn', 'canal_stone'], step=24.0)
+                     else (ground(x, y, 24.0)[0] - 2.0, ground(x, y, 24.0)[1]), ['lawn', 'city_paving', 'forest_floor', 'canal_stone'], step=24.0)
     # Beyond the map: coarse ground to the horizon, forested hills with one-crown canopy trees.
     kit.PALETTE.setdefault('far_ground', '#8E9478')
     ac.outer_apron('Landscape', c['Far'], FAR, (((X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24)),), far_z, step=60.0, material='far_ground')
@@ -1040,14 +1069,41 @@ def main():
     # Masson pine to deciduous broadleaf: in forest-gap surveys sweetgum (枫香) is in every plot, then
     # castor aralia, white oak, Chinese pistache and cork oak; conifers about 10 % of the reserve,
     # broadleaf about 49 % (2002). As this build's kinds: sweetgum as the maple (green, then red in
-    # autumn), oaks and pistache as broadleaf, pine as cedar. About one tree per 1,000 m².
+    # autumn), oaks and pistache as broadleaf, pine as cedar.
     # Sources: design/PURPLE-MOUNTAIN-PLAN.md.
+    # The forest is closed: 30,000 trees in 3,000 groves (3 Nov) read as parkland on a lawn. Now many
+    # small overlapping groves over the whole wood, about one tree per 400 m², and a second, denser
+    # stand within 30 m of every way a visitor walks or rides, where the forest is seen from inside.
     mountain_trees = 0
     if MOUNTAIN is not None:
         kinds = ['maple_autumn'] * 7 + ['broadleaf'] * 5 + ['broadleaf_shade'] * 3 + ['broadleaf_sun'] * 2 + ['cedar'] * 2 + ['camphor']
-        mountain_trees = ac.scatter(protos, c['Trees'], rnd, kinds, 30000, (3600.0, X1 - 30), (Y0 + 30, 6000.0),
-                                    lambda x, y: MOUNTAIN.at(x, y) and not blocked(x, y) and dry(x, y) and crown_clear(x, y, 3.0),
-                                    zground, clump=45.0, groves=3000)
+        def wood_ok(x, y):
+            return MOUNTAIN.at(x, y) and not blocked(x, y) and dry(x, y) and crown_clear(x, y, 3.0)
+        mountain_trees = ac.scatter(protos, c['Trees'], rnd, kinds, 45000, (3600.0, X1 - 30), (Y0 + 30, 6000.0),
+                                    wood_ok, zground, clump=28.0, groves=14000)
+        WAYSIDE = 15.0
+        wayside = set()
+        for w in F['ways']:
+            if 'highway' not in w.get('tags', {}) or len(w['pts']) < 2:
+                continue
+            for a, b in zip(w['pts'], w['pts'][1:]):
+                L = math.dist(a, b)
+                for k in range(int(L / WAYSIDE) + 1):
+                    px, py = a[0] + (b[0] - a[0]) * k * WAYSIDE / max(L, 1e-6), a[1] + (b[1] - a[1]) * k * WAYSIDE / max(L, 1e-6)
+                    if MOUNTAIN.at(px, py):
+                        i, j = int(px // WAYSIDE), int(py // WAYSIDE)
+                        wayside.update((i + di, j + dj) for di in (-2, -1, 0, 1, 2) for dj in (-2, -1, 0, 1, 2))
+        near = sorted(wayside)
+        placed = tries = 0
+        while near and placed < 25000 and tries < 200000:
+            tries += 1
+            i, j = near[rnd.randrange(len(near))]
+            x, y = (i + rnd.random()) * WAYSIDE, (j + rnd.random()) * WAYSIDE
+            if not wood_ok(x, y):
+                continue
+            kit.place(protos[rnd.choice(kinds)], c['Trees'], (x, y, zground(x, y) - 0.2), rnd.uniform(0, 6.28), rnd.uniform(.9, 1.35))
+            placed += 1
+        mountain_trees += placed
         trees += mountain_trees
     print('SPECIES', species_count, 'shore', shore, 'mountain', mountain_trees, flush=True)
     # The model's own trees, at their places, as the Mufu Mountain wood's researched mix

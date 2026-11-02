@@ -102,7 +102,7 @@ SETTINGS = {
                   {'name': 'viaduct', 'x0': 400.0, 'x1': 2600.0, 'y0': 6000.0, 'y1': 7400.0, 'cell': 4.0, 'stepUp': 1.0},
                   # Purple Mountain to the Mausoleum (design/PURPLE-MOUNTAIN-PLAN.md): its stairs and hill
                   # paths climb steeper than the city's streets, up to 40 % over a 4 m cell.
-                  {'name': 'zijin', 'x0': 3620.0, 'x1': 7860.0, 'y0': -1520.0, 'y1': 6000.0, 'cell': 4.0, 'stepUp': 1.6}],
+                  {'name': 'zijin', 'x0': 3620.0, 'x1': 7860.0, 'y0': -1520.0, 'y1': 6000.0, 'cell': 4.0, 'stepUp': 1.6, 'zOff': 200}],
         'title': 'Tiny Nanjing: from Xinjiekou to the Yangtze',
         'zh': '新街口 · 中山路 · 总统府',
         'fog': 0.00022,      # light haze: Purple Mountain should stand clear in the east
@@ -206,6 +206,9 @@ def walk_grid(trees, grid):
         lc.exclude = True
     dg = bpy.context.evaluated_depsgraph_get()
     cell = grid.get('cell', CELL)
+    # Int16 centimetres span only ±320 m: a grid over higher ground (Purple Mountain's 448 m) stores
+    # its heights above a whole-metre zOff, which keeps the road cells' odd centimetre.
+    z0 = int(grid.get('zOff', 0))
     nx = int((grid['x1'] - grid['x0']) / cell)
     ny = int((grid['y1'] - grid['y0']) / cell)
     heights = [NO_WALK] * (nx * ny)
@@ -238,11 +241,11 @@ def walk_grid(trees, grid):
             if name in WALKABLE:
                 # Roads are marked by an odd centimetre (everything else even): the bike keeps to
                 # the carriageway without a second grid to download.
-                cm = max(-32000, min(32000, int(round(loc.z * 100))))
+                cm = max(-32000, min(32000, int(round((loc.z - z0) * 100))))
                 heights[j * nx + i] = (cm | 1) if name in ROADS else (cm & ~1)
                 walk_count += 1
             elif name == 'water':
-                water[j * nx + i] = max(-32000, min(32000, int(round(loc.z * 100))))
+                water[j * nx + i] = max(-32000, min(32000, int(round((loc.z - z0) * 100))))
     # Trunks: unwalkable discs round each tree inside the grid.
     for o in trees:
         x, y = o.location.x * cy_ + o.location.y * sy_, -o.location.x * sy_ + o.location.y * cy_
@@ -348,7 +351,8 @@ def main():
         water += wet
         grids.append({'name': g['name'], 'nx': nx, 'ny': ny, 'x0': g['x0'], 'y0': g['y0'], 'cell': g.get('cell', CELL),
                       'offset': len(heights), **({'yaw': g['yaw']} if g.get('yaw') else {}),
-                      **({'stepUp': g['stepUp']} if g.get('stepUp') else {})})
+                      **({'stepUp': g['stepUp']} if g.get('stepUp') else {}),
+                      **({'zOff': int(g['zOff'])} if g.get('zOff') else {})})
         heights += h
         walk_count += n
     lap('walk grids')

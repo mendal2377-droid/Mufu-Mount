@@ -61,8 +61,13 @@ def index(x, y):
 
 
 def value(grid, x, y):
+    """Centimetres above the scene's base at Blender (x, y): a grid's zOff (whole metres, for ground
+    over Int16's 320 m) added back; NO where not walkable, None outside every grid."""
     k = index(x, y)
-    return None if k is None or grid is None else grid[k[3]]
+    if k is None or grid is None:
+        return None
+    v = grid[k[3]]
+    return v if v == NO else v + int(k[0].get('zOff', 0)) * 100
 
 
 def inside(x, y, pts):
