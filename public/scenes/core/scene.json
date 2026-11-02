@@ -1,0 +1,223 @@
+{
+ "id": "core",
+ "title": "Tiny Nanjing: from Xinjiekou to the Yangtze",
+ "zh": "新街口 · 中山路 · 总统府",
+ "axes": "three.js: x = east, y = up, z = south (Blender x, z, -y); metres",
+ "walk": {
+  "cell": 1.0,
+  "noWalk": -32768,
+  "grids": [
+   {
+    "name": "centre",
+    "nx": 1424,
+    "ny": 1488,
+    "x0": -1480.0,
+    "y0": -1520.0,
+    "cell": 2.5,
+    "offset": 0
+   },
+   {
+    "name": "north",
+    "nx": 1420,
+    "ny": 950,
+    "x0": -3600.0,
+    "y0": 2200.0,
+    "cell": 4.0,
+    "offset": 2118912,
+    "stepUp": 1.0
+   },
+   {
+    "name": "wutang",
+    "nx": 750,
+    "ny": 675,
+    "x0": -2600.0,
+    "y0": 6000.0,
+    "cell": 4.0,
+    "offset": 3467912,
+    "stepUp": 1.0
+   },
+   {
+    "name": "west",
+    "nx": 950,
+    "ny": 930,
+    "x0": -5280.0,
+    "y0": -1520.0,
+    "cell": 4.0,
+    "offset": 3974162,
+    "stepUp": 1.0
+   },
+   {
+    "name": "east",
+    "nx": 385,
+    "ny": 1880,
+    "x0": 2080.0,
+    "y0": -1520.0,
+    "cell": 4.0,
+    "offset": 4857662,
+    "stepUp": 1.0
+   },
+   {
+    "name": "riverside",
+    "nx": 420,
+    "ny": 1250,
+    "x0": -5280.0,
+    "y0": 2200.0,
+    "cell": 4.0,
+    "offset": 5581462,
+    "stepUp": 1.0
+   },
+   {
+    "name": "viaduct",
+    "nx": 550,
+    "ny": 350,
+    "x0": 400.0,
+    "y0": 6000.0,
+    "cell": 4.0,
+    "offset": 6106462,
+    "stepUp": 1.0
+   },
+   {
+    "name": "mufu",
+    "nx": 1774,
+    "ny": 1282,
+    "x0": -1698.3500000000004,
+    "y0": 8213.51,
+    "cell": 3.0,
+    "offset": 6298962,
+    "stepUp": 1.3
+   }
+  ],
+  "walkableCells": 5672373,
+  "water": true,
+  "roads": true
+ },
+ "labels": {
+  "xinjiekou": "Xinjiekou",
+  "zhongshan": "Zhongshan Road",
+  "palace": "the Presidential Palace",
+  "gulou": "Gulou"
+ },
+ "origin_wgs84": [
+  32.0418,
+  118.7838
+ ],
+ "base_z": 1.0,
+ "fog": 0.00022,
+ "skyline_clip": [
+  -5286.35,
+  3625.58,
+  -12854.84,
+  1550.49
+ ],
+ "spawns": {
+  "xinjiekou": {
+   "position": [
+    -460.0,
+    6.72,
+    -150.0
+   ],
+   "look": [
+    -460.0,
+    6.72,
+    -180.0
+   ]
+  },
+  "zhongshan": {
+   "position": [
+    -430.0,
+    9.286,
+    -1100.0
+   ],
+   "look": [
+    -431.124,
+    9.286,
+    -1129.979
+   ]
+  },
+  "palace": {
+   "position": [
+    807.502,
+    7.492,
+    -288.765
+   ],
+   "look": [
+    807.502,
+    7.492,
+    -318.765
+   ]
+  },
+  "mufu": {
+   "position": [
+    -345.782,
+    7.442,
+    -9451.589
+   ],
+   "look": [
+    -351.84,
+    7.442,
+    -9422.207
+   ]
+  },
+  "wutang": {
+   "position": [
+    -1065.0,
+    24.775,
+    -7860.0
+   ],
+   "look": [
+    -1065.0,
+    24.775,
+    -7890.0
+   ]
+  },
+  "gulou": {
+   "position": [
+    -470.0,
+    14.794,
+    -2000.0
+   ],
+   "look": [
+    -493.779,
+    14.794,
+    -2018.291
+   ]
+  }
+ },
+ "gates": [
+  {
+   "target": "palace",
+   "position": [
+    -446.0,
+    6.699,
+    -180.0
+   ],
+   "look": [
+    -446.0,
+    6.699,
+    -210.0
+   ]
+  },
+  {
+   "target": "xinjiekou",
+   "position": [
+    827.502,
+    6.814,
+    -298.765
+   ],
+   "look": [
+    857.502,
+    6.814,
+    -298.765
+   ]
+  }
+ ],
+ "bells": {},
+ "docks": {},
+ "rides": {},
+ "seats": {},
+ "traffic": [],
+ "transit": true,
+ "trees": 152382,
+ "staticTriangles": 2656434,
+ "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed). Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, balconies and air conditioners are drawn from photographs (assumed)."
+}
