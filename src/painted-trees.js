@@ -441,6 +441,14 @@ function leafMaterial(kind, sp, bands, shared, plan, base, map) {
       gl_Position=projectionMatrix*mvPosition;`);
     s.fragmentShader = 'uniform float citySnow,citySeason,leafGain;uniform vec3 seasonCol[4],fallCol[4];varying float vSeed,vTreeHash,vShade,vBloom;\n' + s.fragmentShader
       .replace('#include <map_fragment>', `#include <map_fragment>
+        // The mipmaps average a leaf's alpha with the gaps round it, so past 50 m or so the thin
+        // leaves fell under the alpha test and whole crowns went to bare branches (Purple Mountain's
+        // slopes): alpha raised with the mip level keeps the cover (Golus, "Anti-aliased alpha test").
+        #ifdef USE_MAP
+          vec2 texel=vMapUv*vec2(textureSize(map,0));
+          float mip=max(0.,.5*log2(max(dot(dFdx(texel),dFdx(texel)),dot(dFdy(texel),dFdy(texel)))));
+          diffuseColor.a*=1.+mip*.5;
+        #endif
         float s4=mod(citySeason,4.);int si=int(floor(s4));float sf=s4-float(si);int sj=(si+1)-4*((si+1)/4);
         vec3 fallPick=fallCol[int(vTreeHash*3.999)];
         vec3 ca=si==2?fallPick:seasonCol[si], cb=sj==2?fallPick:seasonCol[sj];
@@ -457,7 +465,7 @@ function leafMaterial(kind, sp, bands, shared, plan, base, map) {
         }
         diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.92,.94,.95),citySnow*.5*smoothstep(.2,.9,lum));`);
   };
-  m.customProgramCacheKey = () => 'painted-leaves-v5-' + kind;
+  m.customProgramCacheKey = () => 'painted-leaves-v6-' + kind;
   return m;
 }
 
