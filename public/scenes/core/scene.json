@@ -8,13 +8,23 @@
   "noWalk": -32768,
   "grids": [
    {
+    "name": "mausoleum",
+    "nx": 470,
+    "ny": 590,
+    "x0": 5699.032333942704,
+    "y0": 1516.1864597994509,
+    "cell": 2.0,
+    "offset": 0,
+    "stepUp": 1.0
+   },
+   {
     "name": "centre",
     "nx": 1424,
     "ny": 1488,
     "x0": -1480.0,
     "y0": -1520.0,
     "cell": 2.5,
-    "offset": 0
+    "offset": 277300
    },
    {
     "name": "north",
@@ -23,7 +33,7 @@
     "x0": -3600.0,
     "y0": 2200.0,
     "cell": 4.0,
-    "offset": 2118912,
+    "offset": 2396212,
     "stepUp": 1.0
    },
    {
@@ -33,7 +43,7 @@
     "x0": -2600.0,
     "y0": 6000.0,
     "cell": 4.0,
-    "offset": 3467912,
+    "offset": 3745212,
     "stepUp": 1.0
    },
    {
@@ -43,7 +53,7 @@
     "x0": -5280.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 3974162,
+    "offset": 4251462,
     "stepUp": 1.0
    },
    {
@@ -53,7 +63,7 @@
     "x0": 2080.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 4857662,
+    "offset": 5134962,
     "stepUp": 1.0
    },
    {
@@ -63,7 +73,7 @@
     "x0": -5280.0,
     "y0": 2200.0,
     "cell": 4.0,
-    "offset": 5581462,
+    "offset": 5858762,
     "stepUp": 1.0
    },
    {
@@ -73,7 +83,7 @@
     "x0": 400.0,
     "y0": 6000.0,
     "cell": 4.0,
-    "offset": 6106462,
+    "offset": 6383762,
     "stepUp": 1.0
    },
    {
@@ -83,7 +93,7 @@
     "x0": 3620.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 6298962,
+    "offset": 6576262,
     "stepUp": 1.6,
     "zOff": 200
    },
@@ -94,11 +104,11 @@
     "x0": -1698.3500000000004,
     "y0": 8213.51,
     "cell": 3.0,
-    "offset": 8291762,
+    "offset": 8569062,
     "stepUp": 1.3
    }
   ],
-  "walkableCells": 7501186,
+  "walkableCells": 7782497,
   "water": true,
   "roads": true
  },
@@ -181,6 +191,114 @@
     -7890.0
    ]
   },
+  "zs-axis": {
+   "position": [
+    6121.427,
+    86.8,
+    -1832.252
+   ],
+   "look": [
+    6119.794,
+    86.8,
+    -1862.207
+   ]
+  },
+  "zs-stair": {
+   "position": [
+    6094.423,
+    126.467,
+    -2364.404
+   ],
+   "look": [
+    6092.337,
+    126.467,
+    -2394.332
+   ]
+  },
+  "zs-hall": {
+   "position": [
+    6086.267,
+    157.8,
+    -2477.294
+   ],
+   "look": [
+    6087.9,
+    157.8,
+    -2447.338
+   ]
+  },
+  "zs-music": {
+   "position": [
+    6288.426,
+    69.022,
+    -1742.303
+   ],
+   "look": [
+    6274.342,
+    69.022,
+    -1715.815
+   ]
+  },
+  "zs-meiling": {
+   "position": [
+    5442.032,
+    53.588,
+    -611.086
+   ],
+   "look": [
+    5442.032,
+    53.588,
+    -641.086
+   ]
+  },
+  "zs-meiling-terrace": {
+   "position": [
+    5442.032,
+    55.188,
+    -631.686
+   ],
+   "look": [
+    5442.032,
+    55.188,
+    -601.686
+   ]
+  },
+  "zs-xiaoling": {
+   "position": [
+    4892.76,
+    35.663,
+    -934.468
+   ],
+   "look": [
+    4864.543,
+    35.663,
+    -944.657
+   ]
+  },
+  "zs-wengzhong": {
+   "position": [
+    4507.632,
+    23.447,
+    -1095.686
+   ],
+   "look": [
+    4508.906,
+    23.447,
+    -1125.659
+   ]
+  },
+  "zs-mingtower": {
+   "position": [
+    4796.032,
+    62.698,
+    -2009.186
+   ],
+   "look": [
+    4796.032,
+    62.698,
+    -2039.186
+   ]
+  },
   "gulou": {
    "position": [
     -470.0,
@@ -228,7 +346,7 @@
  "seats": {},
  "traffic": [],
  "transit": true,
- "trees": 290207,
- "staticTriangles": 3567511,
+ "trees": 286534,
+ "staticTriangles": 3925714,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed). Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, balconies and air conditioners are drawn from photographs (assumed)."
 }
