@@ -342,8 +342,13 @@ def main():
     grids, heights, walk_count, water = [], [], 0, []
     grid_list = list(cfg['grids'])
     # Grids the build adds (Tiny Nanjing: Mufu Mountain's, over the merged model).
+    # 'first': a finer grid inside a coarser one (the Mausoleum's 2 m in Purple Mountain's 4 m) is
+    # searched before it (src/landmark-world.js takes the first grid that holds a point).
     for extra in json.loads(bpy.context.scene.get('extra_grids', '[]')):
-        grid_list.append(extra)
+        if extra.get('first'):
+            grid_list.insert(0, extra)
+        else:
+            grid_list.append(extra)
     for g in grid_list:
         if 'x1' not in g:
             continue

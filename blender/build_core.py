@@ -33,6 +33,7 @@ import area_common as ac  # noqa: E402
 import kit  # noqa: E402
 import kit_oldcity as oc  # noqa: E402
 import mufu_merge as mm  # noqa: E402
+import zhongshan_merge as zm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_BLEND = ROOT / 'art-src' / 'core.blend'
@@ -186,6 +187,46 @@ def dry(x, y, r=3.0):
 MOUNTAIN_WOODS = (16455205,)
 _mountain = [p['pts'] for p in F['places'] if p['id'] in MOUNTAIN_WOODS and p.get('pts')]
 MOUNTAIN = ac.Mask(_mountain, A.extent, 8.0) if _mountain else None
+# Tree canopy (Meta and WRI, 1 m, CC BY 4.0), on the core's 4 m grid: tools/research/canopy-prep.py.
+_canopy_meta = json.loads((A.data / 'canopy.json').read_text(encoding='utf-8')) if (A.data / 'canopy.json').exists() else None
+if _canopy_meta:
+    _cz = np.load(A.data / 'canopy.npz')
+    _ccover, _cheight = _cz['cover'], _cz['height']
+    # The canopy's mean height over a 28 m window, about one Copernicus cell: what its surface model
+    # stands above the forest floor there (open ground counts as 0).
+    _surf = np.pad(_cheight.astype(np.float32) * (_ccover / 255.0), 3, mode='edge')
+    _cs = np.pad(_surf.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+    _cmean = (_cs[7:, 7:] - _cs[:-7, 7:] - _cs[7:, :-7] + _cs[:-7, :-7]) / 49.0
+
+
+def _canopy_cell(x, y):
+    e = _canopy_meta['extent_local_m']
+    return int((y - e['y_south']) // 4.0), int((x - e['x_west']) // 4.0)
+
+
+def canopy_at(x, y):
+    """(share of the cell under canopy over 3 m, the tallest canopy within 4 m) at (x, y); (0, 0) outside."""
+    if not _canopy_meta:
+        return 0.0, 0.0
+    j, i = _canopy_cell(x, y)
+    if not (1 <= j < _ccover.shape[0] - 1 and 1 <= i < _ccover.shape[1] - 1):
+        return 0.0, 0.0
+    return _ccover[j, i] / 255.0, float(_cheight[j - 1:j + 2, i - 1:i + 2].max())
+
+
+def canopy_mean(x, y, default=4.0):
+    if not _canopy_meta:
+        return default
+    j, i = _canopy_cell(x, y)
+    return float(_cmean[j, i]) if 0 <= j < _cmean.shape[0] and 0 <= i < _cmean.shape[1] else default
+
+
+def mountain_floor(x, y):
+    """The forest floor under Purple Mountain: the surface model less the canopy measured there
+    (until 3 Nov a flat 4 m; the canopy map has 8-13 m trees on the slopes, 6 m on the ridges)."""
+    return max(A.bare_at(x, y), A.dsm_at(x, y) - canopy_mean(x, y))
+
+
 # The 30 m cells round the sharpest tops off further: on 3 Nov Toutuo Ridge was built at 411 m
 # against its surveyed 425. Each OSM peak with an ele on the mountain lifts the ground to that
 # height, fading out over SUMMIT_R (a cosine). The lift is measured from the highest ground within
@@ -198,40 +239,32 @@ for _p in F['places'] if MOUNTAIN is not None else ():
     if _t.get('natural') != 'peak' or 'ele' not in _t or not _p.get('p') or not MOUNTAIN.at(*_p['p']):
         continue
     try:
-        _top = max(A.dsm_at(_p['p'][0] + dx, _p['p'][1] + dy) for dx in range(-40, 41, 8) for dy in range(-40, 41, 8) if dx * dx + dy * dy <= 1600)
-        _lift = float(str(_t['ele']).split()[0]) - A.base - (_top - 4.0)
+        _top = max(mountain_floor(_p['p'][0] + dx, _p['p'][1] + dy) for dx in range(-40, 41, 8) for dy in range(-40, 41, 8) if dx * dx + dy * dy <= 1600)
+        _lift = float(str(_t['ele']).split()[0]) - A.base - _top
     except ValueError:
         continue
     if _lift > 0:
         SUMMITS.append((_p['p'][0], _p['p'][1], _lift))
 print('SUMMITS', [(round(x), round(y), round(l, 1)) for x, y, l in SUMMITS])
-# Tree canopy (Meta and WRI, 1 m, CC BY 4.0), on the core's 4 m grid: tools/research/canopy-prep.py.
-_canopy_meta = json.loads((A.data / 'canopy.json').read_text(encoding='utf-8')) if (A.data / 'canopy.json').exists() else None
-if _canopy_meta:
-    _cz = np.load(A.data / 'canopy.npz')
-    _ccover, _cheight = _cz['cover'], _cz['height']
-
-
-def canopy_at(x, y):
-    """(share of the cell under canopy over 3 m, the tallest canopy within 4 m) at (x, y); (0, 0) outside."""
-    if not _canopy_meta:
-        return 0.0, 0.0
-    e = _canopy_meta['extent_local_m']
-    i, j = int((x - e['x_west']) // 4.0), int((y - e['y_south']) // 4.0)
-    if not (1 <= j < _ccover.shape[0] - 1 and 1 <= i < _ccover.shape[1] - 1):
-        return 0.0, 0.0
-    return _ccover[j, i] / 255.0, float(_cheight[j - 1:j + 2, i - 1:i + 2].max())
+# The Zhongshan world on the mountain (blender/zhongshan_merge.py): its patches are appended in
+# the build; round them the city's ground eases to the world's own forest-floor rule.
+ZS = zm.ZhongshanMerge(A.meta['origin_wgs84'], A.base) if MOUNTAIN is not None else None
 
 
 def zground(x, y):
+    if ZS is not None:
+        h = ZS.height(x, y)
+        if h is not None:
+            return h
     if MOUNTAIN is not None and MOUNTAIN.at(x, y):
-        z = max(A.bare_at(x, y), A.dsm_at(x, y) - 4.0)
+        z = mountain_floor(x, y)
         for sx, sy, lift in SUMMITS:
             d = math.hypot(x - sx, y - sy)
             if d < SUMMIT_R:
                 z += lift * 0.5 * (1 + math.cos(math.pi * d / SUMMIT_R))
-        return z
-    return A.bare_at(x, y)
+    else:
+        z = A.bare_at(x, y)
+    return ZS.blend(x, y, z, A.dsm_at(x, y)) if ZS is not None else z
 
 
 WATER = {}
@@ -266,6 +299,11 @@ def ground(x, y, step=4.0):
     a vertex within one step of water drops just under the water's level as a stone bank: else the
     terrain between a dry vertex and a wet one rose through the surface (tests/city-audit.py found
     a quarter of the moats and the inner Qinhuai covered by lawn and paving)."""
+    # Under the Zhongshan world's patches the city's ground keeps out of sight: well inside, 2.5 m
+    # down; within one terrain step of the edge only a little, or its 24 m cells dipped a trench
+    # along the patch's border.
+    if ZS is not None and (h := ZS.height(x, y)) is not None:
+        return h - (2.5 if ZS.inside(x, y, step + 6.0) else 0.6), 0
     # Under the merged Mufu model the city's ground keeps out of sight, just below it.
     if MUFU['zone'] is not None and MUFU['zone'].at(x, y):
         h = MUFU['heights'].at(x, y)
@@ -910,11 +948,30 @@ def main():
         # margin the city's road stopped short of the model's (Yongji Avenue at Shangyuanmen).
         return zone.at(x, y) and MUFU['heights'].at(x, y) is not None
 
+    # The Zhongshan world (blender/zhongshan_merge.py): the Mausoleum axis, the Music Stage, Meiling
+    # Palace and Ming Xiaoling, with their own graded ground, on Purple Mountain. OSM's buildings,
+    # roads and the city's trees keep off its patches, as on Mufu Mountain.
+    if ZS is not None:
+        c['Zhongshan'] = bpy.data.collections.new('Zhongshan')
+        root.children.link(c['Zhongshan'])
+        zmoved = ZS.append({n: c['Zhongshan'] for n in zm.BUILT}, c['Ground'], set(protos))
+        print('ZHONGSHAN', {'objects': len(zmoved), 'tris': sum(len(o.data.polygons) for o in zmoved if o.type == 'MESH'),
+                            'trees': len(ZS.trees), 'spawns': [n for n, _, _ in ZS.spawns], 'arch': [round(ZS.dx), round(ZS.dy), round(ZS.dz, 1)]}, flush=True)
+
+    def in_zs(x, y):
+        return ZS is not None and ZS.inside(x, y, 0.0)
+
     def skip(x, y):
-        return in_palace(x, y) or in_mufu(x, y)
+        return in_palace(x, y) or in_mufu(x, y) or in_zs(x, y)
     mx0, mx1, my0, my1 = zone.bbox()
-    scene['extra_grids'] = json.dumps([{'name': 'mufu', 'x0': max(X0, mx0 - 20), 'x1': min(X1, mx1 + 20), 'y0': max(Y0, my0 - 20),
-                                        'y1': min(Y1, my1 + 20), 'cell': 3.0, 'stepUp': 1.3}])
+    extra = [{'name': 'mufu', 'x0': max(X0, mx0 - 20), 'x1': min(X1, mx1 + 20), 'y0': max(Y0, my0 - 20),
+              'y1': min(Y1, my1 + 20), 'cell': 3.0, 'stepUp': 1.3}]
+    if ZS is not None:
+        # Finer ground over the Mausoleum's axis and the Music Stage (2 m: the stair's landings,
+        # the stage's terraces), searched before the mountain's 4 m grid.
+        x0_, x1_, y0_, y1_ = ZS.rects[0]
+        extra.append({'name': 'mausoleum', 'x0': x0_, 'x1': x1_, 'y0': y0_, 'y1': y1_, 'cell': 2.0, 'stepUp': 1.0, 'first': True})
+    scene['extra_grids'] = json.dumps(extra)
     print('MUFU', {'parts': len(mobjects), 'tris': sum(len(o.data.polygons) for o in mobjects), 'river': round(z0, 2),
                    'scale': round(mm.SCALE, 4), 'turn': round(math.degrees(mm.TURN), 2), 'bbox': [round(v) for v in (mx0, mx1, my0, my1)]}, flush=True)
 
@@ -978,7 +1035,7 @@ def main():
             l, r = ac.polyline_offset(pts, w / 2 + 0.6), ac.polyline_offset(pts, -w / 2 - 0.6)
             road_polys.append([(v.x, v.y) for v in l] + [(v.x, v.y) for v in reversed(r)])
     rmask = ac.Mask(road_polys, A.extent, 2.0)
-    blocked = lambda x, y: bmask.at(x, y) or rmask.at(x, y) or in_mufu(x, y)  # noqa: E731
+    blocked = lambda x, y: bmask.at(x, y) or rmask.at(x, y) or in_mufu(x, y) or in_zs(x, y)  # noqa: E731
 
     # A tree needs its whole crown clear of buildings, not just its trunk (crowns pierced walls).
     def crown_clear(x, y, r=4.5):
@@ -1134,7 +1191,12 @@ def main():
                     mountain_trees += 1
         print('MOUNTAIN FOREST', mountain_trees, 'trees of', seen, 'lattice points', flush=True)
         trees += mountain_trees
-    print('SPECIES', species_count, 'shore', shore, 'mountain', mountain_trees, flush=True)
+    zs_trees = 0
+    for kind, x, y, z, rot, sc in (ZS.trees if ZS is not None else ()):
+        kit.place(protos[kind], c['Trees'], (x, y, z), rot, sc)
+        zs_trees += 1
+    trees += zs_trees
+    print('SPECIES', species_count, 'shore', shore, 'mountain', mountain_trees, 'zhongshan', zs_trees, flush=True)
     # The model's own trees, at their places, as the Mufu Mountain wood's researched mix
     # (ZONES: research/plants/FACTS.md).
     mix, placed = ZONES[62344629], 0
@@ -1237,6 +1299,10 @@ def main():
     ac.add_point(pk, 'Spawn mufu', (hs[0], hs[1], hz if hz is not None else zground(*hs)), (ahead[0], ahead[1], (hz or 0) + 1.6))
     wt = Vector((-1065.0, 7860.0))
     ac.add_point(pk, 'Spawn wutang', (wt.x, wt.y, zground(*wt)), (-1065.0, 8200.0, zground(-1065, 8200) + 10))
+    for name, loc, rot in (ZS.spawns if ZS is not None else ()):
+        e = bpy.data.objects.new(name, None)
+        e.location, e.rotation_euler = loc, (0, 0, rot)
+        pk.objects.link(e)
     gl = Vector((-470.0, 2000.0))
     ac.add_point(pk, 'Spawn gulou', (gl.x, gl.y, zground(*gl)), (-600.0, 2100.0, zground(-600, 2100) + 10))
     for n, (target, at, toward) in enumerate((('palace', xj + Vector((14.0, 30.0)), xj + Vector((14.0, 60.0))),
