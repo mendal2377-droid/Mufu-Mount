@@ -77,17 +77,28 @@
     "stepUp": 1.0
    },
    {
+    "name": "zijin",
+    "nx": 1060,
+    "ny": 1880,
+    "x0": 3620.0,
+    "y0": -1520.0,
+    "cell": 4.0,
+    "offset": 6298962,
+    "stepUp": 1.6,
+    "zOff": 200
+   },
+   {
     "name": "mufu",
-    "nx": 1774,
+    "nx": 1813,
     "ny": 1282,
     "x0": -1698.3500000000004,
     "y0": 8213.51,
     "cell": 3.0,
-    "offset": 6298962,
+    "offset": 8291762,
     "stepUp": 1.3
    }
   ],
-  "walkableCells": 5672373,
+  "walkableCells": 7501186,
   "water": true,
   "roads": true
  },
@@ -105,7 +116,7 @@
  "fog": 0.00022,
  "skyline_clip": [
   -5286.35,
-  3625.58,
+  7871.86,
   -12854.84,
   1550.49
  ],
@@ -217,7 +228,7 @@
  "seats": {},
  "traffic": [],
  "transit": true,
- "trees": 152382,
- "staticTriangles": 2656434,
+ "trees": 290207,
+ "staticTriangles": 3567511,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed). Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, balconies and air conditioners are drawn from photographs (assumed)."
 }
