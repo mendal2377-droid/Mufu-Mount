@@ -1,0 +1,16 @@
+{
+ "source": "High Resolution Canopy Height Maps by WRI and Meta (Tolan et al. 2024), CC BY 4.0; quadkeys 132103222, 132103223. Imagery mostly 2018-2020: a snapshot, not today.",
+ "cell": 4.0,
+ "rows_cols": [
+  3593,
+  3279
+ ],
+ "extent_local_m": {
+  "x_west": -5265.380208585433,
+  "x_east": 7850.889486636123,
+  "y_south": -1525.9212000003722,
+  "y_north": 12848.698799999911
+ },
+ "cover": "share of 16 one-metre samples per cell under canopy over 3 m, 0-255",
+ "height": "tallest sample per cell, metres"
+}

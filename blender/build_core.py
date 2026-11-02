@@ -188,7 +188,9 @@ _mountain = [p['pts'] for p in F['places'] if p['id'] in MOUNTAIN_WOODS and p.ge
 MOUNTAIN = ac.Mask(_mountain, A.extent, 8.0) if _mountain else None
 # The 30 m cells round the sharpest tops off further: on 3 Nov Toutuo Ridge was built at 411 m
 # against its surveyed 425. Each OSM peak with an ele on the mountain lifts the ground to that
-# height, fading out over SUMMIT_R (a cosine).
+# height, fading out over SUMMIT_R (a cosine). The lift is measured from the highest ground within
+# 40 m of the mapped point, not the point itself: Tianbao's top lies off its node, and lifting from
+# the node put it 14 m over its surveyed 250 m.
 SUMMIT_R = 250.0
 SUMMITS = []
 for _p in F['places'] if MOUNTAIN is not None else ():
@@ -196,12 +198,29 @@ for _p in F['places'] if MOUNTAIN is not None else ():
     if _t.get('natural') != 'peak' or 'ele' not in _t or not _p.get('p') or not MOUNTAIN.at(*_p['p']):
         continue
     try:
-        _lift = float(str(_t['ele']).split()[0]) - A.base - (A.dsm_at(*_p['p']) - 4.0)
+        _top = max(A.dsm_at(_p['p'][0] + dx, _p['p'][1] + dy) for dx in range(-40, 41, 8) for dy in range(-40, 41, 8) if dx * dx + dy * dy <= 1600)
+        _lift = float(str(_t['ele']).split()[0]) - A.base - (_top - 4.0)
     except ValueError:
         continue
     if _lift > 0:
         SUMMITS.append((_p['p'][0], _p['p'][1], _lift))
 print('SUMMITS', [(round(x), round(y), round(l, 1)) for x, y, l in SUMMITS])
+# Tree canopy (Meta and WRI, 1 m, CC BY 4.0), on the core's 4 m grid: tools/research/canopy-prep.py.
+_canopy_meta = json.loads((A.data / 'canopy.json').read_text(encoding='utf-8')) if (A.data / 'canopy.json').exists() else None
+if _canopy_meta:
+    _cz = np.load(A.data / 'canopy.npz')
+    _ccover, _cheight = _cz['cover'], _cz['height']
+
+
+def canopy_at(x, y):
+    """(share of the cell under canopy over 3 m, the tallest canopy within 4 m) at (x, y); (0, 0) outside."""
+    if not _canopy_meta:
+        return 0.0, 0.0
+    e = _canopy_meta['extent_local_m']
+    i, j = int((x - e['x_west']) // 4.0), int((y - e['y_south']) // 4.0)
+    if not (1 <= j < _ccover.shape[0] - 1 and 1 <= i < _ccover.shape[1] - 1):
+        return 0.0, 0.0
+    return _ccover[j, i] / 255.0, float(_cheight[j - 1:j + 2, i - 1:i + 2].max())
 
 
 def zground(x, y):
@@ -1071,20 +1090,24 @@ def main():
     # broadleaf about 49 % (2002). As this build's kinds: sweetgum as the maple (green, then red in
     # autumn), oaks and pistache as broadleaf, pine as cedar.
     # Sources: design/PURPLE-MOUNTAIN-PLAN.md.
-    # The forest is closed: 30,000 trees in 3,000 groves (3 Nov) read as parkland on a lawn. Now many
-    # small overlapping groves over the whole wood, about one tree per 400 m², and a second, denser
-    # stand within 30 m of every way a visitor walks or rides, where the forest is seen from inside.
+    # Where the trees stand, and how tall: Meta and WRI's 1 m canopy height map (CC BY 4.0), on the
+    # core's 4 m grid (tools/research/canopy-prep.py; 60 % of the mountain band under canopy, mostly
+    # 8-13 m). A tree on a jittered 18 m lattice wherever the canopy covers the cell, and on a 9 m
+    # lattice within about 20 m of the ways a visitor walks or rides, where the forest is seen from inside;
+    # each scaled to the canopy's height there. Species in groves (60 m cells) of the survey mix.
+    # Before this (3 Nov) 30,000 trees in 3,000 groves read as parkland on a lawn.
     mountain_trees = 0
     if MOUNTAIN is not None:
         kinds = ['maple_autumn'] * 7 + ['broadleaf'] * 5 + ['broadleaf_shade'] * 3 + ['broadleaf_sun'] * 2 + ['cedar'] * 2 + ['camphor']
+        tall = {k: max(protos[k].dimensions.z, 1.0) for k in set(kinds)}
+
         def wood_ok(x, y):
-            return MOUNTAIN.at(x, y) and not blocked(x, y) and dry(x, y) and crown_clear(x, y, 3.0)
-        mountain_trees = ac.scatter(protos, c['Trees'], rnd, kinds, 45000, (3600.0, X1 - 30), (Y0 + 30, 6000.0),
-                                    wood_ok, zground, clump=28.0, groves=14000)
+            return MOUNTAIN.at(x, y) and not blocked(x, y) and dry(x, y) and crown_clear(x, y, 2.5)
+
         WAYSIDE = 15.0
         wayside = set()
         for w in F['ways']:
-            if 'highway' not in w.get('tags', {}) or len(w['pts']) < 2:
+            if w.get('kind') not in WIDTH or len(w['pts']) < 2:      # roads and paths, not rail or rivers
                 continue
             for a, b in zip(w['pts'], w['pts'][1:]):
                 L = math.dist(a, b)
@@ -1092,18 +1115,24 @@ def main():
                     px, py = a[0] + (b[0] - a[0]) * k * WAYSIDE / max(L, 1e-6), a[1] + (b[1] - a[1]) * k * WAYSIDE / max(L, 1e-6)
                     if MOUNTAIN.at(px, py):
                         i, j = int(px // WAYSIDE), int(py // WAYSIDE)
-                        wayside.update((i + di, j + dj) for di in (-2, -1, 0, 1, 2) for dj in (-2, -1, 0, 1, 2))
-        near = sorted(wayside)
-        placed = tries = 0
-        while near and placed < 25000 and tries < 200000:
-            tries += 1
-            i, j = near[rnd.randrange(len(near))]
-            x, y = (i + rnd.random()) * WAYSIDE, (j + rnd.random()) * WAYSIDE
-            if not wood_ok(x, y):
-                continue
-            kit.place(protos[rnd.choice(kinds)], c['Trees'], (x, y, zground(x, y) - 0.2), rnd.uniform(0, 6.28), rnd.uniform(.9, 1.35))
-            placed += 1
-        mountain_trees += placed
+                        wayside.update((i + di, j + dj) for di in (-1, 0, 1) for dj in (-1, 0, 1))
+        seen = 0
+        for sp, keep in ((18.0, lambda x, y: True), (9.0, lambda x, y: (int(x // WAYSIDE), int(y // WAYSIDE)) in wayside)):
+            for gy in np.arange(Y0 + 30, 6000.0, sp):
+                for gx in np.arange(3600.0, X1 - 30, sp):
+                    x, y = gx + rnd.uniform(-.4, .4) * sp, gy + rnd.uniform(-.4, .4) * sp
+                    if not keep(x, y) or not MOUNTAIN.at(x, y):
+                        continue
+                    seen += 1
+                    cover, h = canopy_at(x, y)
+                    if rnd.random() >= cover or h < 3 or not wood_ok(x, y):
+                        continue
+                    g = random.Random(hash((int(x // 60), int(y // 60))))
+                    k = g.choice(kinds) if rnd.random() < 0.75 else rnd.choice(kinds)
+                    kit.place(protos[k], c['Trees'], (x, y, zground(x, y) - 0.2), rnd.uniform(0, 6.28),
+                              min(1.4, max(0.55, h / tall[k] * rnd.uniform(.85, 1.05))))
+                    mountain_trees += 1
+        print('MOUNTAIN FOREST', mountain_trees, 'trees of', seen, 'lattice points', flush=True)
         trees += mountain_trees
     print('SPECIES', species_count, 'shore', shore, 'mountain', mountain_trees, flush=True)
     # The model's own trees, at their places, as the Mufu Mountain wood's researched mix
