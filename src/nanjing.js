@@ -295,10 +295,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     const run=game.run,course=gameView.course;
     $('#passport-run-best').textContent=run.best?`Best ${run.best.toFixed(1)} s${run.medal?' · '+run.medal:''} · ${run.runs} run${run.runs>1?'s':''}`:`${course.rings.length} rings · about ${Math.round(course.length/34)} s at cruising speed`;
   }
-  let lastWay='',mausoleumOffer=false;
-  // Standing by the Zhongshan Gate bus stop (Bus 34's terminus on this map).
-  function mausoleumAtGate(){const st=world?.transit?.lines.find(l=>l.id==='bus-34')?.runs.flatMap(r=>r.stops.map(q=>q.stop)).find(s=>s.name==='中山门');
-    return !!st&&Math.hypot(world.body.x-st.spot[0],world.body.z-st.spot[1])<25;}
+  let lastWay='';
   // The metro map at an entrance: every line calling here, its stations in order; pick one to ride.
   function openMetro(near){const dlg=$('#metro-map');if(!dlg)return;
     const here=world.transit.entrances.filter(e=>e.stop.osm===near.stop.osm);
@@ -363,15 +360,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(state.flying){state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
     state.moving=world.walk(camera,keys,dt);
     world.placeCamera(camera,dt);
-    // Bus 34 runs on from Zhongshan Gate to the Mausoleum (the road built for Sun Yat-sen's funeral
-    // procession): off this map, so at the gate the ride goes on into the Zhongshan scene.
-    const ride=world.transit?.busRide;
-    const atGate=(!!ride&&ride.b.line.id==='bus-34'&&ride.b.wait>0&&ride.b.at?.name==='中山门')||(!ride&&mausoleumOffer&&mausoleumAtGate());
-    if(atGate&&!mausoleumOffer)toast('Zhongshan Gate · Bus 34 goes on to the Sun Yat-sen Mausoleum · F to ride on');
-    mausoleumOffer=atGate;
-    // Off at a terminus (set once per world): say so; at Zhongshan Gate keep the Mausoleum offer.
+    // Off at a stop (set once per world): say where, and whether it is the end of the line. Bus 34
+    // runs on from Zhongshan Gate to the Mausoleum on Purple Mountain, in the city itself.
     if(world.transit&&!world.onAlight)world.onAlight=(st,last,line)=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');
-      if(line?.id==='bus-34'&&st.name==='中山门'){mausoleumOffer=true;toast('Terminus · Zhongshan Gate · F to take Bus 34 on to the Sun Yat-sen Mausoleum');return;}
       toast(last?`Terminus · ${st.en} · everyone off · WASD walk`:`Off at ${st.en} · WASD walk`);};
     if(t-lastSeatHint>6&&!world.seated){const gate=world.nearestGate();
       if(gate){lastSeatHint=t;toast(`Moon gate · F to glide to ${world.label(gate.target)}`);}
@@ -503,7 +494,6 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       // Metro and buses (src/transit.js): wait at a stop and ride; F again gets off at the next stop.
       const tr=world.transit;
       if(tr?.metroRide)return;
-      if(mausoleumOffer&&(tr?.busRide||mausoleumAtGate())){mausoleumOffer=false;if(tr?.busRide)world.getOffBus(()=>{});api.enter('zhongshan',{drop:true});toast('Bus 34 · on to the Sun Yat-sen Mausoleum');return;}
       if(tr?.busRide){if(openRidePick())return;world.getOffBus(busOff);
         if(world.transit.busRide)toast('Getting off at the next stop');return;}
       if(tr?.waiting){tr.cancelWait();toast('Stopped waiting');return;}
@@ -511,11 +501,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       // At a stop: choose the line and where to get off first.
       if(near?.kind==='bus'&&!near.picked&&world.transit.linesAt(near.stop).length){openBusPick(near);return;}
       if(near?.kind==='bus'){const d=world.waitForBus(near.stop,b=>{camera.rotation.set(world.view==='first'?-.04:-.12,world.heading+(world.view==='first'?0:Math.PI),0,'YXZ');
-          // Where it is heading: the line's last stop on this run (Bus 34 east to Zhongshan Gate, for the Mausoleum).
+          // Where it is heading: the line's last stop on this run.
           const end=b.run===0?b.line.stops[b.line.stops.length-1]:b.line.stops[0];
-          const on=b.line.id==='bus-34'&&end.name==='中山门'?' (on to the Mausoleum)':'';
           const dest=near.picked?.dest;if(dest)world.rideTo(dest,busOff);
-          toast(`Aboard ${b.line.en} → ${end.en}${on} · ${dest?`getting off at ${dest.en}`:'F to choose where to get off'} · V for a window seat`);},near.picked?.line||null);
+          toast(`Aboard ${b.line.en} → ${end.en} · ${dest?`getting off at ${dest.en}`:'F to choose where to get off'} · V for a window seat`);},near.picked?.line||null);
         toast(d==null?`Waiting at ${near.stop.en}…`:`Waiting at ${near.stop.en} · the bus is about ${Math.max(5,Math.round(d/5/5)*5)} s away · move to stop waiting`);return;}
       if(near?.kind==='metro'){openMetro(near);return;}
       // The pleasure-boat dock: sail the river and come back here.

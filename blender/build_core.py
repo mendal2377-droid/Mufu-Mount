@@ -267,6 +267,57 @@ def zground(x, y):
     return ZS.blend(x, y, z, A.dsm_at(x, y)) if ZS is not None else z
 
 
+# Detailed ground over the centre (Xinjiekou to Gulou and the Palace), 12 m; coarser, 24 m, out to
+# the river, sunk 2 m under the centre's.
+CORE_PATCH = ((-1500.0, 2100.0), (-1530.0, 3400.0))
+_SURFACE = {}
+
+
+def in_core(x, y, margin=6.0):
+    return CORE_PATCH[0][0] + margin < x < CORE_PATCH[0][1] - margin and CORE_PATCH[1][0] + margin < y < CORE_PATCH[1][1] - margin
+
+
+def outer_vertex(x, y):
+    z, mi = ground(x, y, 24.0)
+    return (z - 2.0, mi) if in_core(x, y) else (z, mi)
+
+
+def terrain_top(x, y, s, ox, oy, fn):
+    """The higher of a terrain_patch quad's two triangulations at (x, y): its rendered surface."""
+    i, j = math.floor((x - ox) / s), math.floor((y - oy) / s)
+    u, v = (x - ox) / s - i, (y - oy) / s - j
+
+    def at(a, b):
+        k = (s, i + a, j + b)
+        if k not in _SURFACE:
+            _SURFACE[k] = fn(ox + k[1] * s, oy + k[2] * s)[0]
+        return _SURFACE[k]
+    z00, z10, z01, z11 = at(0, 0), at(1, 0), at(0, 1), at(1, 1)
+    a = z00 + u * (z10 - z00) + v * (z11 - z10) if u >= v else z00 + v * (z01 - z00) + u * (z11 - z01)
+    b = z00 + u * (z10 - z00) + v * (z01 - z00) if u + v <= 1 else z11 + (1 - u) * (z01 - z11) + (1 - v) * (z10 - z11)
+    return max(a, b)
+
+
+def road_z(x, y):
+    """A road's height: zground, but never under the rendered terrain. A 12-24 m terrain cell
+    spans a dip in zground as a chord, and a road laid at zground lay under it: Yongji Avenue's
+    last 10 m before the Mufu model, buried under the station square, and the bike stopped there
+    (tests/mufu-journey-browser.mjs). On Purple Mountain zground also follows the forest floor's
+    metre-scale bumps, which the 24 m terrain smooths away: a road at zground rode up to 3 m over
+    the ground on both sides, and the bike, clipping a corner of a slanting road's 4 m cells, fell
+    off it (tests/zhongshan-journey-browser.mjs). There the road lies at most 0.8 m over the
+    terrain. On and by the Zhongshan patches the world's own ground is the surface: zground."""
+    z = zground(x, y)
+    if ZS is not None and ZS.distance(x, y) < 30.0:
+        return z
+    t = terrain_top(x, y, 24.0, X0 + 24, Y0 + 24, outer_vertex)
+    if in_core(x, y, 0.0):
+        t = max(t, terrain_top(x, y, 12.0, CORE_PATCH[0][0], CORE_PATCH[1][0], lambda x, y: ground(x, y, 12.0)))
+    if MOUNTAIN is not None and MOUNTAIN.at(x, y):
+        return max(t, min(z, t + 0.8))
+    return max(t, z)
+
+
 WATER = {}
 
 
@@ -650,7 +701,7 @@ def build_roads(coll, skip):
         # junction, outside the model, and the bike could not reach the station.
         runs, cur = [], []
         for q in pts:
-            if skip(*q):
+            if skip(q[0], q[1], kind):
                 if len(cur) > 1:
                     runs.append(cur)
                 cur = []
@@ -669,6 +720,13 @@ def build_roads(coll, skip):
             if t.get('oneway') in ('yes', '-1', '1') and kind not in FOOT:
                 width = lanes * 3.4 if lanes else max(WIDTH[kind] / 2, 6.0)
             bridge = bool(t.get('bridge')) and (num(t.get('layer')) or 1) > 0 and kind not in FOOT
+            # On and by the Zhongshan patches the ground is the world's 4 m terrain, steep across
+            # some roads (the lawn south of the Bo'ai arch falls 4 m in 18): a road laid at its
+            # centreline's height sank under the grass at its uphill edge, and showed as a sliver
+            # the bike fell off. There it is sampled every 4 m and lies at the higher of its edges.
+            near_zs = ZS is not None and any(ZS.distance(*q) < 30.0 for q in pts)
+            if near_zs:
+                pts = densify(pts, 4.0)
             pts3 = []
             total = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
             run = 0.0
@@ -676,7 +734,13 @@ def build_roads(coll, skip):
                 if i:
                     run += math.dist(pts[i - 1], p)
                 rise = 7.0 * max(0.0, math.sin(math.pi * min(run / total, 1.0))) ** 0.5 if bridge and total > 60 else 0.0
-                pts3.append((p[0], p[1], zground(*p) + rise))
+                z = road_z(*p)
+                if near_zs and ZS.distance(*p) < 30.0:
+                    a, b = pts[max(i - 1, 0)], pts[min(i + 1, len(pts) - 1)]
+                    d = math.dist(a, b) or 1.0
+                    nx, ny = (a[1] - b[1]) / d * width / 2, (b[0] - a[0]) / d * width / 2
+                    z = max(z, zground(p[0] + nx, p[1] + ny), zground(p[0] - nx, p[1] - ny))
+                pts3.append((p[0], p[1], z + rise))
             foot = kind in FOOT
             if not foot:
                 carriageways.append(([p[:2] for p in pts3], width))
@@ -975,12 +1039,16 @@ def main():
     print('MUFU', {'parts': len(mobjects), 'tris': sum(len(o.data.polygons) for o in mobjects), 'river': round(z0, 2),
                    'scale': round(mm.SCALE, 4), 'turn': round(math.degrees(mm.TURN), 2), 'bbox': [round(v) for v in (mx0, mx1, my0, my1)]}, flush=True)
 
-    # Detailed ground over the centre (Xinjiekou to Gulou and the Palace); coarser out to the river.
-    patch = ((-1500.0, 2100.0), (-1530.0, 3400.0))
+    # Detailed ground over the centre (CORE_PATCH); coarser out to the river (road_z reads both).
+    patch = CORE_PATCH
     ac.terrain_patch('Terrain core', c['Ground'], patch[0], patch[1], lambda x, y: ground(x, y, 12.0), ['lawn', 'city_paving', 'forest_floor', 'canal_stone'], step=12.0)
-    ac.terrain_patch('Terrain outer', c['Ground'], (X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24),
-                     lambda x, y: ground(x, y, 24.0) if not (patch[0][0] + 6 < x < patch[0][1] - 6 and patch[1][0] + 6 < y < patch[1][1] - 6)
-                     else (ground(x, y, 24.0)[0] - 2.0, ground(x, y, 24.0)[1]), ['lawn', 'city_paving', 'forest_floor', 'canal_stone'], step=24.0)
+    outer = ac.terrain_patch('Terrain outer', c['Ground'], (X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24),
+                             outer_vertex, ['lawn', 'city_paving', 'forest_floor', 'canal_stone'], step=24.0)
+    if ZS is not None:
+        # 2.5 m down was not enough under the Zhongshan patches: a 24 m cell spans a curve of the
+        # world's 4 m ground (the Ming Tower's mound) and rose through Xiaoling's paving. Its cells
+        # wholly on a patch go; the world's terrain covers them.
+        print('ZHONGSHAN CUT', ZS.cut(outer), flush=True)
     # Beyond the map: coarse ground to the horizon, forested hills with one-crown canopy trees.
     kit.PALETTE.setdefault('far_ground', '#8E9478')
     ac.outer_apron('Landscape', c['Far'], FAR, (((X0 + 24, X1 - 24), (Y0 + 24, Y1 - 24)),), far_z, step=60.0, material='far_ground')
@@ -1020,7 +1088,12 @@ def main():
             for v in o.data.vertices:
                 v.co.z = zground(v.co.x, v.co.y) + 0.08
     city, n_b, tris = build_buildings(c['City'], skip, c['Overhead'])
-    roads, avenues = build_roads(c['Roads'], skip)
+    # On the Zhongshan patches the world's own roads and paths stand in for OSM's, except where it
+    # drew no way and built nothing over the spot (the road east of Meiling Palace, Bus 34's way):
+    # there the city's carriageway runs on. Its footpaths stay off: OSM's paths through the walled
+    # grounds run under its buildings.
+    roads, avenues = build_roads(c['Roads'], lambda x, y, kind: in_palace(x, y) or in_mufu(x, y)
+                                 or (in_zs(x, y) and (kind in FOOT or ZS.covers(x, y))))
     lamp_proto = lamp_prototype(c['Prototypes'])
     for x, y, z, ang in lamps:
         kit.place(lamp_proto, c['Trees'], (x, y, z), ang)
@@ -1195,6 +1268,9 @@ def main():
     for kind, x, y, z, rot, sc in (ZS.trees if ZS is not None else ()):
         # The world never drew Zixia Lake (紫霞湖) by Xiaoling; the city has it from OSM.
         if not dry(x, y):
+            continue
+        # Nor the road it never drew east of Meiling, which the city's road now carries.
+        if rmask.at(x, y):
             continue
         kit.place(protos[kind], c['Trees'], (x, y, z), rot, sc)
         zs_trees += 1

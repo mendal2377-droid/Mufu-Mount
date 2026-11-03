@@ -24,6 +24,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
+from mathutils.kdtree import KDTree
 
 ROOT = Path(__file__).resolve().parents[1]
 BLEND = ROOT / 'art-src' / 'zhongshan.blend'
@@ -52,6 +53,8 @@ class ZhongshanMerge:
         self.dz = BASE_Z - city_base
         self.rects = [(x0 + self.dx, x1 + self.dx, y0 + self.dy, y1 + self.dy) for (x0, x1), (y0, y1) in PATCHES]
         self.tree = None
+        self.ways = None         # its roads and paths (face centres), once appended
+        self.built = None        # its paving, steps and roofs (upward faces), once appended
         self.trees = []          # (kind, x, y, z, rotation, scale) of the world's own planting
         self.spawns = []         # (name, location, rotation): its spawns and seats
 
@@ -78,9 +81,15 @@ class ZhongshanMerge:
         bpy.context.view_layer.update()
         # The world ran Lingyuan Road and its paths on past its patches, floating a metre over its
         # coarse apron; here the city's own roads take over at the patch edge.
+        ways = []
         for o in moved:
             if o.type == 'MESH' and o.name.split('.')[0].endswith((' roads', ' paths')):
                 self.clip(o)
+                ways += [(o.matrix_world @ f.center).xy for f in o.data.polygons]
+        self.ways = KDTree(len(ways))
+        for i, p in enumerate(ways):
+            self.ways.insert((p.x, p.y, 0.0), i)
+        self.ways.balance()
         # Its planting (avenue cedars, the plane necklace round Meiling, the Sacred Way's pines and
         # its forest) on its patches only: the far canopy and the outer forest give way to the
         # city's, planted from the canopy height map.
@@ -108,6 +117,17 @@ class ZhongshanMerge:
             verts += [m @ v.co for v in o.data.vertices]
             polys += [[base + i for i in f.vertices] for f in o.data.polygons]
         self.tree = BVHTree.FromPolygons(verts, polys) if polys else None
+        # Its paving, steps and roofs (the upward faces of everything built on the patches): a city
+        # road under them would only show as a sliver at their edges (by the Bo'ai arch's plaza).
+        verts, polys = [], []
+        for o in moved:
+            if o.type != 'MESH' or o in terrain:
+                continue
+            m, r = o.matrix_world, o.matrix_world.to_3x3()
+            base = len(verts)
+            verts += [m @ v.co for v in o.data.vertices]
+            polys += [[base + i for i in f.vertices] for f in o.data.polygons if (r @ f.normal).z > 0.5]
+        self.built = BVHTree.FromPolygons(verts, polys) if polys else None
         return moved
 
     def clip(self, o):
@@ -120,6 +140,29 @@ class ZhongshanMerge:
         bm.to_mesh(o.data)
         bm.free()
         return len(off)
+
+    def cut(self, o):
+        """Drop o's faces lying wholly on a patch, where the world's own terrain covers them."""
+        m = o.matrix_world
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        under = [f for f in bm.faces if all(self.inside(*(m @ v.co).xy, 0.0) for v in f.verts)]
+        bmesh.ops.delete(bm, geom=under, context='FACES')
+        bm.to_mesh(o.data)
+        bm.free()
+        return len(under)
+
+    def has_way(self, x, y, r=12.0):
+        """Whether the world drew a road or path within r of (x, y). Bus 34's road east of Meiling
+        Palace crosses its patch but was never drawn: there the city's own road stays."""
+        return self.ways is not None and self.ways.find((x, y, 0.0))[2] <= r
+
+    def covers(self, x, y):
+        """Whether the world drew its own ground at (x, y): a road or path near it, or paving,
+        steps or a roof over it. Elsewhere on a patch the city's own road stays."""
+        if self.has_way(x, y):
+            return True
+        return self.built is not None and self.built.ray_cast(Vector((x, y, 1000.0)), Vector((0, 0, -1)))[0] is not None
 
     def inside(self, x, y, margin=EDGE):
         return any(x0 + margin < x < x1 - margin and y0 + margin < y < y1 - margin for x0, x1, y0, y1 in self.rects)

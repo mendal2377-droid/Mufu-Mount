@@ -721,11 +721,36 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     }
     return null;
   }
-  // Smoothed surface for the eye: averages walkable neighbours within half a step, so stairs
-  // feel like a steady climb rather than a camera that judders on every riser.
+  // The traveller's height: the walk grid read between its cell centres, as the drawn ground runs,
+  // not cell by cell. Each cell is flat, and on a 4 m grid up a 10 % road (by Zhongshan Gate) the
+  // bike's wheels sank 20 cm into the asphalt at a cell's uphill edge (the owner saw it). Where
+  // the four cells round a point are not one surface (a drop, no walk), the nearest cell's height
+  // averaged over half a step round it, so stairs feel like a steady climb rather than a camera
+  // that judders on every riser.
+  function between(x, z, h0) {
+    for (const g of walk.grids) {
+      let u = x, v = -z;
+      if (g.yaw) { const c = Math.cos(g.yaw), s = Math.sin(g.yaw); u = x * c - z * s; v = -x * s - z * c; }
+      const c = g.cell || walk.cell, fi = (u - g.x0) / c - .5, fj = (v - g.y0) / c - .5;
+      if (fi < -.5 || fj < -.5 || fi >= g.nx - .5 || fj >= g.ny - .5) continue;
+      const i = Math.floor(fi), j = Math.floor(fj), a = fi - i, b = fj - j;
+      if (i < 0 || j < 0 || i + 1 >= g.nx || j + 1 >= g.ny) return null;
+      const q = [heights[g.offset + j * g.nx + i], heights[g.offset + j * g.nx + i + 1],
+        heights[g.offset + (j + 1) * g.nx + i], heights[g.offset + (j + 1) * g.nx + i + 1]];
+      if (q.includes(walk.noWalk)) return null;
+      // Within an ordinary step only: a grid's taller step (Purple Mountain's 1.6 m terraces) read
+      // between would float the traveller beside a wall.
+      const [h00, h10, h01, h11] = q.map((h) => h / 100 + (g.zOff || 0));
+      if ([h00, h10, h01, h11].some((h) => Math.abs(h - h0) >= STEP_UP)) return null;
+      return (h00 * (1 - a) + h10 * a) * (1 - b) + (h01 * (1 - a) + h11 * a) * b;
+    }
+    return null;
+  }
   function surface(x, z) {
     const h0 = heightAt(x, z);
     if (h0 === null) return null;
+    const smooth = between(x, z, h0);
+    if (smooth !== null) return smooth;
     let sum = 0, n = 0;
     for (const [dx, dz] of [[0, 0], [.7, 0], [-.7, 0], [0, .7], [0, -.7]]) {
       const h = heightAt(x + dx, z + dz);

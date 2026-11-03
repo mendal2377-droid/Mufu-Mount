@@ -205,9 +205,18 @@ export async function loadTransit(base, {scene, bands, heightAt, roadAt, surface
       let bk = 0, bd = Infinity;
       for (let k = 0; k < r.n; k += 2) { const d = (r.xs[k] - st.at[0]) ** 2 + (r.zs[k] + st.at[1]) ** 2; if (d < bd) { bd = d; bk = k; } }
       if (bd > 45 * 45) return null;
-      // This side's stop: on the pavement to the right of the bus (forward is (sin h, cos h)).
-      const h = r.hs[bk], x = r.xs[bk], z = r.zs[bk];
-      const spot = kerb(x - Math.cos(h) * 4.5, z + Math.sin(h) * 4.5, 8);
+      // This side's stop: on the pavement to the right of the bus (forward is (sin h, cos h)), the
+      // first spot out from the route clear of the carriageway with none beyond it. The nearest
+      // clear spot was at times the strip between a junction's two carriageways, and the shelter
+      // stood in the middle of the road (the owner saw it at Zhongshan Gate).
+      const h = r.hs[bk], x = r.xs[bk], z = r.zs[bk], rx = -Math.cos(h), rz = Math.sin(h);
+      const outer = (d) => [1, 2, 3, 4, 5, 6, 8].every((e) => roadAt(x + rx * (d + e), z + rz * (d + e)) === null);
+      let spot = null;
+      // Out to 50 m: Zhongshan Gate's junction is over 40 m across. Failing that, the nearest clear
+      // spot within 40 m of any kind; within 8 m there was often none, and the shelter stood where
+      // the search began, on the carriageway (18 of 70 stops).
+      for (let d = 3; d <= 50 && !spot; d += .5) if (clear(x + rx * d, z + rz * d, 2) && outer(d)) spot = [x + rx * d, z + rz * d];
+      spot = spot || kerb(x + rx * 4.5, z + rz * 4.5, 40);
       return {s: bk * SAMPLE, stop: {...st, spot, run, line, h}};
     }).filter(Boolean).sort((a, b) => a.s - b.s);
     line.runs = [{r: out, stops: stopS(out, 0)}, {r: back, stops: stopS(back, 1)}];
