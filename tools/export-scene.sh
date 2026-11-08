@@ -4,7 +4,7 @@ set -e
 id=${1:-zhongshan}; shift || true
 B=${BLENDER_EXE:-/d/soft/blender/blender.exe}
 flag=--no-render; [ "$1" = "--render" ] && flag=
-"$B" -b --factory-startup --python blender/build_$id.py -- $flag 2>&1 | grep -E "BUILD|MUFU|SUMMITS|SPECIES|MOUNTAIN FOREST|WALL|XUANWU|ISLAND|ZHONGSHAN|CULLED|RENDERED|Error|Traceback|line "
+"$B" -b --factory-startup --python blender/build_$id.py -- $flag 2>&1 | grep -E "BUILD|MUFU|SUMMITS|SPECIES|MOUNTAIN FOREST|WALL|XUANWU|ISLAND|ZHONGSHAN|CULLED|CMAB|PARK|RENDERED|Error|Traceback|line "
 "$B" -b art-src/$id.blend --python blender/export_web.py -- $id 2>&1 | grep -E "EXPORTED|Error|Traceback|line "
 # --join-meshes false: meshopt quantises positions over each mesh's bounds, and joining every
 # collection into one mesh let the bridge's 80 km far land coarsen the deck to metre steps.

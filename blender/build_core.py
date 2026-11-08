@@ -10,8 +10,10 @@ the wall and roof colours (OSM `building:colour`/`roof:colour`, else a palette b
 per-building hash). Roads are ribbons whose UVs carry metres along and across, so a shader paints
 the lanes. Plane trees line the avenues and OSM tree rows; parks are scattered. The Presidential
 Palace is the hero model from build_palace.py, appended at its geographic origin.
-Assumptions: estimated heights where OSM has none, colours where OSM has none, road widths by class,
-plane-tree spacing, the bare ground (the DSM's 150 m minimum).
+Where OSM maps no buildings, CMAB's rooftops traced from satellite imagery stand instead; park and
+forest trees stand where Meta and WRI's canopy map has trees (design/CMAB-CANOPY-PLAN.md).
+Assumptions: estimated heights where OSM has none (from use and footprint), colours where OSM has
+none, road widths by class, plane-tree spacing, the bare ground (the DSM's 150 m minimum).
 """
 import colorsys
 import hashlib
@@ -450,6 +452,46 @@ def estimate_height(t, a):
     return 18.0
 
 
+# CMAB (Zhang et al., Scientific Data 2025, CC BY 4.0; tools/research/cmab-prep.py): rooftops traced
+# from satellite imagery, each with a use label and a height and year estimated by machine learning.
+# Measured against the heights OSM's mappers tagged (tests/cmab-check.py, design/CMAB-CANOPY-PLAN.md),
+# its heights are no better than a constant (median 8.4 m off, correlation 0.07) and its years are
+# mostly a filler (1985), so neither is used. Its use labels are: in estimate_height in place of
+# OSM's bare building=yes, the median error falls from 7.0 m to 4.7 m. Its rooftops replace the
+# made-up infill.
+CMAB_KIND = {'Residence': 'residential', 'Business': 'commercial', 'Office': 'office', 'Public service': 'public',
+             'Industry': 'industrial', 'Other': ''}
+CMAB = json.loads((A.data / 'cmab.json').read_text(encoding='utf-8'))['buildings'] if (A.data / 'cmab.json').exists() else []
+CMAB_C = [(sum(p[0] for p in b[3]) / len(b[3]), sum(p[1] for p in b[3]) / len(b[3])) for b in CMAB]
+_CMAB_G = 50.0
+_cmab_grid = {}
+for _k, _b in enumerate(CMAB):
+    _xs, _ys = [p[0] for p in _b[3]], [p[1] for p in _b[3]]
+    for _i in range(int(min(_xs) // _CMAB_G), int(max(_xs) // _CMAB_G) + 1):
+        for _j in range(int(min(_ys) // _CMAB_G), int(max(_ys) // _CMAB_G) + 1):
+            _cmab_grid.setdefault((_i, _j), []).append(_k)
+CMAB_STATS = Counter()
+
+
+def cmab_hits(pts):
+    """The CMAB rooftops matching an outline: the outline's centre on the rooftop, or the rooftop's
+    centre inside the outline (OSM maps blocks CMAB splits, and the reverse)."""
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+    near = {k for i in range(int(min(xs) // _CMAB_G), int(max(xs) // _CMAB_G) + 1)
+            for j in range(int(min(ys) // _CMAB_G), int(max(ys) // _CMAB_G) + 1) for k in _cmab_grid.get((i, j), ())}
+    return [k for k in near if ac.point_in_poly(cx, cy, CMAB[k][3]) or ac.point_in_poly(*CMAB_C[k], pts)]
+
+
+def cmab_kind(pts, a):
+    """The use label of the CMAB rooftop closest in size to this outline, as an OSM building kind ('' if none)."""
+    hits = cmab_hits(pts)
+    if not hits:
+        return ''
+    k = min(hits, key=lambda k: abs(math.log(max(abs(area(CMAB[k][3])), 1.0) / max(a, 1.0))))
+    return CMAB_KIND.get(CMAB[k][1], '')
+
+
 # Districts from OSM land use (the owner, 1 November: the old residential compounds round Wutang
 # Square are not the offices of Xinjiekou): residential, commercial and retail, industrial; and
 # the frontage of the avenues, where ground floors are shops.
@@ -539,7 +581,14 @@ def build_buildings(coll, skip, over):
             xs, ys = [p[0] for p in pts], [p[1] for p in pts]
             if any(min(xs) < px < max(xs) and min(ys) < py < max(ys) and ac.point_in_poly(px, py, pts) for px, py in part_c):
                 continue
-        h = num(t.get('height')) or (num(t.get('building:levels')) or 0) * 3.3 or estimate_height(t, abs(a))
+        h = num(t.get('height')) or (num(t.get('building:levels')) or 0) * 3.3
+        if not h:
+            # No mapped height: the rule, told what the building is by CMAB where OSM says only "yes".
+            kind = cmab_kind(pts, abs(a)) if (t.get('building') or 'yes') == 'yes' else ''
+            if kind:
+                t = dict(t, building=kind)
+                CMAB_STATS['osm kind from cmab'] += 1
+            h = estimate_height(t, abs(a))
         h0 = num(t.get('min_height')) or (num(t.get('building:min_level')) or 0) * 3.3
         h = max(h, h0 + 2.5)
         g = zground(cx, cy)
@@ -589,60 +638,60 @@ def extrude(bm, uv, col, pts, g, h0, h, wall, roof):
     return len(pts) * 2 + len(res['faces'])
 
 
-def _seg(x, y, a, b):
-    ax, ay, bx, by = a[0], a[1], b[0], b[1]
-    dx, dy = bx - ax, by - ay
-    k = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / max(dx * dx + dy * dy, 1e-9)))
-    return math.hypot(x - ax - dx * k, y - ay - dy * k)
-
-
-def build_infill(coll, blocked, near_road, skip, mark):
-    """Where OSM has no buildings, fill in the commonest Nanjing pattern: compounds of six- and
-    seven-storey slab blocks in rows, turned to the nearest street. Only on dry, non-green land near
-    a street and clear of mapped buildings and roads. Marked as assumed in the provenance."""
+def build_infill(coll, blocked, skip, mark):
+    """Where OSM maps no buildings: CMAB's rooftops (traced from satellite imagery) that no OSM
+    building covers, each extruded from its own outline, its height from estimate_height told CMAB's
+    use label. Until 9 Nov a lattice of made-up six- and seven-storey slabs stood here (26,600, every
+    34 m wherever a street was near): now a building stands only where one was seen. A rooftop is
+    skipped where it would stand in a road, on a mapped building or in water (probed every 4 m
+    inside it, OSM and the water mask winning), or in a landmark built another way."""
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
     col = bm.loops.layers.color.new('Col')
+    covered = set()
+    for b in F['buildings']:
+        pts = b['pts'][:-1] if b['pts'][0] == b['pts'][-1] else b['pts']
+        if len(pts) >= 3:
+            covered.update(cmab_hits(pts))
     n = 0
-    step = 34.0
-    y = Y0 + 60
-    while y < Y1 - 60:
-        x = X0 + 60
-        while x < X1 - 60:
-            px, py = x + rnd.uniform(-5, 5), y + rnd.uniform(-5, 5)
-            ang = near_road(px, py)
-            x += step
-            if ang is None or skip(px, py) or wet(px, py) or green_mask.at(px, py):
-                continue
-            L, W = rnd.uniform(36, 58), rnd.uniform(11, 14)
-            ca, sa = math.cos(ang), math.sin(ang)
-            pts = [(px + ca * u - sa * v, py + sa * u + ca * v) for u, v in ((-L / 2, -W / 2), (L / 2, -W / 2), (L / 2, W / 2), (-L / 2, W / 2))]
-            # Probe the whole footprint every 4 m: corner probes alone let a 57 m slab straddle an
-            # 11 m carriageway (one stood across Zhongshan Road).
-            probe = [(px + ca * u - sa * v, py + sa * u + ca * v)
-                     for u in [-L / 2 + k * 4.0 for k in range(int(L / 4) + 1)] + [L / 2]
-                     for v in (-W / 2, 0.0, W / 2)]
-            # dry(), not wet(): a 4 m stream slips between the water mask's 4 m cells at a single
-            # point, and a slab stood across one north-west of the wall (scene-audit, build 9).
-            if any(blocked(qx, qy) or not dry(qx, qy, 2.0) or green_mask.at(qx, qy) for qx, qy in probe):
-                continue
-            if RESIDENTIAL.at(px, py):
-                floors = rnd.choice((6, 6, 6, 7, 7)) if rnd.random() < 0.9 else rnd.choice((11, 18))
-            elif COMMERCIAL.at(px, py):
-                floors = rnd.choice((8, 11, 18, 24, 28))
-            else:
-                floors = rnd.choice((6, 6, 6, 7, 7, 7, 11, 18)) if rnd.random() < 0.93 else rnd.choice((24, 28, 32))
-            h = floors * 3.0 + 1.2
-            st = style({}, h, px, py)
-            # Nanjing's compounds are mostly white, cream and pale grey; old walk-ups faded.
-            walls = WALKUP_WALLS if .15 < st < .3 else INFILL_WALLS
-            wall = lin(walls[int(rnd.random() * len(walls))])
-            roof = lin(ROOFS[int(rnd.random() * len(ROOFS))] if h > 25 else rnd.choice(('#8FA0A6', '#A9AAA3', '#7E9AA8')))
-            if extrude(bm, uv, col, pts, zground(px, py), 0.0, h, (*wall[:3], st), (*roof[:3], st)):
-                n += 1
-                mark(pts)
-        y += step
+    for k, (_, func, _, ring) in enumerate(CMAB):
+        if k in covered:
+            CMAB_STATS['covered by osm'] += 1
+            continue
+        cx, cy = CMAB_C[k]
+        if not (X0 + 30 < cx < X1 - 30 and Y0 + 30 < cy < Y1 - 30):
+            CMAB_STATS['skipped: map edge'] += 1
+            continue
+        pts = [tuple(p) for p in ring]
+        a = area(pts)
+        if a < 0:
+            pts = pts[::-1]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        probe = [(x, y) for x in np.arange(min(xs) + 2.0, max(xs), 4.0) for y in np.arange(min(ys) + 2.0, max(ys), 4.0)
+                 if ac.point_in_poly(x, y, pts)] or [(cx, cy)]
+        if any(skip(x, y) for x, y in probe):
+            CMAB_STATS['skipped: landmark'] += 1
+            continue
+        if not all(dry(x, y, 2.0) for x, y in probe):
+            CMAB_STATS['skipped: water'] += 1
+            continue
+        # A rooftop's traced edge may lap a pavement or a neighbour by a metre: a few blocked probes
+        # are allowed, not a building across a street.
+        if sum(blocked(x, y) for x, y in probe) > 0.15 * len(probe):
+            CMAB_STATS['skipped: road or building'] += 1
+            continue
+        t = {'building': CMAB_KIND.get(func, '')}
+        h = estimate_height(t, abs(a))
+        st = style(t, h, cx, cy)
+        # Nanjing's compounds are mostly white, cream and pale grey; old walk-ups faded.
+        walls = WALKUP_WALLS if .15 < st < .3 else INFILL_WALLS
+        wall = lin(walls[int(hashf(k, 4) * len(walls))])
+        roof = lin(ROOFS[int(hashf(k, 5) * len(ROOFS))] if h > 25 else ('#8FA0A6', '#A9AAA3', '#7E9AA8')[int(hashf(k, 6) * 3)])
+        if extrude(bm, uv, col, pts, zground(cx, cy), 0.0, h, (*wall[:3], st), (*roof[:3], st)):
+            n += 1
+            mark(pts)
     kit.mesh_object('Infill buildings', bm, coll, ['facade', 'roof_city'])
+    CMAB_STATS['infill built'] = n
     return n
 
 
@@ -1139,31 +1188,14 @@ def main():
     def crown_clear(x, y, r=4.5):
         return not any(bmask.at(x + r * math.cos(a), y + r * math.sin(a)) for a in (0, 1.57, 3.14, 4.71, .78, 2.36, 3.93, 5.5))
 
-    # Infill: the nearest street's direction within 140 m, from a 100 m bucket index of segments.
-    buckets = {}
-    for pts, w in carriageways:
-        for a, b in zip(pts, pts[1:]):
-            key = (int((a[0] + b[0]) / 200), int((a[1] + b[1]) / 200))
-            buckets.setdefault(key, []).append((a, b))
-
-    def near_road(x, y):
-        best, ang = 140.0, None
-        kx, ky = int(x // 100), int(y // 100)
-        for i in range(kx - 2, kx + 3):
-            for j in range(ky - 2, ky + 3):
-                for a, b in buckets.get((i, j), ()):
-                    d = _seg(x, y, a, b)
-                    if d < best:
-                        best, ang = d, math.atan2(b[1] - a[1], b[0] - a[0])
-        return ang
-
     def mark(pts):
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
         for j in range(int((min(ys) - bmask.y0) / bmask.cell), int((max(ys) - bmask.y0) / bmask.cell) + 2):
             for i in range(int((min(xs) - bmask.x0) / bmask.cell), int((max(xs) - bmask.x0) / bmask.cell) + 2):
                 if 0 <= i < bmask.nx and 0 <= j < bmask.ny and ac.point_in_poly(bmask.x0 + i * bmask.cell, bmask.y0 + j * bmask.cell, pts):
                     bmask.m[j, i] = True
-    infill = build_infill(c['City'], blocked, near_road, skip, mark)
+    infill = build_infill(c['City'], blocked, skip, mark)
+    print('CMAB', dict(CMAB_STATS), flush=True)
     trees = 0
     # Street trees by research (research/plants/FACTS.md): plane on the roads the city names as
     # plane avenues, cherries on Jiming Temple Road; every other road one species along its whole
@@ -1246,11 +1278,36 @@ def main():
                                     lambda x, y: not blocked(x, y) and not foot_mask.at(x, y) and crown_clear(x, y, 3.0) and dry(x, y), A.extent)
     trees += sum(island_trees.values())
     print('ISLAND TREES', island_trees, flush=True)
-    # Other green spaces: the census mix of the city's own trees.
+    # Other green spaces: the census mix of the city's own trees, where Meta and WRI's canopy map has
+    # trees over 3 m (as on Purple Mountain below), each scaled to the canopy's height there. Until
+    # 9 Nov, 9,000 trees were scattered at random over the central patch's parks, of which the map
+    # has only an eighth under canopy, and the parks beyond it had none. A jittered lattice, 12 m in
+    # the central patch where people walk, 16 m beyond; species in groves (60 m cells).
     kinds = ['camphor', 'camphor', 'plane', 'scholar', 'ginkgo', 'metasequoia', 'cedar', 'privet', 'wingnut']
-    trees += ac.scatter(protos, c['Trees'], rnd, kinds, 9000, patch[0], patch[1],
-                        lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and dry(x, y) and not in_palace(x, y)
-                        and not xw_isl.at(x, y) and not any(m.at(x, y) for m, _ in zones), zground, groves=500)
+    tall = {k: max(protos[k].dimensions.z, 1.0) for k in set(kinds)}
+
+    def park_ok(x, y):
+        return (green_mask.at(x, y) and not (MOUNTAIN is not None and MOUNTAIN.at(x, y)) and not xw_isl.at(x, y) and not in_palace(x, y)
+                and not any(m.at(x, y) for m, _ in zones) and not blocked(x, y) and crown_clear(x, y, 3.5) and dry(x, y))
+    park_trees = 0
+    for sp, inside in ((12.0, True), (16.0, False)):
+        for gy in np.arange(Y0 + 30, Y1 - 30, sp):
+            for gx in np.arange(X0 + 30, X1 - 30, sp):
+                if (patch[0][0] < gx < patch[0][1] and patch[1][0] < gy < patch[1][1]) != inside:
+                    continue
+                x, y = gx + rnd.uniform(-.4, .4) * sp, gy + rnd.uniform(-.4, .4) * sp
+                if not green_mask.at(x, y):
+                    continue
+                cover, h = canopy_at(x, y)
+                if h < 3 or rnd.random() >= cover or not park_ok(x, y):
+                    continue
+                g = random.Random(hash((int(x // 60), int(y // 60))))
+                k = g.choice(kinds) if rnd.random() < 0.75 else rnd.choice(kinds)
+                kit.place(protos[k], c['Trees'], (x, y, zground(x, y) - 0.2), rnd.uniform(0, 6.28),
+                          min(1.4, max(0.55, h / tall[k] * rnd.uniform(.85, 1.05))))
+                park_trees += 1
+    trees += park_trees
+    print('PARK TREES', park_trees, flush=True)
     # Purple Mountain's forest (OSM relation 16455205). Its secondary forest has turned from planted
     # Masson pine to deciduous broadleaf: in forest-gap surveys sweetgum (枫香) is in every plot, then
     # castor aralia, white oak, Chinese pistache and cork oak; conifers about 10 % of the reserve,

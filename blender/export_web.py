@@ -113,8 +113,10 @@ SETTINGS = {
         'fog': 0.00022,      # light haze: Purple Mountain should stand clear in the east
         'labels': {'xinjiekou': 'Xinjiekou', 'zhongshan': 'Zhongshan Road', 'palace': 'the Presidential Palace', 'gulou': 'Gulou'},
         'provenance': 'Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: '
-                      'OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, '
-                      'and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed). '
+                      'OpenStreetMap contributors (ODbL). Where OSM maps no buildings, rooftops from CMAB (Zhang et al., Scientific Data 2025, '
+                      'CC BY 4.0), traced from satellite imagery. Windows and lanes are drawn by shaders; where OSM has no height, it is '
+                      'estimated from the building\'s use (OSM\'s, else CMAB\'s) and footprint, not measured. Park and forest trees stand '
+                      'where Meta and WRI\'s canopy height map (Tolan et al. 2024, CC BY 4.0) has trees, at its heights. '
                       'Building types follow OSM land use (residential, commercial, industrial); the old walk-ups\' colours, '
                       'balconies and air conditioners are drawn from photographs (assumed).',
     },
