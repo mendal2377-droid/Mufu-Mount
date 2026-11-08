@@ -255,16 +255,18 @@ def city_wall(bm, pts, ground, *, height=14.0, width=12.0, outer_side=1, mi_bric
 
 # --- Bridges and props ------------------------------------------------------------------------------
 
-def arch_bridge(bm, a, b, z_banks, *, width=6.0, rise=2.4, mi_stone=0, mi_rail=0, segs=16):
-    """Stone bridge from a to b: a gently humped deck with balustrades, piers into the water."""
+def arch_bridge(bm, a, b, z_banks, *, width=6.0, rise=2.4, mi_stone=0, mi_rail=0, segs=16, z_end=None):
+    """Stone bridge from a to b: a gently humped deck with balustrades, piers into the water.
+    z_end: the deck's height at b where its banks differ (z_banks is then the height at a)."""
     a, b = Vector(a), Vector(b)
+    zb = z_banks if z_end is None else z_end
     L = (b - a).length
     t = (b - a) / L
     ang = math.atan2(t.y, t.x)
     for k in range(segs):
         u0, u1 = k / segs, (k + 1) / segs
-        z0 = z_banks + rise * math.sin(math.pi * u0)
-        z1 = z_banks + rise * math.sin(math.pi * u1)
+        z0 = z_banks + (zb - z_banks) * u0 + rise * math.sin(math.pi * u0)
+        z1 = z_banks + (zb - z_banks) * u1 + rise * math.sin(math.pi * u1)
         p = a.lerp(b, (u0 + u1) / 2)
         R = Matrix.Translation((p.x, p.y, (z0 + z1) / 2)) @ Matrix.Rotation(ang, 4, 'Z') @ \
             Matrix.Rotation(math.atan2(z1 - z0, L / segs), 4, 'Y').inverted()
@@ -274,7 +276,7 @@ def arch_bridge(bm, a, b, z_banks, *, width=6.0, rise=2.4, mi_stone=0, mi_rail=0
     for u in (0.25, 0.5, 0.75):
         p = a.lerp(b, u)
         R = Matrix.Translation((p.x, p.y, 0)) @ Matrix.Rotation(ang, 4, 'Z')
-        add_box(bm, (0, 0, z_banks - 3), (1.4, width - 0.6, 6), mi=mi_stone, matrix=R)
+        add_box(bm, (0, 0, min(z_banks, zb) - 3), (1.4, width - 0.6, 6), mi=mi_stone, matrix=R)
 
 
 def lantern_string(bm, a, b, n, mi, sag=1.2):

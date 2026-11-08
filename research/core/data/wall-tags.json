@@ -1,0 +1,591 @@
+{
+ "version": 0.6,
+ "generator": "Overpass API 0.7.62.11 87bfad18",
+ "osm3s": {
+  "timestamp_osm_base": "2026-11-04T01:47:55Z",
+  "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+ },
+ "elements": [
+  {
+   "type": "way",
+   "id": 30685570,
+   "tags": {
+    "barrier": "city_wall",
+    "historic": "citywalls",
+    "lanes": "20",
+    "layer": "1",
+    "surface": "cobblestone"
+   }
+  },
+  {
+   "type": "way",
+   "id": 30685577,
+   "tags": {
+    "barrier": "city_wall",
+    "historic": "citywalls",
+    "lanes": "20"
+   }
+  },
+  {
+   "type": "way",
+   "id": 81520515,
+   "tags": {
+    "barrier": "city_wall",
+    "historic": "citywalls",
+    "lanes": "20",
+    "layer": "1",
+    "surface": "cobblestone"
+   }
+  },
+  {
+   "type": "way",
+   "id": 89637327,
+   "tags": {
+    "barrier": "city_wall",
+    "layer": "1",
+    "material": "brick",
+    "name": "台城",
+    "name:zh": "台城",
+    "name:zh-Hans": "台城",
+    "name:zh-Hant": "台城",
+    "width": "20"
+   }
+  },
+  {
+   "type": "way",
+   "id": 89637542,
+   "tags": {
+    "barrier": "city_wall",
+    "height": "20",
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 95918075,
+   "tags": {
+    "barrier": "city_wall",
+    "material": "stone",
+    "name": "南京城墙",
+    "wikidata": "Q927701",
+    "wikipedia": "zh:南京城墙"
+   }
+  },
+  {
+   "type": "way",
+   "id": 95918082,
+   "tags": {
+    "highway": "steps",
+    "name": "解放门登城口",
+    "name:zh": "解放门登城口",
+    "name:zh-Hans": "解放门登城口",
+    "name:zh-Hant": "解放門登城口"
+   }
+  },
+  {
+   "type": "way",
+   "id": 134497186,
+   "tags": {
+    "barrier": "city_wall",
+    "historic": "citywalls",
+    "lanes": "20",
+    "name": "南京明城墙",
+    "name:en": "City Wall of Nanjing"
+   }
+  },
+  {
+   "type": "way",
+   "id": 160512348,
+   "tags": {
+    "barrier": "city_wall",
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 223953633,
+   "tags": {
+    "barrier": "city_wall",
+    "height": "20",
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 237044575,
+   "tags": {
+    "barrier": "city_wall",
+    "embankment": "yes",
+    "layer": "1",
+    "material": "brick",
+    "name": "南京城墙",
+    "name:zh": "南京城墙",
+    "name:zh-Hans": "南京城墙",
+    "name:zh-Hant": "南京城牆",
+    "width": "20"
+   }
+  },
+  {
+   "type": "way",
+   "id": 437649421,
+   "tags": {
+    "barrier": "city_wall",
+    "embankment": "yes",
+    "lanes": "20",
+    "two_sided": "yes"
+   }
+  },
+  {
+   "type": "way",
+   "id": 552631181,
+   "tags": {
+    "barrier": "city_wall",
+    "name": "南京城墙",
+    "wikidata": "Q927701",
+    "wikipedia": "zh:南京城墙"
+   }
+  },
+  {
+   "type": "way",
+   "id": 625734601,
+   "tags": {
+    "barrier": "city_wall",
+    "name": "汉西门遗迹"
+   }
+  },
+  {
+   "type": "way",
+   "id": 625736919,
+   "tags": {
+    "barrier": "city_wall",
+    "name": "南京城墙",
+    "two_sided": "yes"
+   }
+  },
+  {
+   "type": "way",
+   "id": 940335843,
+   "tags": {
+    "building": "yes",
+    "historic": "city_gate",
+    "layer": "1",
+    "name": "玄武门",
+    "name:zh": "玄武门",
+    "name:zh-Hans": "玄武门",
+    "name:zh-Hant": "玄武門"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061607219,
+   "tags": {
+    "building": "yes",
+    "historic": "city_gate",
+    "layer": "1",
+    "name": "解放门"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061610836,
+   "tags": {
+    "building": "yes",
+    "historic": "city_gate",
+    "layer": "1",
+    "name": "解放门",
+    "name:zh": "解放门",
+    "name:zh-Hans": "解放门",
+    "name:zh-Hant": "解放門"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061610837,
+   "tags": {
+    "barrier": "city_wall",
+    "name": "南京城墙",
+    "wikidata": "Q927701",
+    "wikipedia": "zh:南京城墙"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061610838,
+   "tags": {
+    "barrier": "city_wall",
+    "name": "南京城墙",
+    "wikidata": "Q927701",
+    "wikipedia": "zh:南京城墙"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061610840,
+   "tags": {
+    "highway": "steps",
+    "name": "玄武门登城口",
+    "name:zh": "玄武门登城口",
+    "name:zh-Hans": "玄武门登城口",
+    "name:zh-Hant": "玄武門登城口"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061627460,
+   "tags": {
+    "barrier": "city_wall"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061634138,
+   "tags": {
+    "barrier": "city_wall"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061637446,
+   "tags": {
+    "barrier": "city_wall"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061637447,
+   "tags": {
+    "barrier": "city_wall"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1061637448,
+   "tags": {
+    "barrier": "city_wall",
+    "building": "yes"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1103385815,
+   "tags": {
+    "barrier": "city_wall",
+    "historic": "citywalls",
+    "lanes": "20"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1103385816,
+   "tags": {
+    "area": "yes",
+    "barrier": "city_wall"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1103710305,
+   "tags": {
+    "barrier": "city_wall",
+    "name": "南京城墙"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349635,
+   "tags": {
+    "historic": "citywalls",
+    "surface": "paving_stones"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349636,
+   "tags": {
+    "historic": "citywalls",
+    "surface": "paving_stones"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349637,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349638,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349639,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349640,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349641,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349642,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349644,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349646,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349648,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349650,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349652,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349654,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349656,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349657,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349667,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349668,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349669,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349670,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349671,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349672,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349673,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349674,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349675,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349676,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349677,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349678,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349679,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349680,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349681,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349682,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349683,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349684,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349685,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349686,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349687,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349688,
+   "tags": {
+    "historic": "citywalls",
+    "surface": "paving_stones"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349689,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349690,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349691,
+   "tags": {
+    "historic": "citywalls"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1375349692,
+   "tags": {
+    "historic": "citywalls"
+   }
+  }
+ ]
+}

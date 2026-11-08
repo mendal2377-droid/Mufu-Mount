@@ -19,7 +19,9 @@ export async function installJourney(page) {
     // farther off in a row. With longer runs allowed the route cut 20-50 m corners over the grass
     // the bike could never ride.
     const nearRoad = (x, z) => [[3, 0], [-3, 0], [0, 3], [0, -3], [2.1, 2.1], [2.1, -2.1], [-2.1, 2.1], [-2.1, -2.1]].some(([a, b]) => g.road(x + a, z + b) !== null);
-    function route(from, to, mode) {
+    // L: the lattice, 4 m by default; 2 m for Xuanwu Lake's 4.5 m bridges on a slant, which a 4 m
+    // lattice can step clean over (state ids hold lattice indices within ±4000: 8 km at 2 m).
+    function route(from, to, mode, L = 4) {
       const ok = (x, z) => (mode === "bike" ? g.road(x, z) ?? (g.height(x, z) === null ? null : nearRoad(x, z) ? "edge" : "near") : g.height(x, z));
       // A state is a lattice point and the off-road points just crossed to reach it (0-3).
       const id = (i, j, k = 0) => ((i + 4000) * 8000 + (j + 4000)) * 4 + k;

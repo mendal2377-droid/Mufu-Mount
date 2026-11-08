@@ -6,6 +6,7 @@ import {flightStep} from './kite.js';
 import {createTraveller, createMagpie, createGlider} from './traveller.js';
 import {loadTransit} from './transit.js';
 import {paintedTree} from './painted-trees.js';
+import {createXuanwuLife, shoreField} from './xuanwu-life.js';
 
 // A landmark scene modelled in Blender (blender/build_<id>.py, exported by blender/export_web.py)
 // and streamed on arrival. Unlike the atlas it is in true metres: the walker's eye is 1.65 m, the
@@ -77,6 +78,9 @@ const SEASONS = {
   maple_autumn: {year: ['#A8C860', '#5E9E3E', null, '#8E7E72']}, maple_red: {year: ['#A8C860', '#5E9E3E', null, '#8E7E72']},
   cherry: {year: ['#F2B8C6', '#6E9E46', '#D9783A', '#8E7E72']}, willow: {year: ['#B8D86A', null, '#C9B84A', '#A79A70']},
   cedar: {year: [null, null, null, '#36513A']}, cypress: {year: [null, null, null, '#36513A']},
+  // Lotus (research/xuanwu/FACTS.md): new leaves in spring, flowers June to August, seed heads in
+  // autumn, brown stalks in winter.
+  lotus: {year: ['#8DBE5A', null, '#9A9048', '#7A6448']}, lotus_flower: {year: ['#C9D98A', null, '#8E7A4E', '#6E5A44']},
   // From research/plants/FACTS.md: ginkgo gold in late November, metasequoia fiery red in early
   // December, plane yellowing late; camphor, privet and cedar evergreen (camphor's lighter spring
   // flush is an assumption); plum flowers in late February, so its "winter" is the blossom.
@@ -185,18 +189,21 @@ function silhouetteGeometry(spec) {
 // show a crowd of raised leaves, not flat pads); a flower is a pink cup on its own leaf.
 function lotusGeometry(spec, colour) {
   const parts = [];
-  const leaf = (r, x, y, z, hex) => {
+  // crown 1 takes the season's colour (SEASONS: leaves brown in winter, the flower a bud in spring
+  // and a seed head in autumn); a flower's own leaf keeps its green.
+  const crowns = [];
+  const leaf = (r, x, y, z, hex, crown = 1) => {
     const g = new THREE.ConeGeometry(r, r * .28, 9, 1, true).toNonIndexed();
     g.rotateX(Math.PI); g.translate(x, y + r * .14, z);
     const n = g.attributes.normal;
     for (let i = 0; i < n.count; i++) n.setXYZ(i, n.getX(i) * .3, 1, n.getZ(i) * .3);
-    parts.push(colour(g, hex));
+    parts.push(colour(g, hex)); crowns.push(crown);
   };
   if (spec.flower) {
-    leaf(.5, .1, .05, 0, '#5E9B4A');
+    leaf(.5, .1, .05, 0, '#5E9B4A', 0);
     const cup = new THREE.ConeGeometry(.2, .32, 6, 1, true).toNonIndexed();
     cup.rotateX(Math.PI); cup.translate(0, .55, 0);
-    parts.push(colour(cup, spec.crown));
+    parts.push(colour(cup, spec.crown)); crowns.push(1);
   } else {
     leaf(.55, 0, .05, 0, spec.crown); leaf(.42, .5, .45, .2, '#6FAE52'); leaf(.38, -.35, .7, -.4, '#4E8A44');
   }
@@ -207,6 +214,10 @@ function lotusGeometry(spec, colour) {
     for (const g of parts) { arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; }
     out.setAttribute(name, new THREE.BufferAttribute(arr, 3));
   }
+  const crown = new Float32Array(total);
+  let o = 0;
+  parts.forEach((g, i) => { crown.fill(crowns[i], o, o + g.attributes.position.count); o += g.attributes.position.count; });
+  out.setAttribute('crown', new THREE.BufferAttribute(crown, 1));
   return out;
 }
 
@@ -221,6 +232,15 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   ]);
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0xa8d0ea, .0011);
+  // The near plane follows the camera's height above the ground, a hundredth of it, 0.1-4 m: at
+  // 0.1 m the depth buffer could not tell surfaces a metre apart 1.5 km off, and from high over
+  // Xuanwu Lake the lake bed (under 1 m of water) fought the water in grey lines across it. 4 m at
+  // most: the glide camera trails the glider by 11 m. Here, not in frame(): every render of the
+  // world passes through, the test shots' too.
+  scene.onBeforeRender = (renderer, s, camera) => {
+    const p = camera.position, near = Math.min(4, Math.max(.1, (p.y - (surface(p.x, p.z) ?? 0)) * .01));
+    if (Math.abs(camera.near - near) > 1e-3) { camera.near = near; camera.updateProjectionMatrix(); }
+  };
   const walk = meta.walk, heights = new Int16Array(walkBuf);
   // cellZ: the whole metres the last cellOf's grid stores its heights above (zOff, for ground over
   // the Int16 centimetres' 320 m: Purple Mountain). Declared here: cellOf runs while the world loads.
@@ -228,6 +248,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // Water surfaces (same layout as the walk grid), where a boat can be steered.
   const waterBuf = walk.water ? await fetch(base + 'water.bin').then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null) : null;
   const waterHeights = waterBuf ? new Int16Array(waterBuf) : null;
+
+  // The water's distance from its shores (src/xuanwu-life.js), made when the water's shader first
+  // compiles: the walk grids are loaded by then.
+  const NO_SHORE = {tex: new THREE.DataTexture(new Uint8Array([255]), 1, 1, THREE.RedFormat), box: new THREE.Vector4(0, 0, 0, 0)};
+  NO_SHORE.tex.needsUpdate = true;
+  let shoreMap = null;
+  const shore = () => (shoreMap ??= id === 'core' && waterHeights ? shoreField(waterAt) : NO_SHORE);
 
   // --- Painted toon materials keyed on palette names ---------------------------------------------
   const cache = new Map(), hazeColor = {value: new THREE.Color(0xa8d0ea)};
@@ -259,6 +286,10 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.citySnow = shared.snow; s.uniforms.worldMottle = {value: style.mottle}; s.uniforms.worldScale = {value: style.scale};
       s.uniforms.worldJoints = {value: style.joints || 0}; s.uniforms.cityTime = shared.time;
       s.uniforms.worldWater = {value: name === 'water' ? 1 : 0};
+      // Distance from the shore, for the water's shallows; the lotus beds' season.
+      const sh = name === 'water' ? shore() : NO_SHORE;
+      s.uniforms.shoreTex = {value: sh.tex}; s.uniforms.shoreBox = {value: sh.box};
+      s.uniforms.worldLotus = {value: name === 'lotus' ? 1 : 0}; s.uniforms.citySeason = shared.season || {value: 1};
       s.uniforms.worldWindows = {value: style.windows || 0};
       s.uniforms.citySunset = shared.sunset || {value: 0}; s.uniforms.cityDawn = shared.dawn || {value: 0};
       s.uniforms.worldFar = {value: far ? 1 : 0}; s.uniforms.hazeColor = hazeColor;
@@ -268,7 +299,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.skyClip = {value: new THREE.Vector4(...(meta.skyline_clip || [1, -1, 1, -1]))};
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nattribute float wallTop;varying float vTop;\n#endif\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;\n#ifdef FACADE_TOP\nvTop=wallTop;\n#endif\n');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops;uniform vec3 hazeColor;uniform vec4 skyClip;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
+      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops,worldLotus,citySeason;uniform vec3 hazeColor;uniform vec4 skyClip,shoreBox;uniform sampler2D shoreTex;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -289,9 +320,18 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             float rip=lwNoise(w+vec2(cityTime*.05,cityTime*.03))*.6+lwNoise(w*3.1-vec2(cityTime*.09,0.))*.4;
             // vNormal, not normal: at color_fragment the latter is not declared yet.
             float fres=pow(1.-clamp(dot(normalize(vViewPosition),normalize(vNormal)),0.,1.),4.);
+            // Shallows paler and greener within a few tens of metres of the bank, open water deeper blue.
+            float sd=1.;
+            if(shoreBox.z>0.){vec2 su=vec2((vWorldPos.x-shoreBox.x)/shoreBox.z,(vWorldPos.z-shoreBox.y)/shoreBox.w);
+              if(su.x>0.&&su.x<1.&&su.y>0.&&su.y<1.)sd=texture2D(shoreTex,su).r;}
+            diffuseColor.rgb*=mix(vec3(1.08,1.12,.94),vec3(.8,.88,1.),smoothstep(.05,.9,sd));
             diffuseColor.rgb=mix(diffuseColor.rgb*(.9+rip*.22),vec3(.78,.88,.96),fres*.35);
             diffuseColor.rgb+=smoothstep(.78,.86,rip)*.08;
           }
+          // Lotus beds: green through the summer, yellowing in autumn, brown in winter.
+          if(worldLotus>.5){float s4=mod(citySeason,4.);
+            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.6,.56,.3),smoothstep(1.4,2.4,s4)*(1.-smoothstep(3.,3.6,s4))*.6);
+            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.45,.38,.28),smoothstep(2.5,3.,s4)*(1.-smoothstep(3.7,4.,s4)));}
           // Towers: 3.8 m floor bands and 2.4 m mullions on the walls.
           float winLit=0.;
           if(worldWindows>0.){
@@ -851,6 +891,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // --- The traveller, the magpie and the glider -------------------------------------------------------
   const traveller = createTraveller(bands), magpie = createMagpie(bands), glider = createGlider(bands);
   traveller.root.add(glider); glider.visible = false;
+  // Xuanwu Lake: its carp, a jumping culter and the name boards at its gates and islands.
+  const xuanwu = id === 'core' && waterHeights ? createXuanwuLife(scene, {waterAt, heightAt, nearest, shared}) : null;
   scene.add(traveller.root, magpie.root);
   traveller.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   const body = new THREE.Vector3(), lastBody = new THREE.Vector3();
@@ -1142,6 +1184,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     get vehicle() { return vehicle; },
     get canBike() { return true; },
     get canBoat() { return !!waterHeights; },
+    get xuanwu() { return xuanwu; },
     // Switch the way of moving. Returns a short message for the toast, or null if it cannot.
     setVehicle(v) {
       if (glide || ride || mode === 'glide') return null;
@@ -1347,6 +1390,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         traveller.root.position.y = body.y + .55;
       }
       magpie.update(dt, t, body, heading, speed, mode, surface);
+      xuanwu?.update(dt, t, body, vehicle);
       // The shadow box centres on the traveller (or the camera while gliding), snapped to texels
       // along the light's own axes.
       focus.copy(glide || mode === 'glide' ? camera.position : body);

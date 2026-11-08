@@ -27,13 +27,23 @@
     "offset": 277300
    },
    {
+    "name": "xuanwu",
+    "nx": 890,
+    "ny": 1000,
+    "x0": -260.0,
+    "y0": 2420.0,
+    "cell": 2.0,
+    "offset": 2396212,
+    "stepUp": 1.0
+   },
+   {
     "name": "north",
     "nx": 1420,
     "ny": 950,
     "x0": -3600.0,
     "y0": 2200.0,
     "cell": 4.0,
-    "offset": 2396212,
+    "offset": 3286212,
     "stepUp": 1.0
    },
    {
@@ -43,7 +53,7 @@
     "x0": -2600.0,
     "y0": 6000.0,
     "cell": 4.0,
-    "offset": 3745212,
+    "offset": 4635212,
     "stepUp": 1.0
    },
    {
@@ -53,7 +63,7 @@
     "x0": -5280.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 4251462,
+    "offset": 5141462,
     "stepUp": 1.0
    },
    {
@@ -63,7 +73,7 @@
     "x0": 2080.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 5134962,
+    "offset": 6024962,
     "stepUp": 1.0
    },
    {
@@ -73,7 +83,7 @@
     "x0": -5280.0,
     "y0": 2200.0,
     "cell": 4.0,
-    "offset": 5858762,
+    "offset": 6748762,
     "stepUp": 1.0
    },
    {
@@ -83,7 +93,7 @@
     "x0": 400.0,
     "y0": 6000.0,
     "cell": 4.0,
-    "offset": 6383762,
+    "offset": 7273762,
     "stepUp": 1.0
    },
    {
@@ -93,7 +103,7 @@
     "x0": 3620.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 6576262,
+    "offset": 7466262,
     "stepUp": 1.6,
     "zOff": 200
    },
@@ -104,11 +114,11 @@
     "x0": -1698.3500000000004,
     "y0": 8213.51,
     "cell": 3.0,
-    "offset": 8569062,
+    "offset": 9459062,
     "stepUp": 1.3
    }
   ],
-  "walkableCells": 7783296,
+  "walkableCells": 8050335,
   "water": true,
   "roads": true
  },
@@ -563,7 +573,7 @@
  },
  "traffic": [],
  "transit": true,
- "trees": 286137,
- "staticTriangles": 4044344,
+ "trees": 301687,
+ "staticTriangles": 4664110,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: OpenStreetMap contributors (ODbL). Windows and lanes are drawn by shaders; heights are estimated where OSM has none, and where OSM maps no buildings the blocks are filled with typical six- and seven-storey slabs (assumed). Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, balconies and air conditioners are drawn from photographs (assumed)."
 }

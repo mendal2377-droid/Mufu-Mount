@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import area_common as ac  # noqa: E402
 import kit  # noqa: E402
 import kit_oldcity as oc  # noqa: E402
+import core_xuanwu as xw  # noqa: E402
 import mufu_merge as mm  # noqa: E402
 import zhongshan_merge as zm  # noqa: E402
 
@@ -500,6 +501,12 @@ def hashf(s, k=0):
     return int(hashlib.md5(f'{s}:{k}'.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
 
 
+# Set in main(): OSM buildings built another way (the wall's gates, Xuanwu Park's halls), short
+# tunnels that are gate passages through the wall (drawn as streets), and the park's foot bridges
+# (built as decks, not ribbons).
+SKIP_BUILDINGS, THROUGH, DECKED = set(), set(), set()
+
+
 def build_buildings(coll, skip, over):
     """Extrude every building and part. Outlines that contain parts are dropped (OSM's 3D
     convention: the parts describe the building, the outline is only its footprint)."""
@@ -515,7 +522,7 @@ def build_buildings(coll, skip, over):
         t = b['tags']
         # Underground buildings (metro stations, layer < 0) stood on Zhongshan Road's carriageway;
         # construction sites are plots, not buildings, and several are mapped over roads.
-        if (num(t.get('layer')) or 0) < 0 or t.get('building') == 'construction':
+        if (num(t.get('layer')) or 0) < 0 or t.get('building') == 'construction' or b['id'] in SKIP_BUILDINGS:
             continue
         pts = b['pts'][:-1] if b['pts'][0] == b['pts'][-1] else list(b['pts'])
         if len(pts) < 3:
@@ -615,7 +622,9 @@ def build_infill(coll, blocked, near_road, skip, mark):
             probe = [(px + ca * u - sa * v, py + sa * u + ca * v)
                      for u in [-L / 2 + k * 4.0 for k in range(int(L / 4) + 1)] + [L / 2]
                      for v in (-W / 2, 0.0, W / 2)]
-            if any(blocked(qx, qy) or wet(qx, qy) or green_mask.at(qx, qy) for qx, qy in probe):
+            # dry(), not wet(): a 4 m stream slips between the water mask's 4 m cells at a single
+            # point, and a slab stood across one north-west of the wall (scene-audit, build 9).
+            if any(blocked(qx, qy) or not dry(qx, qy, 2.0) or green_mask.at(qx, qy) for qx, qy in probe):
                 continue
             if RESIDENTIAL.at(px, py):
                 floors = rnd.choice((6, 6, 6, 7, 7)) if rnd.random() < 0.9 else rnd.choice((11, 18))
@@ -690,7 +699,7 @@ def build_roads(coll, skip):
         if kind not in WIDTH:
             continue
         t = w.get('tags', {})
-        if t.get('tunnel') or (num(t.get('layer')) or 0) < 0:
+        if (t.get('tunnel') or (num(t.get('layer')) or 0) < 0) and w.get('id') not in THROUGH or w.get('id') in DECKED:
             continue
         pts = [p for p in w['pts'] if X0 + 20 < p[0] < X1 - 20 and Y0 + 20 < p[1] < Y1 - 20]
         if len(pts) < 2:
@@ -1087,6 +1096,17 @@ def main():
         if o.name.startswith('Pitches'):
             for v in o.data.vertices:
                 v.co.z = zground(v.co.x, v.co.y) + 0.08
+    # The Ming wall and Xuanwu Lake (blender/core_xuanwu.py): the wall's gates and the park's halls
+    # stand in for their OSM buildings, gate passages are streets, the lake's bridges are decks.
+    wall = xw.Wall(F, WIDTH, FOOT)
+    THROUGH.update(wall.tunnels_through)
+    SKIP_BUILDINGS.update(wall.not_buildings)
+    halls = xw.park_halls(F, c['Buildings'], zground, wall.not_buildings)
+    SKIP_BUILDINGS.update(halls)
+    xk = xw.lake_ring(F, lakes)
+    xw_level = LAKE_LEVELS[xk] if xk is not None else 0.0
+    xw_bridges = xw.foot_bridges(F, A.extent, lakes[xk]) if xk is not None else []
+    DECKED.update(b['id'] for b in xw_bridges)
     city, n_b, tris = build_buildings(c['City'], skip, c['Overhead'])
     # On the Zhongshan patches the world's own roads and paths stand in for OSM's, except where it
     # drew no way and built nothing over the spot (the road east of Meiling Palace, Bus 34's way):
@@ -1094,12 +1114,17 @@ def main():
     # grounds run under its buildings.
     roads, avenues = build_roads(c['Roads'], lambda x, y, kind: in_palace(x, y) or in_mufu(x, y)
                                  or (in_zs(x, y) and (kind in FOOT or ZS.covers(x, y))))
+    wall_m, breaches, arches = xw.build_wall(wall, c['Buildings'], c['Overhead'], zground)
+    pavilions = xw.xuanwu_gate(wall, c['Buildings'], zground)
+    decks = xw.build_bridges(xw_bridges, c['Roads'], xw_level, road_z)
+    print('WALL', {'lines': len(wall.lines), 'built_m': round(wall_m), 'breaches': breaches, 'arches': arches,
+                   'gate_passages': len(THROUGH), 'pavilions': pavilions, 'park_halls': len(halls)}, flush=True)
     lamp_proto = lamp_prototype(c['Prototypes'])
     for x, y, z, ang in lamps:
         kit.place(lamp_proto, c['Trees'], (x, y, z), ang)
 
     # Plane trees: both sides of every avenue, every 9 m, where there is no building; OSM tree rows.
-    bmask = ac.Mask([b['pts'] for b in F['buildings']], A.extent, 2.0)
+    bmask = ac.Mask([b['pts'] for b in F['buildings']] + wall.footprints(), A.extent, 2.0)
     # Carriageways as polygons (both edges of each ribbon), so trees never stand in a road: Zhongshan
     # Road is mapped as two one-way ways, and each side's trees fell on the other.
     road_polys = []
@@ -1209,11 +1234,23 @@ def main():
                         shore += 1
                         break
     trees += shore
+    # Xuanwu Lake's islands, each by its own character (blender/core_xuanwu.py), off their paths.
+    xw_isl = ac.Mask(list(xw.islands(F).values()), A.extent, 4.0)
+    foot_polys = []
+    for w in F['ways']:
+        if w.get('kind') in FOOT and len(w['pts']) > 1 and any(-500 < x < 1900 and 2400 < y < 4800 for x, y in w['pts']):
+            l, r = ac.polyline_offset(w['pts'], 2.4), ac.polyline_offset(w['pts'], -2.4)
+            foot_polys.append([(v.x, v.y) for v in l] + [(v.x, v.y) for v in reversed(r)])
+    foot_mask = ac.Mask(foot_polys, A.extent, 2.0)
+    island_trees = xw.plant_islands(F, protos, c['Trees'], rnd, zground,
+                                    lambda x, y: not blocked(x, y) and not foot_mask.at(x, y) and crown_clear(x, y, 3.0) and dry(x, y), A.extent)
+    trees += sum(island_trees.values())
+    print('ISLAND TREES', island_trees, flush=True)
     # Other green spaces: the census mix of the city's own trees.
     kinds = ['camphor', 'camphor', 'plane', 'scholar', 'ginkgo', 'metasequoia', 'cedar', 'privet', 'wingnut']
     trees += ac.scatter(protos, c['Trees'], rnd, kinds, 9000, patch[0], patch[1],
                         lambda x, y: green_mask.at(x, y) and not blocked(x, y) and crown_clear(x, y, 3.5) and dry(x, y) and not in_palace(x, y)
-                        and not any(m.at(x, y) for m, _ in zones), zground, groves=500)
+                        and not xw_isl.at(x, y) and not any(m.at(x, y) for m, _ in zones), zground, groves=500)
     # Purple Mountain's forest (OSM relation 16455205). Its secondary forest has turned from planted
     # Masson pine to deciduous broadleaf: in forest-gap surveys sweetgum (枫香) is in every plot, then
     # castor aralia, white oak, Chinese pistache and cork oak; conifers about 10 % of the reserve,
@@ -1310,6 +1347,9 @@ def main():
                for o in list(c['Ground'].objects) + list(c['Roads'].objects)
                + [m for m in c['Mufu'].objects if m.active_material and m.active_material.get('walkable')]
                if o.type == 'MESH' and len(o.data.polygons)]
+    # Xuanwu Lake's stone decks (core_xuanwu.build_bridges): trees lifted onto a 4.5 m deck stood
+    # across it, and their trunks cut the walk to Huanzhou and from Cuizhou Gate (build 10).
+    decks = {o.data for o in c['Roads'].objects if o.name.startswith('Lake bridges')}
     up, culled = Vector((0, 0, 1)), Counter()
     for o in list(c['Trees'].objects):
         if o.data.name == 'proto far':
@@ -1325,14 +1365,19 @@ def main():
         kind = o.data.name.replace('proto ', '')
         # Not on a carriageway (roads the tree masks missed: service roads, junction mouths) and
         # not on water (lamps excepted: they stand on bridges).
+        # Water counts only where its surface is the top one: a lake's big triangles run on under
+        # its islands, hidden below their higher ground (build 8 culled 4200 island trees so).
         under = ''
         for t, me in floors:
             hit = t.ray_cast(o.location + Vector((0, 0, 3.0)), Vector((0, 0, -1)), 6.0)
             if hit[0] is not None:
                 mat = me.materials[me.polygons[hit[2]].material_index]
-                under = 'road_city' if mat.get('road') else mat.name.split('.')[0]
+                under = 'road_city' if mat.get('road') else 'deck' if me in decks else mat.name.split('.')[0]
+                if under == 'water' and top is not None and hit[0].z < top - 0.05:
+                    under = ''
+                    continue
                 break
-        if under == 'water' and kind != 'lamp' or under == 'road_city':
+        if under in ('water', 'deck') and kind != 'lamp' or under == 'road_city':
             culled[kind + ' on ' + under] += 1
             bpy.data.objects.remove(o)
             continue
@@ -1356,6 +1401,14 @@ def main():
             bpy.data.objects.remove(o)
     trees -= sum(n for k, n in culled.items() if k != 'lamp')
     print('CULLED under roofs', dict(culled), flush=True)
+    # Lotus on Xuanwu Lake, after the cull (it grows in the water on purpose). The beds are Overhead:
+    # out of the walk and water grids' ray cast, so the lake stays water for the boat and the audits.
+    if xk is not None:
+        holes = [i['pts'] for i in F['islands'] if ac.point_in_poly(*i['pts'][0], lakes[xk])]
+        bed, lake_cells, centres = xw.lotus_beds(F, lakes[xk], holes, wet, xw_level, c['Overhead'], xw_bridges)
+        plants = xw.lotus_plants(centres, protos, c['Trees'], rnd, xw_level)
+        print('XUANWU', {'level': round(xw_level + A.base, 2), 'level_local': round(xw_level, 2), 'bridges': decks,
+                         'lotus_share': round(bed / max(lake_cells, 1), 3), 'lotus_plants': plants}, flush=True)
 
     # Markers: Xinjiekou looking up Zhongshan Road; the road itself; the Palace gate; Gulou.
     pk = c['Markers']

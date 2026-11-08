@@ -89,6 +89,10 @@ SETTINGS = {
         # the city is for riding and flying. A 4 m grid takes steps up to 1 m, the same 25 % slope
         # the 2.5 m grid allows with 0.65 m (the foot of Mufu Mountain was impassable at 16 %).
         'grids': [{'name': 'centre', 'x0': -1480.0, 'x1': 2080.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 2.5},
+                  # Xuanwu Lake's islands, bridges and causeways at 2 m, searched before the north's
+                  # 4 m: a 4.5 m deck on a slant fell between 4 m cell centres (holes and 3 m drops
+                  # on 9 of 26 park bridges), and the dyke to Lingzhou met only at cell corners.
+                  {'name': 'xuanwu', 'x0': -260.0, 'x1': 1520.0, 'y0': 2420.0, 'y1': 4420.0, 'cell': 2.0, 'stepUp': 1.0},
                   {'name': 'north', 'x0': -3600.0, 'x1': 2080.0, 'y0': 2200.0, 'y1': 6000.0, 'cell': 4.0, 'stepUp': 1.0},
                   # Line 3's Xiaoshi and Wutang Square up to the foot of Mufu Mountain.
                   {'name': 'wutang', 'x0': -2600.0, 'x1': 400.0, 'y0': 6000.0, 'y1': 8700.0, 'cell': 4.0, 'stepUp': 1.0},

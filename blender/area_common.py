@@ -131,30 +131,59 @@ def polygon_mesh(name, coll, polys, z, material, inset=0.0):
     return kit.mesh_object(name, bm, coll, [material])
 
 
-def water_mesh(name, coll, poly, z, material='water', holes=()):
-    """A lake's surface that never leaves its outline. Ear-clipping the stitched OSM rings (they
-    touch and cross themselves) laid sheets of water over the shore (tests/city-audit.py: willows
-    in water); scanfill, then only triangles whose centre is inside the outline and outside every
-    hole are kept."""
-    pts = poly[:-1] if poly[0] == poly[-1] else poly
-    # Holes only filter triangles: given to the tessellator, islands touching the shore broke
-    # Xuanwu Lake down to a tenth of its surface.
-    rings = [pts] + [h[:-1] if h[0] == h[-1] else h for h in holes]
-    flat = pts
+def water_mesh(name, coll, poly, z, material='water', holes=(), band=2.0):
+    """A lake's surface that never leaves its outline, filled scanline by scanline. Ear-clipping the
+    stitched OSM rings (they touch and cross themselves) laid sheets of water over the shore
+    (tests/city-audit.py: willows in water); scanfill's triangles then ran shore to shore, and
+    dropping each one whose centre fell on an island cut bands of bare lake bottom right across
+    Xuanwu Lake (seen from above, build 8). Here each 2 m band holds the spans between successive
+    crossings of the outline and the island rings at its middle, kept where that middle is inside
+    the outline and outside every island (even-odd, as point_in_poly counts), and each span's ends
+    lean along their own edges so the shore is not a staircase."""
+    rings = [poly[:-1] if poly[0] == poly[-1] else poly] + [h[:-1] if h[0] == h[-1] else h for h in holes]
+    segs = []
+    for k, r in enumerate(rings):
+        for (ax, ay), (bx, by) in zip(r, r[1:] + r[:1]):
+            if ay != by:
+                segs.append((ax, ay, bx, by, k))
+    S = np.array(segs, dtype=np.float64)
+    AX, AY, BX, BY, RK = S[:, 0], S[:, 1], S[:, 2], S[:, 3], S[:, 4].astype(int)
+    LO, HI = np.minimum(AY, BY), np.maximum(AY, BY)
+    SLOPE = (BX - AX) / (BY - AY)
+    ys = [p[1] for p in rings[0]]
     bm = bmesh.new()
-    vs = [bm.verts.new((x, y, z)) for x, y in flat]
-    for a, b, c in geometry.tessellate_polygon([[Vector((x, y, 0)) for x, y in pts]]):
-        cx, cy = (flat[a][0] + flat[b][0] + flat[c][0]) / 3, (flat[a][1] + flat[b][1] + flat[c][1]) / 3
-        if not point_in_poly(cx, cy, pts) or any(point_in_poly(cx, cy, h) for h in rings[1:]):
-            continue
-        try:
-            f = bm.faces.new((vs[a], vs[b], vs[c]))
-        except ValueError:
-            continue
-        f.normal_update()
-        if f.normal.z < 0:
-            f.normal_flip()
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.01)
+    y0 = math.floor(min(ys) / band) * band
+    while y0 < max(ys):
+        y1, ym = y0 + band, y0 + band / 2
+        on = (LO <= ym) & (ym < HI)
+        if on.any():
+            xs = AX[on] + (ym - AY[on]) * SLOPE[on]
+            order = np.argsort(xs)
+            xs, sl, rk = xs[order], SLOPE[on][order], RK[on][order]
+            parity = [0] * len(rings)
+            for n in range(len(xs) - 1):
+                parity[rk[n]] ^= 1
+                if not parity[0] or any(parity[1:]) or xs[n + 1] - xs[n] < 0.05:
+                    continue
+                # Lean the ends along their edges, by at most the band's height either way (a
+                # near-level edge would throw them far out).
+                def at(x, s, y):
+                    return x + max(-band, min(band, s * (y - ym)))
+                # Each band reaches 0.6 m under the one below: bands meet at points that are not
+                # shared vertices (each span ends where its own edges cross), and T-junctions can
+                # crack. 0.6 m, not less: meshopt stores the city's joined Water mesh in 16 bits over
+                # 24 km, steps of 0.37 m. (The grey lines seen across Xuanwu from above in builds 9-10
+                # were not cracks but the lake bed fighting the water in the depth buffer: the near
+                # plane now follows the camera's height, src/landmark-world.js.)
+                yb = y0 - 0.6
+                xa0, xb0 = at(xs[n], sl[n], yb), at(xs[n + 1], sl[n + 1], yb)
+                xa1, xb1 = at(xs[n], sl[n], y1), at(xs[n + 1], sl[n + 1], y1)
+                if xb0 <= xa0 or xb1 <= xa1:
+                    xa0 = xa1 = xs[n]
+                    xb0 = xb1 = xs[n + 1]
+                v = [bm.verts.new((xa0, yb, z)), bm.verts.new((xb0, yb, z)), bm.verts.new((xb1, y1, z)), bm.verts.new((xa1, y1, z))]
+                bm.faces.new(v)
+        y0 = y1
     return kit.mesh_object(name, bm, coll, [material])
 
 

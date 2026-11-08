@@ -36,3 +36,30 @@ the six cores, **placed from descriptions** and labelled approximate.
 - **Water plants:** lotus and lily beds cover between 5% and 15% of the lake, none on a boat route.
 - **Islands:** each named island's OSM area is within 10% of the official one; Lingzhou is reported
   as a known +24%.
+
+## Status
+
+**Phase 1, 8 November 2026** (build 10; `blender/core_xuanwu.py`, tests/xuanwu-browser.mjs):
+
+- **Walk:** all 15 routes from Xuanwu Gate, Jiefang Gate and the Cuizhou gate to the five islands
+  pass on the 2 m walk grid, and so does a walk through Xuanwu Gate's passage onto the lake. All 26
+  OSM park bridges are walkable end to end.
+- **Entrances:** all 6 OSM entrance points stand on walkable ground. Each gate and island has a name
+  board, English first.
+- **Trees** by island: 1213 on Huanzhou, 1042 on Yingzhou, 1183 on Liangzhou, 1221 on Cuizhou, 382
+  on Lingzhou.
+- **Water plants:** lotus beds cover 8% of the lake (9200 plants).
+- **Fish:** schools under the surface.
+- **Not done:**
+  - The wall is plain grey.
+  - Xuanwu Gate has one square passage; the real gate has three arches.
+  - The lotus beds read as khaki flats in autumn.
+  - **Water audit not met:** the lake stands at 6.45 m in the city's frame, not the plan's 9.8 m.
+    Which datum each number uses is not yet known.
+  - The island landmarks have not started.
+- **How build 10 was made:** its last two fixes were patched into the saved scene, not built from
+  scratch, and the next full build makes them from the code:
+  - no trees on the lake's stone decks;
+  - water bands overlapping 0.6 m.
+- **The grey lines across the lake** seen from high above were the lake bed fighting the water in
+  the depth buffer. The near plane now follows the camera's height (`src/landmark-world.js`).
