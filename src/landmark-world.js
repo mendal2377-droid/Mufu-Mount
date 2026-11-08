@@ -21,6 +21,8 @@ const EYE = 1.65, SIT_EYE = 1.15, STEP_UP = .65, WALK = 1.7, RUN = 4.6;
 const PAINT = {
   lawn: {mottle: .10, scale: .18}, forest_floor: {mottle: .14, scale: .09}, paving: {mottle: .05, scale: .7, joints: 1},
   paving_joint: {mottle: .05, scale: .7}, granite: {mottle: .04, scale: .5, joints: .6}, granite_shade: {mottle: .05, scale: .5},
+  // Xuanwu Gate's coursed stone face: a stronger mottle than the brick.
+  gate_stone: {mottle: .1, scale: .9},
   hedge: {mottle: .12, scale: 1.2}, vine: {mottle: .16, scale: 1.4}, water: {mottle: 0, scale: 1},
   // Skyline towers: painted floor bands and mullions, windows that light up at dusk.
   tower_glass: {mottle: .03, scale: .3, windows: 1}, tower_glass_dark: {mottle: .03, scale: .3, windows: 1},

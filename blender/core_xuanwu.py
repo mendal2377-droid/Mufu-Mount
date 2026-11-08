@@ -33,6 +33,14 @@ WALL_H = 15.0                   # above the graded ground where OSM gives no hei
 WALL_W = 10.0
 ARCH_TUNNEL = 100.0             # a tunnel this short through the wall is a gate passage
 GATE_NEAR = 30.0                # a street this close to a mapped city gate goes through it
+# Xuanwu Gate (design/XUANWU-PLAN.md, "Phase 2, first"): no published dimensions, so these are scaled
+# from a photograph of the street face by the guards standing at it (approximate).
+GATE_HALF = 15.0                # the gate block along the wall: about 30 m
+GATE_TOP = 10.2                 # its walkway above the street; a 1.1 m balustrade above
+GATE_ARCHES = (-7.8, 0.0, 7.8)  # three equal round-headed passages (one until 1931), centres along the wall
+GATE_R = 2.2                    # each 4.4 m wide, its crown 5.5 m up
+GATE_SPRING = 3.3
+GATE_WALL_NEAR = 150.0          # the wall this close beside it stands at its height, as in the photograph
 
 # The islands by their OSM outlines' centres (research/xuanwu/FACTS.md), with their planting:
 # shore willow spacing (m), interior kinds and square metres per tree.
@@ -169,18 +177,51 @@ def _cut(pts, s0, s1):
     return out
 
 
+def gate_site(wall):
+    """Xuanwu Gate on its wall line: (line index, arc position, point, unit direction), or None.
+    The gate is OSM way 940335843 (a city_gate building the wall replaces)."""
+    g = next((c for c in wall.gates if 3300 < c[1] < 3500 and -250 < c[0] < 0), None)
+    if g is None:
+        return None
+    best = None
+    for li, w in enumerate(wall.lines):
+        run = 0.0
+        for a, b in zip(w['pts'], w['pts'][1:]):
+            L = math.dist(a, b)
+            if L > 1e-6:
+                k = max(0.0, min(1.0, ((g[0] - a[0]) * (b[0] - a[0]) + (g[1] - a[1]) * (b[1] - a[1])) / (L * L)))
+                p = (a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k)
+                d = math.dist(p, g)
+                if best is None or d < best[0]:
+                    best = (d, li, run + k * L, p, Vector(((b[0] - a[0]) / L, (b[1] - a[1]) / L, 0.0)))
+            run += L
+    return best[1:] if best and best[0] < 40 else None
+
+
+def _pieces(s0, s1, cuts):
+    """[s0, s1] split at the given arc positions."""
+    marks = [s0] + sorted(c for c in cuts if s0 < c < s1) + [s1]
+    return list(zip(marks, marks[1:]))
+
+
 def build_wall(wall, coll, over, ground):
     """The wall in runs between its openings; a lintel (Overhead: the walk grid sees under it) over
     each arch, and Xuanwu Gate's two pavilions on top. Returns (metres built, breaches, arches)."""
     bm = bmesh.new()
     lint = bmesh.new()
     built = breaches = arches = 0
+    site = gate_site(wall)
     for li, w in enumerate(wall.lines):
         pts = [tuple(p) for p in w['pts']]
         total = _length(pts)
         height = _num(wall.tags.get(w['id'], {}).get('height')) or WALL_H
         side = wall.outer_side(pts)
         gaps = sorted((s - h, s + h, arch) for l2, s, h, arch in wall.passes if l2 == li)
+        sg = site[1] if site and site[0] == li else None
+        if sg is not None:
+            # Xuanwu Gate: one 30 m gap the gate block fills (xuanwu_gate), not the streets' openings.
+            gaps = sorted([gp for gp in gaps if gp[1] < sg - GATE_HALF - 10 or gp[0] > sg + GATE_HALF + 10]
+                          + [(sg - GATE_HALF, sg + GATE_HALF, 'gate')])
         merged = []
         for g in gaps:
             if merged and g[0] <= merged[-1][1] + 3.0:      # less than 3 m of wall between: one opening
@@ -190,10 +231,16 @@ def build_wall(wall, coll, over, ground):
         s = 0.0
         for g0, g1, arch in merged + [(total, total, False)]:
             if g0 - s > 4.0:
-                run = _cut(pts, s, g0)
-                oc.city_wall(bm, run, ground, height=height, width=WALL_W, outer_side=side)
+                cuts = (sg - GATE_WALL_NEAR, sg + GATE_WALL_NEAR) if sg is not None else ()
+                for a0, a1 in _pieces(s, g0, cuts):
+                    if a1 - a0 > 1.0:
+                        near = sg is not None and abs((a0 + a1) / 2 - sg) < GATE_WALL_NEAR
+                        oc.city_wall(bm, _cut(pts, a0, a1), ground, height=GATE_TOP if near else height, width=WALL_W,
+                                     outer_side=side)
                 built += g0 - s
-            if g1 > g0:
+            if arch == 'gate':
+                arches += 1
+            elif g1 > g0:
                 span_pts = _cut(pts, max(0.0, g0), min(total, g1))
                 a, b = span_pts[0], span_pts[-1]
                 if arch and math.dist(a, b) > 1.0:
@@ -213,25 +260,96 @@ def build_wall(wall, coll, over, ground):
     return built, breaches, arches
 
 
-def xuanwu_gate(wall, coll, ground):
-    """Two small vermilion pavilions on the wall top either side of Xuanwu Gate's opening (the
-    owner's photograph; research/north/FACTS.md). The gate is OSM way 940335843."""
-    g = next((c for c in wall.gates if 3300 < c[1] < 3500 and -250 < c[0] < 0), None)
-    if g is None:
+def xuanwu_gate(wall, coll, ground, over):
+    """Xuanwu Gate as the photographs show it (design/XUANWU-PLAN.md): a block of warm grey-brown
+    stone 30 m along the wall with three equal round-headed passages, each in a pale blue-green ring;
+    red doors shut in the middle one (visitors use the sides); the name plaque over it on both
+    faces; a pale balustrade on top; and the 1984 tower, a red gallery hall under a green glazed roof
+    with a two-storey pavilion at each end. Until 9 Nov: one square passage and two small dark-roofed
+    pavilions (the owner: "far too different from the real gate").
+    The spans over the passages and the rings are Overhead, so the walk grid sees the passages' floor.
+    Returns the number of tower buildings."""
+    site = gate_site(wall)
+    if site is None:
         return 0
-    line = min(wall.lines, key=lambda w: min(math.dist(p, g) for p in w['pts']))
-    pts = line['pts']
-    k = min(range(len(pts) - 1), key=lambda i: math.dist(((pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2), g))
-    t = Vector(pts[k + 1]) - Vector(pts[k])
-    t.normalize()
+    _, _, g, t = site
+    # The tower faces the street (west, away from the lake): hall fronts face local -Y.
     yaw = math.atan2(t.y, t.x)
-    n = 0
+    if t.y > 0:                     # local -Y would face east
+        yaw += math.pi
+    z0 = ground(*g)
+    M = Matrix.Translation((g[0], g[1], z0)) @ Matrix.Rotation(yaw, 4, 'Z')
+    D = WALL_W + 1.0                # proud of the wall's faces by half a metre
+    top = GATE_TOP
+    body, span, rings = bmesh.new(), bmesh.new(), bmesh.new()
+
+    # Piers: the solid stone between and beside the passages.
+    edges = [-GATE_HALF] + [e for c in GATE_ARCHES for e in (c - GATE_R, c + GATE_R)] + [GATE_HALF]
+    for x0, x1 in zip(edges[::2], edges[1::2]):
+        kit.add_box(body, ((x0 + x1) / 2, 0, (top - 1.0) / 2), (x1 - x0, D, top + 1.0), mi=0, matrix=M)
+    for c in GATE_ARCHES:
+        # Over each passage: the stone above its round crown, in strips.
+        n = 12
+        for k in range(n):
+            xa, xb = c - GATE_R + 2 * GATE_R * k / n, c - GATE_R + 2 * GATE_R * (k + 1) / n
+            xm = (xa + xb) / 2 - c
+            zc = GATE_SPRING + math.sqrt(max(0.0, GATE_R * GATE_R - xm * xm))
+            kit.add_box(span, (c + xm, 0, (zc + top) / 2), (xb - xa + 0.02, D, top - zc), mi=0, matrix=M)
+        # The ring on both faces: jambs, then the round head in 14 pieces, 0.8 m wide.
+        for face in (-1, 1):
+            y = face * (D / 2 + 0.06)
+            for sx in (-1, 1):
+                kit.add_box(rings, (c + sx * (GATE_R + 0.4), y, GATE_SPRING / 2), (0.8, 0.14, GATE_SPRING), mi=1, matrix=M)
+            rr = GATE_R + 0.4
+            for k in range(14):
+                a0 = math.pi * (k + 0.5) / 14
+                R = (Matrix.Translation((c + rr * math.cos(a0), y, GATE_SPRING + rr * math.sin(a0)))
+                     @ Matrix.Rotation(-(a0 - math.pi / 2), 4, 'Y'))
+                kit.add_box(rings, (0, 0, 0), (math.pi * rr / 14 + 0.05, 0.14, 0.8), mi=1, matrix=M @ R)
+    # The middle passage's red doors, shut.
+    kit.add_box(body, (GATE_ARCHES[1], 0, (GATE_SPRING + GATE_R) / 2), (2 * GATE_R, 0.3, GATE_SPRING + GATE_R), mi=2, matrix=M)
+    # The plaque (Cai Yuanpei's calligraphy, 1929) over it: a dark board in a gold frame. The lake
+    # face is the same as the street face (the owner, 9 Nov), so on both.
+    for face in (-1, 1):
+        kit.add_box(body, (0, face * (D / 2 + 0.08), 7.9), (2.7, 0.1, 1.25), mi=4, matrix=M)
+        kit.add_box(body, (0, face * (D / 2 + 0.14), 7.9), (2.4, 0.1, 0.95), mi=3, matrix=M)
+    # The walk on top, and a pale stone balustrade along both faces.
+    kit.add_box(span, (0, 0, top + 0.05), (2 * GATE_HALF, D - 1.0, 0.1), mi=5, matrix=M)
+    for face in (-1, 1):
+        y = face * (D / 2 - 0.2)
+        for k in range(int(2 * GATE_HALF / 1.5) + 1):
+            kit.add_box(body, (-GATE_HALF + k * 1.5, y, top + 0.55), (0.28, 0.28, 1.1), mi=5, matrix=M)
+        kit.add_box(body, (0, y, top + 1.05), (2 * GATE_HALF, 0.3, 0.14), mi=5, matrix=M)
+        kit.add_box(body, (0, y, top + 0.3), (2 * GATE_HALF, 0.22, 0.12), mi=5, matrix=M)
+    mats = ['gate_stone', 'gate_ring', 'vermilion', 'timber_dark', 'gold', 'granite']
+    kit.mesh_object('Xuanwu Gate', body, coll, mats)
+    kit.mesh_object('Xuanwu Gate spans', span, over, mats)
+    kit.mesh_object('Xuanwu Gate rings', rings, over, mats)
+
+    # The tower (1984): a long gallery hall with gold railings, a two-storey pavilion at each end.
+    def at(lx, ly, lz):
+        p = M @ Vector((lx, ly, lz))
+        return (p.x, p.y, p.z)
+    # Seen from the lake it is the same (the owner, 9 Nov): oc.hall draws its colonnade on the front
+    # only, so the back gets the same red columns and beam, and the gold railing runs on both sides.
+    trim = bmesh.new()
+
+    def back_columns(lx, w, d, h, plinth=0.4):
+        n = max(4, int(w / 3.2))
+        for k in range(n + 1):
+            kit.add_box(trim, (lx - w / 2 + w * k / n, d / 2, top + plinth + h / 2), (0.42, 0.42, h), mi=0, matrix=M)
+        kit.add_box(trim, (lx, d / 2, top + plinth + h - 0.3), (w + 0.4, 0.5, 0.6), mi=0, matrix=M)
+    oc.hall('Xuanwu Gate gallery', coll, at(0, 0, top), 22.0, 6.0, 3.4, walls='vermilion', roof='roof_green',
+            yaw=yaw, plinth=0.4, columns=True)
+    back_columns(0, 22.0, 6.0, 3.4)
+    for face in (-1, 1):
+        kit.add_box(trim, (0, face * (3.0 + 0.9), top + 0.9), (22.0, 0.14, 1.0), mi=1, matrix=M)
     for sx in (-1, 1):
-        p = Vector(g) + t * sx * 17.0
-        oc.hall(f'Xuanwu Gate pavilion {sx}', coll, (p.x, p.y, ground(p.x, p.y) + WALL_H), 7.0, 5.5, 3.4,
-                walls='vermilion', columns=True, yaw=yaw)
-        n += 1
-    return n
+        oc.hall(f'Xuanwu Gate pavilion {sx}', coll, at(sx * 12.0, 0, top), 6.4, 6.4, 5.6, walls='vermilion',
+                roof='roof_green', yaw=yaw, double=True, plinth=0.4, columns=True)
+        back_columns(sx * 12.0, 6.4, 6.4, 5.6)
+    kit.mesh_object('Xuanwu Gate colonnade and railing', trim, coll, ['vermilion', 'gold'])
+    return 3
 
 
 def park_halls(F, coll, ground, skip_ids):

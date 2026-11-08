@@ -1164,7 +1164,7 @@ def main():
     roads, avenues = build_roads(c['Roads'], lambda x, y, kind: in_palace(x, y) or in_mufu(x, y)
                                  or (in_zs(x, y) and (kind in FOOT or ZS.covers(x, y))))
     wall_m, breaches, arches = xw.build_wall(wall, c['Buildings'], c['Overhead'], zground)
-    pavilions = xw.xuanwu_gate(wall, c['Buildings'], zground)
+    pavilions = xw.xuanwu_gate(wall, c['Buildings'], zground, c['Overhead'])
     decks = xw.build_bridges(xw_bridges, c['Roads'], xw_level, road_z)
     print('WALL', {'lines': len(wall.lines), 'built_m': round(wall_m), 'breaches': breaches, 'arches': arches,
                    'gate_passages': len(THROUGH), 'pavilions': pavilions, 'park_halls': len(halls)}, flush=True)

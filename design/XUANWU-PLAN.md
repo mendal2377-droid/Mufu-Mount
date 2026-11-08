@@ -63,3 +63,51 @@ the six cores, **placed from descriptions** and labelled approximate.
   - water bands overlapping 0.6 m.
 - **The grey lines across the lake** seen from high above were the lake bed fighting the water in
   the depth buffer. The near plane now follows the camera's height (`src/landmark-world.js`).
+
+## Phase 2, first: Xuanwu Gate as it really looks (the owner, 9 November 2026: "far too different from the real gate")
+
+**The real gate:**
+- **Sources:**
+  - Photographs on Wikimedia Commons ("南京玄武门.jpg", 2013, CC BY-SA 3.0, and others of the street face).
+  - [The Nanjinger](https://thenanjinger.com/?p=26004).
+  - [Yangtse Evening Post, Aug 2025](https://www.yzwb.net/news/jiangsu/nanjing/202508/t20250826_255298.html).
+- **History:**
+  - Opened in 1908 as Fengrun Gate, with one arch.
+  - Renamed Xuanwu Gate in 1928.
+  - The name plaque was written by Cai Yuanpei in 1929.
+  - Widened to three arches in 1931.
+  - The tower on top dates from 1984.
+  - Restored in 2024–25. It had green roof tiles and a cracked main arch.
+- **Its face, street side:**
+  - The wall is coursed stone in a warm grey-brown.
+  - It has **three equal round-headed arches**. Each sits in a broad pale blue-green ring patterned with clouds. The middle arch has red doors and is usually shut; visitors use the side arches.
+  - A dark plaque with gold characters, 玄武门, hangs above the middle arch.
+  - A pale stone balustrade runs along the top.
+- **On top:**
+  - A long one-storey gallery hall with red columns and gold railings, under a green glazed roof with upturned eaves.
+  - At its two ends, taller two-storey pavilions with green hip-and-gable roofs.
+- **Sizes:** no published dimensions were found. These are scaled from the photograph by the guards standing at the gate face, so they are approximate:
+  - arch openings about 4.4 m wide and 5.5 m high;
+  - the arch rings' outer edge at about 7.3 m;
+  - the wall top at about 10.2 m, plus a 1.1 m balustrade;
+  - the gate block about 30 m wide.
+- **The lake face:** the same as the street face (the owner, 9 Nov): plaque, rings, balustrade and the tower's colonnade on both sides.
+
+**What the city has now (build 10):**
+- one square passage through a 15 m grey wall;
+- two small vermilion pavilions with dark roofs, 34 m apart.
+
+**The build:**
+1. **The gate block** (`core_xuanwu.xuanwu_gate`). It is 30 m along the wall, full thickness, at the photograph's height.
+   - Three round-headed passages go through it.
+   - The two side passages are walkable. The middle one has red doors and is shut, as it usually is.
+   - Each passage gets a blue-green ring on both faces.
+   - The plaque hangs over the middle arch, on both faces.
+   - The stone is a warmer grey-brown than the Ming brick elsewhere.
+2. **The wall beside the gate.** In the photograph it stands at the gate's height, so the wall within 150 m of the gate is lowered to 11 m. Beyond that it steps up to the city's 15 m (an assumption, FACTS: 14–25 m).
+3. **The tower.**
+   - A 26 m gallery hall: red columns, gold railings, a green glazed roof.
+   - At each end, a two-storey pavilion with a green hip-and-gable roof (`kit_oldcity.hall`, `roof_green`).
+4. **Checks.**
+   - The Xuanwu test still walks through the gate, now by a side arch.
+   - Screenshots of the street face and the lake face, compared with the photograph.

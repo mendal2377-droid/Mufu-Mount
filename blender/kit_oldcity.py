@@ -15,6 +15,8 @@ from kit import add_box, mesh_object
 kit.PALETTE.update({
     'whitewash': '#F1EDE3',       # Huizhou-style white walls (Qinhuai, Laomendong)
     'timber_dark': '#5C3326',     # dark red-brown timber frames and balconies
+    'gate_stone': '#8F8372',      # Xuanwu Gate's face: warm grey-brown coursed stone (photographs)
+    'gate_ring': '#A6C8C2',       # the pale blue-green rings round its arches (photographs)
     'tile_dark': '#4D545C',       # grey roof tiles
     'temple_ochre': '#E6B04A',    # Jiming's yellow walls
     'temple_peach': '#E9A58F',    # Jiming's peach-pink hall walls
