@@ -141,3 +141,17 @@ So where OSM maps nothing, CMAB alone stands for about two-thirds of the real bu
 - **(b) As (a), then fill the gaps with estimated buildings.** Only in built-up land-use blocks, and
   only up to the cover that fully mapped blocks of the same use show. These are labelled as
   estimates.
+
+**The owner's choice (9 Nov): real outlines only.**
+
+`cmab-prep.py` now grows each rooftop by the offset measured for its size, interpolated on log
+area. It never takes ground from a neighbour, so no two rooftops overlap. Total roof area rose from
+17.91 to 20.74 km².
+
+Re-measured on the grown outlines:
+
+- CMAB area over OSM area: median 1.00, middle half 0.82–1.15.
+- The remaining offset in every size band is between −0.16 m and +0.12 m.
+
+Recall is unchanged at 55 % of OSM's buildings and 67 % of their area. The blocks CMAB misses stay
+empty, by choice. These outlines take effect with build 12.

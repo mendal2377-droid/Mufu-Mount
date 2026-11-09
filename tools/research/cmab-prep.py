@@ -12,6 +12,12 @@ heights OSM's mappers tagged. Nanjing's file is processed_nanjing_20201231_all (
 Writes research/core/data/cmab.json: per building whose centre is in the core's bbox (the frame of
 terrain.json), [height m, function, year built or '', outer ring in local metres to 0.1 m]. Holes
 (courtyards) are dropped: the city's extrusion has none, and the ring keeps the courtyard's shape.
+
+Each rooftop is then grown outward (`grow`): CMAB traces buildings smaller than they stand. Matched
+one-to-one with OSM's buildings in the core (tests/cmab-check.py, 9 Nov 2026), its outlines had a
+median 0.85 of their area, and the outward offset that closes the gap rose with size: 0.30 m under
+200 m2, 0.72 m at 200-600, 0.98 m at 600-2000, 1.36 m beyond. A grown rooftop never takes ground
+from a neighbour's traced rooftop, nor from one already grown, so no two overlap.
 """
 import json
 import math
@@ -19,6 +25,8 @@ import sys
 from pathlib import Path
 
 import shapefile                       # pyshp
+from shapely import STRtree
+from shapely.geometry import Polygon
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / 'research' / 'core' / 'data'
@@ -89,9 +97,47 @@ for sr in r.iterShapeRecords():
     funcs[f] = funcs.get(f, 0) + 1
     out.append([round(float(h), 1), f, rec['Age'] or '', [list(p) for p in xy]])
 
+# Measured offsets (see the docstring) at each size band's typical footprint, interpolated on log area.
+GROW = [(100.0, 0.30), (350.0, 0.72), (1100.0, 0.98), (4000.0, 1.36)]
+
+
+def grow(a):
+    a = abs(a)
+    if a <= GROW[0][0]:
+        return GROW[0][1]
+    for (a0, d0), (a1, d1) in zip(GROW, GROW[1:]):
+        if a <= a1:
+            k = math.log(a / a0) / math.log(a1 / a0)
+            return d0 + (d1 - d0) * k
+    return GROW[-1][1]
+
+
+raw = [Polygon(b[3]).buffer(0) for b in out]
+tree = STRtree(raw)
+done, moved = [None] * len(out), 0
+for i, b in enumerate(out):
+    g = raw[i].buffer(grow(raw[i].area), join_style='mitre', mitre_limit=2.0)
+    for j in tree.query(g):
+        if j != i and g.intersects(raw[j]):
+            g = g.difference(raw[j])
+        if j < i and done[j] is not None and g.intersects(done[j]):
+            g = g.difference(done[j])
+    if g.geom_type == 'MultiPolygon':
+        g = max(g.geoms, key=lambda q: q.area)
+    if g.is_empty or g.geom_type != 'Polygon' or g.area < raw[i].area:
+        done[i] = raw[i]
+        continue
+    g = Polygon(g.exterior).simplify(0.2)
+    done[i] = g
+    b[3] = [[round(x, 1), round(y, 1)] for x, y in list(g.exterior.coords)[:-1]]
+    moved += 1
+print('grown', moved, 'of', len(out), '; area', round(sum(q.area for q in raw) / 1e6, 2), '->',
+      round(sum(q.area for q in done) / 1e6, 2), 'km2')
+
 (DATA / 'cmab.json').write_text(json.dumps({
     'source': 'CMAB (Zhang et al., Scientific Data 2025; figshare 27992417), CC BY 4.0. Rooftops from '
-              'satellite imagery; height, function and age estimated by machine learning, not surveyed.',
+              'satellite imagery; height, function and age estimated by machine learning, not surveyed. '
+              'Outlines grown 0.3-1.4 m by footprint size to match the sizes OSM maps (tools/research/cmab-prep.py).',
     'frame': 'local metres, origin and scale of terrain.json',
     'fields': ['height_m', 'function', 'year', 'ring'],
     'buildings': out,
