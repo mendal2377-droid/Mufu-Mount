@@ -4,16 +4,17 @@ Every request from the day, in the order given, with where it stands. "Verified"
 the browser or by an audit; "built" means in the code but not yet checked; "pending rebuild" means it
 takes effect with the next city build (`./tools/export-scene.sh core`).
 
-## Open work, in order (updated 9 November 2026)
+## Open work, in order (updated 10 November 2026)
 
 1. **Item 40, real buildings and park trees** (CMAB, canopy map): built (build 11) and every test passes; committed locally. The screenshots show a gap: CMAB finds only about half the buildings OSM maps (66 % of their area), so blocks near Mochou Lake that the made-up slabs filled are now partly empty. **The owner chose real outlines only (9 Nov):** the outlines are now grown by the measured 0.3–1.4 m (median size now 1.00 of OSM's), and the gaps stay. Takes effect in build 12, with the gate (design/CMAB-CANOPY-PLAN.md, "Results").
-2. **Item 43, Xuanwu Gate as it really looks** (the owner, 9 Nov): coded, not built. Next: render the gate alone and compare with the photograph, then build 12.
-3. **Item 38, Xuanwu Lake, phase 2:** the Ming wall's look, lotus colour in autumn, the lake's water level against the plan's 9.8 m (which datum), then the island landmarks (Lama Temple, Nuona Pagoda, Lansheng Building, Guo Pu Pier).
-4. **Item 37, Purple Mountain, phases 2–3** (design/PURPLE-MOUNTAIN-PLAN.md).
-5. **Item 21:** review the rest of the app's text for English first (the place cards still lead with Chinese).
-6. **Visual checks not yet done:** item 22 (the bus's glass and seats), item 27 (Wutang Square's old homes: seen from the air in item 40's shot, not yet at street level).
-7. **Known faults:** the city audit's banks (2 of 21 samples below their water); Bus 34 runs about 900 m off road at y ≈ 5,200 m in the north-west; broadleaf crowns are sparse.
-8. **Publishing:** everything since the last deploy is committed locally on the branch rebuild/blender-city; nothing is pushed. Pushing to main deploys to the live site, so it waits for the owner's go-ahead.
+2. **Item 43, Xuanwu Gate as it really looks** (the owner, 9 Nov): coded and rendered alone (test-results/gate/, 10 Nov): three round arches in blue-green rings, red doors, plaque, balustrade, green-roofed gallery and end pavilions on both faces. Not in the city until build 12.
+3. **Item 44, things to do in the city** (the owner, 10 Nov: first after build 12): lanterns in the city, then journeys, seats, street life (design/THINGS-TO-DO-PLAN.md).
+4. **Item 38, Xuanwu Lake, phase 2:** the Ming wall's look, lotus colour in autumn, the lake's water level against the plan's 9.8 m (which datum), then the island landmarks (Lama Temple, Nuona Pagoda, Lansheng Building, Guo Pu Pier).
+5. **Item 37, Purple Mountain, phases 2–3** (design/PURPLE-MOUNTAIN-PLAN.md).
+6. **Item 21:** review the rest of the app's text for English first (the place cards still lead with Chinese).
+7. **Visual checks not yet done:** item 22 (the bus's glass and seats), item 27 (Wutang Square's old homes: seen from the air in item 40's shot, not yet at street level).
+8. **Known faults:** the city audit's banks (2 of 21 samples below their water); Bus 34 runs about 900 m off road at y ≈ 5,200 m in the north-west; broadleaf crowns are sparse.
+9. **Publishing:** everything since the last deploy is committed locally on the branch rebuild/blender-city; nothing is pushed. Pushing to main deploys to the live site, so it waits for the owner's go-ahead.
 
 | # | Request | Status |
 | --- | --- | --- |
@@ -60,6 +61,7 @@ takes effect with the next city build (`./tools/export-scene.sh core`).
 | 41 | The bike's wheels sink into the road (4 Nov) | Fixed and checked in a screenshot: the traveller's height is read smoothly between the walk grid's cells, not flat per 4 m cell (20 cm off on the 10 % road at Zhongshan Gate) |
 | 42 | A bus stop board in the middle of the road (4 Nov) | Fixed: each shelter on the first pavement out from the bus's right with no carriageway beyond, up to 50 m; a probe found 25 of 70 shelters on a carriageway or between two (Zhongshan Road, Zhongshan East Road), now 0 on one; Zhongshan Gate's checked in a screenshot |
 | 43 | Xuanwu Gate is far too different from the real gate (9 Nov, with a screenshot) | **Researched** (photographs, Nanjinger, Yangtse Evening Post 2025): three equal round arches with blue-green cloud rings, red doors on the middle one, Cai Yuanpei's plaque, a pale balustrade, and a 1984 green-roofed gallery tower with two-storey end pavilions. Ours: one square hole and two small dark-roofed pavilions. Plan: design/XUANWU-PLAN.md, "Phase 2, first". **Coded (9 Nov), not built**: next a render of the gate alone against the photograph, then build 12 |
+| 44 | Things to do in the city (10 Nov) | **Planned** (design/THINGS-TO-DO-PLAN.md): the city has 18 seats (all at Zhongshan), no bells or docks, no street life, and the lantern game does not run inside it. Order: lanterns in the city, journeys, seats, life, landmark moments. Starts after build 12 |
 
 ## Also owed
 

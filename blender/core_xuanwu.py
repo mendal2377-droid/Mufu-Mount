@@ -289,7 +289,7 @@ def xuanwu_gate(wall, coll, ground, over):
         kit.add_box(body, ((x0 + x1) / 2, 0, (top - 1.0) / 2), (x1 - x0, D, top + 1.0), mi=0, matrix=M)
     for c in GATE_ARCHES:
         # Over each passage: the stone above its round crown, in strips.
-        n = 12
+        n = 28                  # fine enough that the crown reads round, not stepped
         for k in range(n):
             xa, xb = c - GATE_R + 2 * GATE_R * k / n, c - GATE_R + 2 * GATE_R * (k + 1) / n
             xm = (xa + xb) / 2 - c
