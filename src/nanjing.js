@@ -9,6 +9,7 @@ import {arrivalFlight} from './city-arrival.js';
 import {createCityGame} from './city-game-view.js';
 import {STAMPS,FACTS,rankFor,MUFU_PHOTOS_NEEDED} from './city-game.js';
 import {loadLandmarkWorld} from './landmark-world.js';
+import {createWorldLanterns} from './world-lanterns.js';
 import {createMusic} from './generative-music.js';
 
 // A separate illustrated atlas: its compressed map coordinates must never be
@@ -93,7 +94,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // Mufu Mountain merged into Tiny Nanjing at its real place, in at the hike's start. The menu's
     // "Detailed Mufu walk" keeps the original morning walk with its photographs.
     mufu:{world:'core',spawn:'mufu',weather:'morning'}},worlds={};
-  let world=null,worldBounds=null,lastSeatHint=-10,worldSkip=false,lastWeather={};
+  let world=null,worldBounds=null,lastSeatHint=-10,lastLanternHint=-30,worldSkip=false,lastWeather={};
   // The home page opens on Tiny Nanjing (the 'core' world) seen from the air, once it has loaded;
   // until then, and if it fails, the illustrated atlas stands in. Pins sit on their true positions.
   let home=null,homeLoad=null;
@@ -134,6 +135,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // The visitor may have gone back to the map or elsewhere while it loaded.
     if(!active||state.overview||selected!==p)return;
     exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
+    // Jinling Keepsakes in this world, hung once (the same progress as the atlas's lanterns).
+    if(w.keepsakes===undefined)w.keepsakes=createWorldLanterns({world:w,game,camera,onPick:(id,index,r)=>gameView.present(id,index,r)});
     w.setVehicle('walk');showWays();
     // Flight bounds: the map's own extent (skyline_clip, three.js x and z) where it has one, else
     // every walk grid (single-grid fields x0/nx are gone: they left the paraglider at NaN).
@@ -360,6 +363,14 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(state.flying){state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
     state.moving=world.walk(camera,keys,dt);
     world.placeCamera(camera,dt);
+    // Keepsake lanterns: found by walking or riding the bike into them, not from a bus, train or boat.
+    const ks=world.keepsakes;
+    if(ks){const tr=world.transit,free=!world.seated&&!world.riding&&!tr?.busRide&&!tr?.metroRide&&world.vehicle!=='boat';
+      ks.update(t,world.body,free);
+      if(t-lastNearest>.5){lastNearest=t;gameView.setCurrent(ks.near(world.body)||selected.id);}
+      if(free&&t-lastLanternHint>25){const l=ks.nearestUnfound(world.body);
+        if(l&&l.d>8){lastLanternHint=t;lastSeatHint=t;toast(`A keepsake lantern glows about ${Math.round(l.d/5)*5} m away`);}}}
+    gameView.tick(dt);
     // Off at a stop (set once per world): say where, and whether it is the end of the line. Bus 34
     // runs on from Zhongshan Gate to the Mausoleum on Purple Mountain, in the city itself.
     if(world.transit&&!world.onAlight)world.onAlight=(st,last,line)=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');

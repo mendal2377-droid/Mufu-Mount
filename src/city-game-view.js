@@ -224,14 +224,21 @@ export function createCityGame({scene, places, routes, ground, camera, shared, t
       }
       return best;
     },
+    // Inside a walked world (src/world-lanterns.js) only the cards and the counter run: the atlas's
+    // own lanterns, beacons and rings are not in that scene.
+    tick(dt) {
+      if (factTimer > 0 && (factTimer -= dt) <= 0) $('#fact-card').classList.remove('show');
+      if (sealTimer > 0 && (sealTimer -= dt) <= 0) $('#seal-moment').classList.remove('show');
+    },
+    /** A lantern found in a walked world: mark it found here too, and show its fact. */
+    present(id, index, r) { picked.add(`${id}:${index}`); showFact(id, index, r.fact, r.count, r.seal); hud(); },
     update(dt, t, {flying}) {
       drawLanterns(t);
       updateBursts(dt);
       // Columns of light over every landmark hid the view on foot. They are a flyer's
       // landmarks: shown only from the kite, where the pins and the passport are out of reach.
       for (const b of beams) b.mesh.visible = !!flying;
-      if (factTimer > 0 && (factTimer -= dt) <= 0) $('#fact-card').classList.remove('show');
-      if (sealTimer > 0 && (sealTimer -= dt) <= 0) $('#seal-moment').classList.remove('show');
+      api.tick(dt);
       const pos = camera.position;
       if (!flying) {
         // Lanterns hang at chest height on the road; reach them on foot.
