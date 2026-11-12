@@ -78,7 +78,7 @@
     <button id="nanjing-return" hidden>↖ Nanjing atlas</button>
     <dialog id="city-menu"><button id="city-menu-close" aria-label="Close menu">×</button><h2 id="city-menu-title">Nanjing</h2>
       <p>WASD move · Drag to look · Shift faster<br>K bird kite · E up · Q down · M map · J passport</p>
-      <button id="city-passport-open">Passport · 金陵拾遗</button><button id="city-map-return">Nanjing map</button><button id="city-mufu">Detailed Mufu walk</button><button id="city-sound">Enable nature sound</button>
+      <button id="city-passport-open">Passport · 金陵拾遗</button><button id="city-journeys-open" hidden>Journeys · 行程</button><button id="city-map-return">Nanjing map</button><button id="city-mufu">Detailed Mufu walk</button><button id="city-sound">Enable nature sound</button>
       <p class="city-caption">A scenic interpretation based on public map anchors and landmark photo references. Not a surveyed city model.</p>
     </dialog>
     <dialog id="city-places" aria-labelledby="places-title">
@@ -87,6 +87,13 @@
       <p id="places-sub">Choose a place and you drop in on its road. Nearest first. <kbd>G</kbd> opens this, <kbd>[</kbd> <kbd>]</kbd> hop to the previous or next landmark.</p>
       <div id="places-grid" role="list"></div>
       <div class="places-foot"><button id="places-map" class="ghost">Open the Nanjing atlas (M)</button></div>
+    </dialog>
+    <dialog id="city-journeys" aria-labelledby="journeys-title">
+      <button id="journeys-close" aria-label="Close journeys">×</button>
+      <div class="passport-head"><div><h2 id="journeys-title">Journeys <small>行程</small></h2></div><div class="passport-count"><b id="journeys-count">0</b><span id="journeys-total">/ 7 made</span></div></div>
+      <p class="passport-how">Real trips to make in this city, by the real bus, the real metro line, and on foot. A step is ticked when you get there by travelling: numbered steps must be made in order and in one go, and flying or dropping in from the Places list starts them again.</p>
+      <div id="journeys-grid" role="list"></div>
+      <div class="passport-foot"><span></span><button id="journeys-reset" class="ghost">Clear my journeys</button></div>
     </dialog>
     <dialog id="city-passport" aria-labelledby="passport-title">
       <button id="passport-close" aria-label="Close passport">×</button>

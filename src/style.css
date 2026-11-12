@@ -1380,3 +1380,26 @@ body.flying #game-lanterns { opacity: .35; }
 
 /* Home over Tiny Nanjing: places beyond the map stand at its edge with their distance. */
 .city-pin.edge .city-label::after { content: " → " attr(data-km); font-size: 9px; opacity: .75; }
+
+/* Journeys (src/world-journeys.js): the passport's frame, one card a trip, its steps ticked. */
+#city-journeys { width: min(760px, 94vw); max-height: 88vh; overflow: auto; border: 1px solid #c9ae6a88; border-radius: 20px;
+  background: #1f3830; color: #fff5db; padding: 26px 28px 22px; }
+#city-journeys::backdrop { background: #0f221d88; backdrop-filter: blur(8px); }
+#city-journeys .passport-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding-right: 30px; }
+#city-journeys h2 { margin: 0; font: 600 28px/1.1 Georgia, "Songti SC", serif; }
+#city-journeys h2 small { font: 400 15px "Songti SC", "SimSun", "Noto Serif CJK SC", serif; color: #ffcb7d; letter-spacing: .12em; margin-left: 6px; }
+#journeys-close { position: absolute; top: 14px; right: 16px; width: 34px; height: 34px; font-size: 20px; color: #fff5db; background: transparent; border: 0; cursor: pointer; }
+#journeys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.journey-card { padding: 13px 15px 11px; border-radius: 12px; background: #274539; border: 1px solid #ffffff1c; }
+.journey-card.made { border-color: #e9c77a99; background: #2e4d3c; }
+.journey-card b { display: block; font: 600 17px/1.25 Georgia, serif; }
+.journey-card.made b::after { content: " \2713"; color: #ffcb7d; }
+.journey-card b small { font: 400 12px "Songti SC", "SimSun", "Noto Serif CJK SC", serif; color: #a9c0b2; letter-spacing: .08em; }
+.journey-card p { margin: 6px 0 8px; font-size: 12px; line-height: 1.6; color: #cfe0d4; }
+.journey-card ol, .journey-card ul { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.75; color: #e6eee4; }
+.journey-card ol { list-style: decimal; }
+.journey-card ul { list-style: none; padding-left: 0; }
+.journey-card ul li::before { content: "\25CB  "; color: #a9c0b2; }
+.journey-card ul li.done::before { content: "\2713  "; color: #ffcb7d; }
+.journey-card li.done { color: #ffcb7d; }
+.journey-card ol li.done::after { content: "  \2713"; }

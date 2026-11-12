@@ -10,6 +10,7 @@ import {createCityGame} from './city-game-view.js';
 import {STAMPS,FACTS,rankFor,MUFU_PHOTOS_NEEDED} from './city-game.js';
 import {loadLandmarkWorld} from './landmark-world.js';
 import {createWorldLanterns} from './world-lanterns.js';
+import {createJourneys} from './world-journeys.js';
 import {createMusic} from './generative-music.js';
 
 // A separate illustrated atlas: its compressed map coordinates must never be
@@ -137,6 +138,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
     // Jinling Keepsakes in this world, hung once (the same progress as the atlas's lanterns).
     if(w.keepsakes===undefined)w.keepsakes=createWorldLanterns({world:w,game,camera,onPick:(id,index,r)=>gameView.present(id,index,r)});
+    // Journeys (src/world-journeys.js): real trips to make here, ticked off in the menu.
+    if(w.journeys===undefined)w.journeys=createJourneys(w.id,storage);
+    $('#city-journeys-open').hidden=!w.journeys;
     w.setVehicle('walk');showWays();
     // Flight bounds: the map's own extent (skyline_clip, three.js x and z) where it has one, else
     // every walk grid (single-grid fields x0/nx are gone: they left the paraglider at NaN).
@@ -270,6 +274,18 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     }
   }
   const walkable=()=>places.filter(p=>p.id!=='mufu');
+  function renderJourneys(){
+    const grid=$('#journeys-grid'),jn=world?.journeys;if(!grid||!jn)return;
+    $('#journeys-count').textContent=String(jn.count());$('#journeys-total').textContent=`/ ${jn.list.length} made`;
+    grid.innerHTML='';
+    for(const j of jn.view()){
+      const card=document.createElement('div');card.className='journey-card'+(j.finished?' made':'');card.setAttribute('role','listitem');card.dataset.id=j.id;
+      const h=document.createElement('b');h.textContent=j.en;const zh=document.createElement('small');zh.textContent=j.zh;h.append(' ',zh);
+      const about=document.createElement('p');about.textContent=j.about;
+      const ol=document.createElement(j.ordered?'ol':'ul');
+      for(const s of j.steps){const li=document.createElement('li');li.textContent=s.en;if(s.done)li.className='done';ol.append(li);}
+      card.append(h,about,ol);grid.append(card);}
+  }
   function renderPassport(){
     const grid=$('#passport-grid');if(!grid)return;
     const rank=game.rank();
@@ -359,8 +375,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       // Touchdown: level the chase camera behind the traveller, looking where they ran out.
       camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');
       toast(`${selected.zh} · WASD walk · Shift run · F sit · V view · K glide`);}
-    if(world.gliding){world.placeCamera(camera,dt);state.moving=false;return false;}
-    if(state.flying){state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
+    // Gliding in and flying are not travelling: an ordered journey starts again (src/world-journeys.js).
+    if(world.gliding){world.journeys?.interrupt();world.placeCamera(camera,dt);state.moving=false;return false;}
+    if(state.flying){world.journeys?.interrupt();state.moving=world.fly(camera,keys,dt,worldBounds);world.placeCamera(camera,dt);return false;}
     state.moving=world.walk(camera,keys,dt);
     world.placeCamera(camera,dt);
     // Keepsake lanterns: found by walking or riding the bike into them, not from a bus, train or boat.
@@ -371,6 +388,12 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       if(free&&t-lastLanternHint>25){const l=ks.nearestUnfound(world.body);
         if(l&&l.d>8){lastLanternHint=t;lastSeatHint=t;toast(`A keepsake lantern glows about ${Math.round(l.d/5)*5} m away`);}}}
     gameView.tick(dt);
+    const jn=world.journeys;
+    if(jn){const tr=world.transit,bus=tr?.busRide,metro=tr?.metroRide,at=bus?.b.p.x!==undefined?bus.b.p:world.body;
+      for(const e of jn.update({x:at.x,n:-at.z,y:world.body.y,way:world.riding?'boat':world.vehicle,bus:bus?.b.line.id||null,metro:metro?.line.id||null,s:metro?.s})){
+        const v=jn.view().find(j=>j.id===e.journey.id);lastSeatHint=t;lastLanternHint=t;
+        toast(e.finished?`Journey complete · ${e.journey.en} · ${jn.count()} of ${jn.list.length} made`:`Journey · ${e.journey.en} · ${e.journey.steps[e.step].en} ✓ (${v.done} of ${v.total})`);
+        if($('#city-journeys').open)renderJourneys();}}
     // Off at a stop (set once per world): say where, and whether it is the end of the line. Bus 34
     // runs on from Zhongshan Gate to the Mausoleum on Purple Mountain, in the city itself.
     if(world.transit&&!world.onAlight)world.onAlight=(st,last,line)=>{camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');
@@ -391,6 +414,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // [ and ] hop to the previous or next landmark in the atlas order.
     hop(step){if(!active||state.overview)return;const list=walkable(),i=list.findIndex(p=>p.id===selected?.id);
       api.enter(list[(Math.max(0,i)+step+list.length)%list.length].id,{drop:true});},
+    journeys(open=true){const d=$('#city-journeys');if(!d||!world?.journeys)return;
+      if(open){controls.unlock();keys.clear();$('#city-menu').close();renderJourneys();if(!d.open)d.showModal();}else d.close();},
     passport(open=true){const d=$('#city-passport');if(!d)return;
       if(open){controls.unlock();keys.clear();$('#city-menu').close();renderPassport();if(!d.open)d.showModal();}else d.close();},
     startWindRun(){
@@ -554,6 +579,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   };
   $('#city-passport-open').onclick=()=>api.passport(true);$('#city-passport-plan').onclick=()=>api.passport(true);
   $('#passport-close').onclick=()=>api.passport(false);
+  $('#city-journeys-open').onclick=()=>api.journeys(true);$('#journeys-close').onclick=()=>api.journeys(false);
+  $('#journeys-reset').onclick=()=>{if(world?.journeys&&confirm('Clear the journeys you have made?')){world.journeys.reset();renderJourneys();}};
   // Each composed view has the light it looks best in; a visitor who has chosen their own keeps it.
   $('#walk-weather').addEventListener('change',()=>{userWeather=true;});$('#city-weather').addEventListener('click',()=>{userWeather=true;});
   $('#walk-places').onclick=()=>api.openPlaces(true);$('#places-close').onclick=()=>$('#city-places').close();
