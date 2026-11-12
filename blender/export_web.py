@@ -83,7 +83,9 @@ SETTINGS = {
                       'contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md.',
     },
     'core': {
-        'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu', 'Zhongshan'),
+        # XuanwuGate, XuanwuGateOver: the gate's own meshes, for 16-bit positions across 30 m, not the city.
+        'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu', 'Zhongshan',
+                   'XuanwuGate', 'XuanwuGateOver'),
         'uv': True,
         # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
         # the city is for riding and flying. A 4 m grid takes steps up to 1 m, the same 25 % slope
@@ -181,7 +183,7 @@ def to_three(v):
 STATIC_COLLECTIONS = SETTINGS[SCENE_ID].get('static', ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates'))
 # Left out of the walk-grid ray cast: trees, moon gates, and anything overhead that people walk under
 # (gate lintels and attics), so the ground beneath stays walkable.
-CAST_EXCLUDE = ('Trees', 'Gates', 'Overhead')
+CAST_EXCLUDE = ('Trees', 'Gates', 'Overhead', 'XuanwuGateOver')
 
 
 def collect():

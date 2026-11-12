@@ -304,9 +304,19 @@ def add_point(coll, name, loc, target):
     return e
 
 
-def scatter(protos, trees, rnd, kinds, count, x_range, y_range, ok, ground, scale=(0.9, 1.35), clump=18.0, groves=120):
-    """Clumped scatter: groves of one kind, accepted where ok(x, y)."""
-    centres = [(rnd.uniform(*x_range), rnd.uniform(*y_range), rnd.choice(kinds)) for _ in range(groves)]
+def scatter(protos, trees, rnd, kinds, count, x_range, y_range, ok, ground, scale=(0.9, 1.35), clump=18.0, groves=120,
+            centre_ok=None):
+    """Clumped scatter: groves of one kind, accepted where ok(x, y). centre_ok(x, y), if given, keeps
+    each grove's centre on that ground (up to 60 draws): with few groves over a narrow island, centres
+    drawn anywhere in its bounding box mostly fell in the lake, and Lingzhou's trees swung from 382 to
+    166 between two builds with nothing on the island changed."""
+    def centre():
+        for _ in range(60):
+            x, y = rnd.uniform(*x_range), rnd.uniform(*y_range)
+            if centre_ok is None or centre_ok(x, y):
+                break
+        return x, y
+    centres = [(*centre(), rnd.choice(kinds)) for _ in range(groves)]
     placed = tries = 0
     while placed < count and tries < count * 8:
         tries += 1

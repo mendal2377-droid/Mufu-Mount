@@ -267,7 +267,12 @@ def xuanwu_gate(wall, coll, ground, over):
     faces; a pale balustrade on top; and the 1984 tower, a red gallery hall under a green glazed roof
     with a two-storey pavilion at each end. Until 9 Nov: one square passage and two small dark-roofed
     pavilions (the owner: "far too different from the real gate").
-    The spans over the passages and the rings are Overhead, so the walk grid sees the passages' floor.
+    `coll` and `over` are the gate's own two collections (XuanwuGate, XuanwuGateOver), not the city's:
+    the export joins each collection into one mesh and stores positions in 16 bits across its bounds,
+    and inside the city-wide Buildings mesh the rings, plaque and balustrade came out in 20 cm steps
+    (build 12: "not as real as the photos"). Only the piers and the shut doors are in `coll`, which
+    the walk grid's rays see; everything over the passages is in `over`, which they pass through. In
+    build 12 the tower stood in Buildings and the rays took the whole block for solid: no way through.
     Returns the number of tower buildings."""
     site = gate_site(wall)
     if site is None:
@@ -306,21 +311,23 @@ def xuanwu_gate(wall, coll, ground, over):
                 R = (Matrix.Translation((c + rr * math.cos(a0), y, GATE_SPRING + rr * math.sin(a0)))
                      @ Matrix.Rotation(-(a0 - math.pi / 2), 4, 'Y'))
                 kit.add_box(rings, (0, 0, 0), (math.pi * rr / 14 + 0.05, 0.14, 0.8), mi=1, matrix=M @ R)
-    # The middle passage's red doors, shut.
-    kit.add_box(body, (GATE_ARCHES[1], 0, (GATE_SPRING + GATE_R) / 2), (2 * GATE_R, 0.3, GATE_SPRING + GATE_R), mi=2, matrix=M)
+    # The middle passage's red doors, shut: a block 4.4 m deep, not a 0.3 m leaf, which the walk grid's
+    # 2 m cells missed (build 12's re-export: the walker went through the doors; that scene's walk.bin
+    # was patched shut by hand). From either face it reads as the doors, set back in the passage.
+    kit.add_box(body, (GATE_ARCHES[1], 0, (GATE_SPRING + GATE_R) / 2), (2 * GATE_R, 4.4, GATE_SPRING + GATE_R), mi=2, matrix=M)
     # The plaque (Cai Yuanpei's calligraphy, 1929) over it: a dark board in a gold frame. The lake
     # face is the same as the street face (the owner, 9 Nov), so on both.
     for face in (-1, 1):
-        kit.add_box(body, (0, face * (D / 2 + 0.08), 7.9), (2.7, 0.1, 1.25), mi=4, matrix=M)
-        kit.add_box(body, (0, face * (D / 2 + 0.14), 7.9), (2.4, 0.1, 0.95), mi=3, matrix=M)
+        kit.add_box(span, (0, face * (D / 2 + 0.08), 7.9), (2.7, 0.1, 1.25), mi=4, matrix=M)
+        kit.add_box(span, (0, face * (D / 2 + 0.14), 7.9), (2.4, 0.1, 0.95), mi=3, matrix=M)
     # The walk on top, and a pale stone balustrade along both faces.
     kit.add_box(span, (0, 0, top + 0.05), (2 * GATE_HALF, D - 1.0, 0.1), mi=5, matrix=M)
     for face in (-1, 1):
         y = face * (D / 2 - 0.2)
         for k in range(int(2 * GATE_HALF / 1.5) + 1):
-            kit.add_box(body, (-GATE_HALF + k * 1.5, y, top + 0.55), (0.28, 0.28, 1.1), mi=5, matrix=M)
-        kit.add_box(body, (0, y, top + 1.05), (2 * GATE_HALF, 0.3, 0.14), mi=5, matrix=M)
-        kit.add_box(body, (0, y, top + 0.3), (2 * GATE_HALF, 0.22, 0.12), mi=5, matrix=M)
+            kit.add_box(span, (-GATE_HALF + k * 1.5, y, top + 0.55), (0.28, 0.28, 1.1), mi=5, matrix=M)
+        kit.add_box(span, (0, y, top + 1.05), (2 * GATE_HALF, 0.3, 0.14), mi=5, matrix=M)
+        kit.add_box(span, (0, y, top + 0.3), (2 * GATE_HALF, 0.22, 0.12), mi=5, matrix=M)
     mats = ['gate_stone', 'gate_ring', 'vermilion', 'timber_dark', 'gold', 'granite']
     kit.mesh_object('Xuanwu Gate', body, coll, mats)
     kit.mesh_object('Xuanwu Gate spans', span, over, mats)
@@ -339,16 +346,16 @@ def xuanwu_gate(wall, coll, ground, over):
         for k in range(n + 1):
             kit.add_box(trim, (lx - w / 2 + w * k / n, d / 2, top + plinth + h / 2), (0.42, 0.42, h), mi=0, matrix=M)
         kit.add_box(trim, (lx, d / 2, top + plinth + h - 0.3), (w + 0.4, 0.5, 0.6), mi=0, matrix=M)
-    oc.hall('Xuanwu Gate gallery', coll, at(0, 0, top), 22.0, 6.0, 3.4, walls='vermilion', roof='roof_green',
+    oc.hall('Xuanwu Gate gallery', over, at(0, 0, top), 22.0, 6.0, 3.4, walls='vermilion', roof='roof_green',
             yaw=yaw, plinth=0.4, columns=True)
     back_columns(0, 22.0, 6.0, 3.4)
     for face in (-1, 1):
         kit.add_box(trim, (0, face * (3.0 + 0.9), top + 0.9), (22.0, 0.14, 1.0), mi=1, matrix=M)
     for sx in (-1, 1):
-        oc.hall(f'Xuanwu Gate pavilion {sx}', coll, at(sx * 12.0, 0, top), 6.4, 6.4, 5.6, walls='vermilion',
+        oc.hall(f'Xuanwu Gate pavilion {sx}', over, at(sx * 12.0, 0, top), 6.4, 6.4, 5.6, walls='vermilion',
                 roof='roof_green', yaw=yaw, double=True, plinth=0.4, columns=True)
         back_columns(sx * 12.0, 6.4, 6.4, 5.6)
-    kit.mesh_object('Xuanwu Gate colonnade and railing', trim, coll, ['vermilion', 'gold'])
+    kit.mesh_object('Xuanwu Gate colonnade and railing', trim, over, ['vermilion', 'gold'])
     return 3
 
 
@@ -440,7 +447,8 @@ def plant_islands(F, protos, trees, rnd, ground, ok, extent):
         xs, ys = [p[0] for p in ring], [p[1] for p in ring]
         want = int(mask.m.sum() * 4.0 / per)
         n += ac.scatter(protos, trees, rnd, kinds, want, (min(xs), max(xs)), (min(ys), max(ys)),
-                        lambda x, y: mask.at(x, y) and ok(x, y), ground, scale=(0.85, 1.2), clump=14.0, groves=max(4, want // 25))
+                        lambda x, y: mask.at(x, y) and ok(x, y), ground, scale=(0.85, 1.2), clump=14.0, groves=max(4, want // 25),
+                        centre_ok=lambda x, y: mask.at(x, y) and ok(x, y))
         counts[name] = n
     return counts
 

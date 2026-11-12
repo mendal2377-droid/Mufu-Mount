@@ -7,27 +7,31 @@ import {PICKUP_RADIUS} from './city-game.js';
 //
 // Each landmark's three lanterns hang where its three facts are about, in the world's own frame:
 // [x east, north] in metres, index for index with FACTS[id]. The spots are ours, chosen on the
-// approach a visitor walks (spawns, the lake's name boards, the summit); none is a surveyed place
+// approach a visitor walks (about 25 m ahead of an arrival point, never on one: arriving picked a
+// lantern up unseen), the lake's name boards, the summit; none is a surveyed place
 // for a lantern. At load each is moved to the nearest walkable ground within SNAP metres, and one
 // that finds none is left out and reported in `skipped`.
 export const WORLD_LANTERNS = {
   core: {
     // 392 steps: the foot of the stair. Blue roofs: the Sacrificial Hall. The commission: the Bo'ai arch.
-    zhongshan: [[6094, 2364], [6086, 2477], [6121, 1832]],
+    zhongshan: [[6093, 2389], [6088, 2452], [6120, 1857]],
     // The tomb: the Ming Tower. The Sacred Way: the Wengzhong Road. World Heritage: the gate.
-    xiaoling: [[4796, 2009], [4508, 1096], [4893, 934]],
+    xiaoling: [[4796, 2034], [4509, 1121], [4869, 943]],
     // The highest point: the summit. The clouds: the ridge path. The observatory.
     zijin: [[5444, 3388], [5800, 2950], [3491, 2753]],
     // The lake's size: inside Xuanwu Gate. The imperial garden: Liangzhou. The islands' seasons: Huanzhou.
-    xuanwu: [[-80, 3410], [544, 4086], [447, 3600]],
+    xuanwu: [[-82, 3418], [544, 4086], [447, 3600]],
     // The temple; the pagoda's side; the cherry road up to Jiefang Gate and the wall.
     jiming: [[588, 2350], [480, 2300], [739, 2470]],
-    // The tower's foot; halfway down Zhongshan Road; Gulou.
-    zifeng: [[-548, 2309], [-500, 2150], [-470, 2000]],
+    // The tower's foot; halfway down Zhongshan Road; just north of Gulou (not on the Gulou spawn
+    // itself, -470, 2000, where arriving picked it up before the visitor had looked round).
+    zifeng: [[-548, 2309], [-500, 2150], [-480, 2060]],
     // The gate; the axis behind it; the west garden.
-    palace: [[808, 289], [798, 489], [720, 480]],
-    // Round Mochou Lake: north, east and south-west shores.
-    mochou: [[-2535, -150], [-2300, -400], [-2700, -650]],
+    palace: [[808, 314], [798, 489], [720, 480]],
+    // Round Mochou Lake: north, east and south-west shores. First guesses at the shore (-2535, -150;
+    // -2300, -400; -2700, -650) snapped onto ground cut off from the paths, so these are the nearest
+    // points a walk from Xinjiekou reaches (tests/lanterns-browser.mjs, 12 Nov).
+    mochou: [[-2578, -134], [-2166, -398], [-2694, -690]],
     // Lion Hill: the tower and its two approaches.
     yuejiang: [[-4008, 6009], [-4008, 5880], [-3880, 6009]],
   },

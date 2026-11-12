@@ -932,7 +932,7 @@ def main():
     root = bpy.data.collections.new('Core')
     scene.collection.children.link(root)
     c = {n: ac_coll for n, ac_coll in ((n, bpy.data.collections.new(n)) for n in
-                                       ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'Trees', 'Prototypes', 'Markers'))}
+                                       ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'XuanwuGate', 'XuanwuGateOver', 'Trees', 'Prototypes', 'Markers'))}
     for v in c.values():
         root.children.link(v)
     protos = species_prototypes(plane_prototype(oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes'])), c['Prototypes']), c['Prototypes'])
@@ -1164,7 +1164,7 @@ def main():
     roads, avenues = build_roads(c['Roads'], lambda x, y, kind: in_palace(x, y) or in_mufu(x, y)
                                  or (in_zs(x, y) and (kind in FOOT or ZS.covers(x, y))))
     wall_m, breaches, arches = xw.build_wall(wall, c['Buildings'], c['Overhead'], zground)
-    pavilions = xw.xuanwu_gate(wall, c['Buildings'], zground, c['Overhead'])
+    pavilions = xw.xuanwu_gate(wall, c['XuanwuGate'], zground, c['XuanwuGateOver'])
     decks = xw.build_bridges(xw_bridges, c['Roads'], xw_level, road_z)
     print('WALL', {'lines': len(wall.lines), 'built_m': round(wall_m), 'breaches': breaches, 'arches': arches,
                    'gate_passages': len(THROUGH), 'pavilions': pavilions, 'park_halls': len(halls)}, flush=True)
