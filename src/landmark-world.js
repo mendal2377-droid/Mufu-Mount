@@ -22,7 +22,7 @@ const PAINT = {
   lawn: {mottle: .10, scale: .18}, forest_floor: {mottle: .14, scale: .09}, paving: {mottle: .05, scale: .7, joints: 1},
   paving_joint: {mottle: .05, scale: .7}, granite: {mottle: .04, scale: .5, joints: .6}, granite_shade: {mottle: .05, scale: .5},
   // Xuanwu Gate's coursed stone face: a stronger mottle than the brick.
-  gate_stone: {mottle: .1, scale: .9, courses: [.5, 1.2]},
+  gate_stone: {mottle: .1, scale: .9, courses: [.5, 1.2]}, gate_ashlar: {mottle: .08, scale: .8, courses: [.6, 1.4]},
   // The Ming wall: brick courses on its faces (drawn larger than the real 10 cm bricks, to read at a
   // distance). It was one flat grey (the owner's build 12 views: "plain grey").
   ming_brick: {mottle: .07, scale: .5, courses: [.25, .62]},

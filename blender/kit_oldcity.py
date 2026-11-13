@@ -17,6 +17,9 @@ kit.PALETTE.update({
     'timber_dark': '#5C3326',     # dark red-brown timber frames and balconies
     'gate_stone': '#8F8372',      # Xuanwu Gate's face: warm grey-brown coursed stone (photographs)
     'gate_ring': '#A6C8C2',       # the pale blue-green rings round its arches (photographs)
+    'gate_ashlar': '#B5B0A3',     # Zhonghua Gate's pale stone courses under its brick
+    'glass_eave': '#9CC9C4',      # the Bao'en tower's glass eaves by day
+    'steel_frame': '#6C797D',     # its steel ribs
     'tile_dark': '#4D545C',       # grey roof tiles
     'temple_ochre': '#E6B04A',    # Jiming's yellow walls
     'temple_peach': '#E9A58F',    # Jiming's peach-pink hall walls
@@ -255,6 +258,45 @@ def city_wall(bm, pts, ground, *, height=14.0, width=12.0, outer_side=1, mi_bric
         acc += seg
 
 
+def arched_wall(solid, over, vault, M, w, th, h, aw, spring, *, ashlar=0.0, mi=0, mi_ashlar=3, mi_top=1, n=24):
+    """A wall w long (local X), th thick, h high, with a round-headed passage aw wide through its
+    middle, springing at `spring`. The piers go into `solid`; everything over the passage into `over`
+    and its smooth barrel vault into `vault`, so the walk grid's rays can be told to pass through
+    them (a collection named Overhead: blender/export_web.py) and the passage is walked.
+    ashlar: the height of a pale stone facing on the lower wall, 6 cm proud, 0 for none."""
+    r = aw / 2
+    R3 = M.to_3x3()
+
+    def quad(bm, pts, toward, m):
+        f = bm.faces.new([p if isinstance(p, bmesh.types.BMVert) else bm.verts.new(M @ Vector(p)) for p in pts])
+        f.normal_update()
+        if f.normal.dot(R3 @ Vector(toward)) < 0:
+            f.normal_flip()
+        f.material_index = m
+    for sx in (-1, 1):
+        pw = (w - aw) / 2
+        add_box(solid, (sx * (r + pw / 2), 0, h / 2 - 0.5), (pw, th, h + 1.0), mi=mi, matrix=M)
+        add_box(solid, (sx * (r + pw / 2), 0, h + 0.05), (pw - 1.0, th - 1.2, 0.1), mi=mi_top, matrix=M)
+        if ashlar:
+            add_box(solid, (sx * (r + pw / 2 + 0.03), 0, ashlar / 2), (pw + 0.06, th + 0.12, ashlar), mi=mi_ashlar, matrix=M)
+    arc = [(r * math.cos(math.pi * k / n), spring + r * math.sin(math.pi * k / n)) for k in range(n + 1)]
+    rows = [(vault.verts.new(M @ Vector((x, -th / 2, z))), vault.verts.new(M @ Vector((x, th / 2, z)))) for x, z in arc]
+    lower = max(ashlar, spring + r + 0.2) if ashlar else h
+    for k in range(n):
+        (xa, za), (xb, zb) = arc[k], arc[k + 1]
+        quad(vault, [rows[k][0], rows[k][1], rows[k + 1][1], rows[k + 1][0]], (-(xa + xb) / 2, 0, spring - (za + zb) / 2), mi_ashlar if ashlar else mi)
+        for face in (-1, 1):
+            y = face * (th / 2 + (0.06 if ashlar else 0.0))
+            quad(over, [(xa, y, za), (xb, y, zb), (xb, y, lower), (xa, y, lower)], (0, face, 0), mi_ashlar if ashlar else mi)
+    if ashlar:
+        for face in (-1, 1):
+            y = face * th / 2
+            quad(over, [(-r, y, lower), (r, y, lower), (r, y, h), (-r, y, h)], (0, face, 0), mi)
+            quad(over, [(-r, face * (th / 2 + 0.06), lower), (r, face * (th / 2 + 0.06), lower), (r, y, lower), (-r, y, lower)], (0, 0, 1), mi_ashlar)
+    add_box(over, (0, 0, h - 0.05), (aw, th, 0.1), mi=mi, matrix=M)
+    add_box(over, (0, 0, h + 0.05), (aw, th - 1.2, 0.1), mi=mi_top, matrix=M)
+
+
 # --- Bridges and props ------------------------------------------------------------------------------
 
 def arch_bridge(bm, a, b, z_banks, *, width=6.0, rise=2.4, mi_stone=0, mi_rail=0, segs=16, z_end=None):
@@ -336,6 +378,19 @@ def glass_tower(name, coll, base, levels=9, r0=9.0, r1=6.0, level_h=7.8, sides=8
         r = r0 + (r1 - r0) * k / max(levels - 1, 1)
         prism(bm, (x, y, zc), r, level_h, sides, mi=0)
         prism(bm, (x, y, zc + level_h - 0.25), r + 1.3, 0.35, sides, mi=1)
+        # A glass eave at every storey, its corners lifted, and a steel rib up each corner: by day the
+        # tower was a bare shaft that read as a grey box (the 14 Nov recheck); it is a pagoda in glass.
+        poly_roof(bm, (x, y, zc + level_h - 1.5), r + 3.0, r + 0.15, 1.3, sides, lift=0.9, thickness=0.12, mi=3)
+        for i in range(sides):
+            a = 2 * math.pi * i / sides
+            add_box(bm, (x + math.cos(a) * (r + 0.05), y + math.sin(a) * (r + 0.05), zc + level_h / 2), (0.34, 0.34, level_h), mi=4,
+                    matrix=Matrix.Translation((x + math.cos(a) * (r + 0.05), y + math.sin(a) * (r + 0.05), 0)) @ Matrix.Rotation(a, 4, 'Z')
+                    @ Matrix.Translation((-(x + math.cos(a) * (r + 0.05)), -(y + math.sin(a) * (r + 0.05)), 0)))
+            # A doorway band on each face, a floor's height, to give the storeys scale.
+            am = a + math.pi / sides
+            ri = r * math.cos(math.pi / sides) + 0.04
+            add_box(bm, (0, 0, 0), (0.1, 2.2, level_h * 0.5), mi=4,
+                    matrix=Matrix.Translation((x + math.cos(am) * ri, y + math.sin(am) * ri, zc + level_h * 0.3)) @ Matrix.Rotation(am, 4, 'Z'))
         zc += level_h
     c = bmesh.ops.create_cone(bm, cap_ends=True, segments=sides, radius1=r1 + 0.8, radius2=0.6, depth=4.0)
     bmesh.ops.translate(bm, vec=(x, y, zc + 2.0), verts=c['verts'])
@@ -346,5 +401,5 @@ def glass_tower(name, coll, base, levels=9, r0=9.0, r1=6.0, level_h=7.8, sides=8
     for f in {f for v in s['verts'] for f in v.link_faces}:
         f.material_index = 2
     kit.PALETTE.setdefault('glass_glow', '#DCEFE4')
-    o = mesh_object(name, bm, coll, [body, ledge, 'gold'])
+    o = mesh_object(name, bm, coll, [body, ledge, 'gold', 'glass_eave', 'steel_frame'])
     return o, zc + 4.0 + spire - z

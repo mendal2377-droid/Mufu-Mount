@@ -295,14 +295,14 @@ def _quad(bm, pts, toward, mi=0):
     return f
 
 
-def _plaque_text(coll, T, name):
+def _plaque_text(coll, T, name, text=None, size=1.0, material='gold'):
     """The plaque's characters as a gold mesh, upright at T (the text faces T's -Y). False without a font."""
     path = next((p for p in PLAQUE_FONTS if os.path.exists(p)), None)
     if path is None:
         return False
     cu = bpy.data.curves.new(name, 'FONT')
     cu.font = bpy.data.fonts.load(path, check_existing=True)
-    cu.body, cu.size, cu.extrude, cu.space_character = PLAQUE_TEXT, 1.0, 0.02, 1.08
+    cu.body, cu.size, cu.extrude, cu.space_character = text or PLAQUE_TEXT, size, 0.02 * size, 1.08
     cu.align_x, cu.align_y, cu.resolution_u = 'CENTER', 'CENTER', 3
     ob = bpy.data.objects.new(name + ' curve', cu)
     coll.objects.link(ob)
@@ -313,7 +313,7 @@ def _plaque_text(coll, T, name):
     me.name = name
     me.transform(T @ Matrix.Rotation(math.pi / 2, 4, 'X'))
     me.materials.clear()
-    me.materials.append(kit.mat('gold'))
+    me.materials.append(kit.mat(material))
     for poly in me.polygons:
         poly.use_smooth = False
     kit.link(bpy.data.objects.new(name, me), coll)

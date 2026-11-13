@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import area_common as ac  # noqa: E402
 import kit  # noqa: E402
 import kit_oldcity as oc  # noqa: E402
+import core_xuanwu as xw  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_BLEND = ROOT / 'art-src' / 'oldsouth.blend'
@@ -239,27 +240,35 @@ def build_fuzimiao(coll):
 
 # --- Zhonghua Gate ---------------------------------------------------------------------------------
 
-def build_zhonghua(coll):
+def build_zhonghua(coll, over):
     """Four pierced walls with three courts between, a ramp up the inner side, 27 vaults (藏兵洞)
-    in the south wall's face. The 1937-destroyed timber tower is not rebuilt (archive photos)."""
-    bm = bmesh.new()
+    in the side walls' court faces. The 1937-destroyed timber tower is not rebuilt (archive photos).
+    Since 14 Nov the four passages are real vaulted tunnels and the gate is walked through, court by
+    court, as visitors do (they were dark panels on solid walls: "a flat wall with one dark arch").
+    Everything over a passage is in `over` (Overhead: the walk grid's rays pass through it), so the
+    wall-top walk has a 7 m gap over each passage. The name stone over the south arch carries 中華門
+    (inscribed 1931), written right to left as stones of that date were: an assumption."""
+    bm, ob, vb = bmesh.new(), bmesh.new(), bmesh.new()
     cx, cy = GATE_C
     z = STREET
     y0 = cy - GATE_D / 2
     walls = [(0.0, 22.0), (44.0, 10.0), (78.0, 10.0), (110.0, 18.0)]   # (south offset, thickness)
     for off, th in walls:
         y = y0 + off + th / 2
-        kit.add_box(bm, (cx, y, z + GATE_H / 2), (GATE_W, th, GATE_H), mi=0)
-        kit.add_box(bm, (cx, y, z + GATE_H + 0.05), (GATE_W - 2, th - 1.2, 0.1), mi=1)
         # Pale stone ashlar on the lower two-thirds, brick above (Commons photograph of the gate).
-        kit.add_box(bm, (cx, y, z + GATE_H * 0.32), (GATE_W + 0.12, th + 0.12, GATE_H * 0.64), mi=3)
-        for side in (-1, 1):
-            kit.arch_panel(bm, (cx, y + side * (th / 2 + 0.02), z), 7.0, 10.5, depth=0.4, mi=2,
-                           facing='+Y' if side > 0 else '-Y')
+        oc.arched_wall(bm, ob, vb, Matrix.Translation((cx, y, z)), GATE_W, th, GATE_H, 7.0, 7.0, ashlar=GATE_H * 0.64)
         # Merlons on the outer (south) wall.
         if off == 0.0:
             for k in range(int(GATE_W / 2.6)):
-                kit.add_box(bm, (cx - GATE_W / 2 + 1.3 + k * 2.6, y0 + 0.4, z + GATE_H + 1.4), (1.3, 0.8, 0.9), mi=0)
+                kit.add_box(ob if abs(-GATE_W / 2 + 1.3 + k * 2.6) < 4.2 else bm,
+                            (cx - GATE_W / 2 + 1.3 + k * 2.6, y0 + 0.4, z + GATE_H + 1.4), (1.3, 0.8, 0.9), mi=0)
+    # The courts' paving, and the name stone over the south arch.
+    kit.add_box(bm, (cx, cy, z + 0.03), (GATE_W - 24, GATE_D, 0.06), mi=1)
+    kit.add_box(ob, (cx, y0 - 0.12, z + 14.6), (7.6, 0.2, 2.6), mi=3)
+    kit.add_box(ob, (cx, y0 - 0.2, z + 14.6), (7.0, 0.12, 2.1), mi=4)
+    T = Matrix.Translation((cx, y0 - 0.29, z + 14.6))
+    if not xw._plaque_text(over, T, 'Zhonghua Gate name stone', text='\u9580\u83ef\u4e2d', size=1.7, material='opening'):
+        print('ZHONGHUA NAME STONE: no font, left blank', flush=True)
     # East and west side walls closing the courts, carrying the ramps.
     for sx in (-1, 1):
         kit.add_box(bm, (cx + sx * (GATE_W / 2 - 6), cy, z + GATE_H / 2), (12.0, GATE_D, GATE_H), mi=0)
@@ -277,7 +286,11 @@ def build_zhonghua(coll):
     steps = 100
     kit.stair_flight(bm, (0, 0, 0), 5.0, steps, GATE_H / steps, 1.0, mi=1,
                      matrix=Matrix.Translation((cx + GATE_W / 2 + 2.6, y0 + GATE_D + steps * 1.0, z)) @ Matrix.Rotation(math.pi, 4, 'Z'))
-    kit.mesh_object('Zhonghua Gate', bm, coll, ['ming_brick', 'paving', 'opening', 'granite_shade'])
+    mats = ['ming_brick', 'paving', 'opening', 'gate_ashlar', 'granite']
+    kit.mesh_object('Zhonghua Gate', bm, coll, mats)
+    kit.mesh_object('Zhonghua Gate over the passages', ob, over, mats)
+    for poly in kit.mesh_object('Zhonghua Gate vaults', vb, over, mats).data.polygons:
+        poly.use_smooth = True
     # The city wall running east from the gate past Laomendong (OSM way 91997603).
     wb = bmesh.new()
     for w in F['wall']:
@@ -350,7 +363,8 @@ def markers(coll, gates_coll, ride_line):
     ac.add_point(coll, 'Spawn zhonghua', (GATE_C.x, GATE_C.y - GATE_D / 2 - 30, z), (GATE_C.x, GATE_C.y, z + 12))
     ac.add_point(coll, 'Spawn mendong', (-60.0, -860.0, zground(-60, -860)), (-30.0, -760.0, zground(-30, -760) + 4))
     ac.add_point(coll, 'Spawn baoen', (BAOEN.x + 45, BAOEN.y + 55, zground(BAOEN.x + 45, BAOEN.y + 55)), (BAOEN.x, BAOEN.y, 40))
-    ac.add_point(coll, 'Spawn wall', (GATE_C.x, GATE_C.y - GATE_D / 2 + 11, z + GATE_H + 0.1), (GATE_C.x, GATE_C.y - 600, z))
+    # Beside the passage, not over it: the wall top over a passage is not walkable ground (build_zhonghua).
+    ac.add_point(coll, 'Spawn wall', (GATE_C.x + 16, GATE_C.y - GATE_D / 2 + 11, z + GATE_H + 0.1), (GATE_C.x + 16, GATE_C.y - 600, z))
     # Benches on the north bank facing the river and the screen wall.
     # On the paved forecourt between the Wenshu gateway and the river, facing the screen wall.
     for k, x in enumerate((AXIS_X - 22, AXIS_X + 18, AXIS_X + 28)):
@@ -405,7 +419,7 @@ def main():
     scene = bpy.context.scene
     root = bpy.data.collections.new('OldSouth')
     scene.collection.children.link(root)
-    c = {n: collection(n, root) for n in ('Ground', 'Water', 'Temple', 'Town', 'Walls', 'City', 'Gates', 'Trees', 'Prototypes', 'Markers')}
+    c = {n: collection(n, root) for n in ('Ground', 'Water', 'Temple', 'Town', 'Walls', 'Overhead', 'City', 'Gates', 'Trees', 'Prototypes', 'Markers')}
     protos = oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes']))
     lap('protos')
     (fx, fy), (sx, sy) = P_F, P_S
@@ -420,9 +434,12 @@ def main():
     lap('build_river')
     build_fuzimiao(c['Temple'])
     lap('build_fuzimiao')
-    build_zhonghua(c['Walls'])
+    build_zhonghua(c['Walls'], c['Overhead'])
     lap('build_zhonghua')
     build_baoen(c['Temple'])
+    # The shared skyline carries this tower too, as OSM's plain 78 m solid: it stood over the model and
+    # hid it (a grey shaft with the glass eaves poking out, 14 Nov). The skyline is not drawn here.
+    scene['skyline_clip'] = [BAOEN.x - 25, BAOEN.x + 25, BAOEN.y - 25, BAOEN.y + 25]
     lap('build_baoen')
     build_laomendong_gate(c['Town'])
     lap('build_laomendong_gate')
