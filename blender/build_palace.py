@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import area_common as ac  # noqa: E402
 import kit  # noqa: E402
 import kit_oldcity as oc  # noqa: E402
+import core_xuanwu as xw  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_BLEND = ROOT / 'art-src' / 'palace.blend'
@@ -77,7 +78,16 @@ def build_gate(coll, overhead):
     kit.add_box(ob, (AX, y, 9.6), (31.0, 8.8, 0.8), mi=0)                     # cornice
     kit.add_box(ob, (AX, y, 10.6), (22.0, 7.0, 1.4), mi=0)                    # attic
     kit.add_box(ob, (AX, y, 12.0), (11.0, 6.0, 1.4), mi=0)                    # stepped centre
-    kit.add_box(ob, (AX, y - 3.52, 10.6), (7.0, 0.1, 0.9), mi=1)              # 總統府 in gold on the stone
+    # 總統府 in gold on the stone: the three characters themselves since 14 Nov (it was a gold bar),
+    # written right to left as on the gate (an assumption: no photograph in the repository settles it).
+    if not xw._plaque_text(overhead, Matrix.Translation((AX, y - 3.56, 10.6)), 'Gate inscription', text='\u5e9c\u7d71\u7e3d', size=1.25):
+        kit.add_box(ob, (AX, y - 3.52, 10.6), (7.0, 0.1, 0.9), mi=1)
+    # A capital and a base on each of the eight columns, and a dentil band under the cornice.
+    for dx in (-13.6, -11.6, -5.0, -3.0, 3.0, 5.0, 11.6, 13.6):
+        kit.add_box(ob, (AX + dx, y - 4.4, 8.75), (1.25, 1.25, 0.3), mi=0)
+        kit.add_box(ob, (AX + dx, y - 4.4, 8.45), (1.0, 1.0, 0.3), mi=0)
+    for k in range(38):
+        kit.add_box(ob, (AX - 14.8 + k * 0.8, y - 4.3, 9.05), (0.4, 0.3, 0.3), mi=0)
     kit.mesh_object('Gate overhead', ob, overhead, ['palace_stone', 'gold'])
     for dx, w, h in ((-8.4, 3.6, 6.2), (8.4, 3.6, 6.2)):
         for s in (-1, 1):
@@ -87,6 +97,14 @@ def build_gate(coll, overhead):
         bmesh.ops.translate(bm, vec=(AX + dx, y - 4.4, 4.6), verts=c['verts'])
         for f in {f for v in c['verts'] for f in v.link_faces}:
             f.material_index = 0
+    for dx in (-13.6, -11.6, -5.0, -3.0, 3.0, 5.0, 11.6, 13.6):
+        kit.add_box(bm, (AX + dx, y - 4.4, 0.35), (1.2, 1.2, 0.7), mi=0)      # column bases
+    # Iron gates in the side arches (shut), bars and a rail: the centre arch stays the way in.
+    for dx in (-8.4, 8.4):
+        for k in range(9):
+            kit.add_box(bm, (AX + dx - 1.6 + k * 0.4, y - 4.3, 2.3), (0.07, 0.07, 4.6), mi=4)
+        for zz in (0.5, 2.6, 4.4):
+            kit.add_box(bm, (AX + dx, y - 4.3, zz), (3.4, 0.08, 0.1), mi=4)
     c = bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=0.12, radius2=0.06, depth=9.0)  # flagpole
     bmesh.ops.translate(bm, vec=(AX, y, 17.2), verts=c['verts'])
     for f in {f for v in c['verts'] for f in v.link_faces}:
@@ -95,7 +113,8 @@ def build_gate(coll, overhead):
     for s in (-1, 1):
         kit.add_box(bm, (AX + s * 18.0, y - 6.0, 0.9), (1.4, 1.4, 1.8), mi=0)
         kit.add_box(bm, (AX + s * 18.0, y - 6.0, 2.4), (0.9, 1.1, 1.3), mi=0)
-    kit.mesh_object('Presidential Palace gate', bm, coll, ['palace_stone', 'opening', 'gold', 'granite'])
+    kit.PALETTE.setdefault('iron_gate', '#2E3336')
+    kit.mesh_object('Presidential Palace gate', bm, coll, ['palace_stone', 'opening', 'gold', 'granite', 'iron_gate'])
 
 
 def build_courts(coll):

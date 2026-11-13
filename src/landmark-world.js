@@ -23,6 +23,8 @@ const PAINT = {
   paving_joint: {mottle: .05, scale: .7}, granite: {mottle: .04, scale: .5, joints: .6}, granite_shade: {mottle: .05, scale: .5},
   // Xuanwu Gate's coursed stone face: a stronger mottle than the brick.
   gate_stone: {mottle: .1, scale: .9, courses: [.5, 1.2]}, gate_ashlar: {mottle: .08, scale: .8, courses: [.6, 1.4]},
+  // The Presidential Palace gate's grey stone blocks; the Drum Tower's red-washed brick.
+  palace_stone: {mottle: .06, scale: .7, courses: [.55, 1.3]}, drum_red: {mottle: .12, scale: .6, courses: [.3, .7]},
   // The Ming wall: brick courses on its faces (drawn larger than the real 10 cm bricks, to read at a
   // distance). It was one flat grey (the owner's build 12 views: "plain grey").
   ming_brick: {mottle: .07, scale: .5, courses: [.25, .62]},

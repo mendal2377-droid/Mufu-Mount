@@ -17,8 +17,9 @@
     "offset": 0
    }
   ],
-  "walkableCells": 256050,
-  "water": true
+  "walkableCells": 256043,
+  "water": true,
+  "roads": false
  },
  "labels": {
   "palace": "the Presidential Palace gate",
@@ -101,7 +102,8 @@
   }
  },
  "traffic": [],
+ "transit": false,
  "trees": 293,
- "staticTriangles": 117457,
+ "staticTriangles": 106737,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, lake and streets: OpenStreetMap contributors (ODbL). Architecture from Commons photographs; see research/palace/FACTS.md."
 }
