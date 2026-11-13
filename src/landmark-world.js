@@ -22,7 +22,10 @@ const PAINT = {
   lawn: {mottle: .10, scale: .18}, forest_floor: {mottle: .14, scale: .09}, paving: {mottle: .05, scale: .7, joints: 1},
   paving_joint: {mottle: .05, scale: .7}, granite: {mottle: .04, scale: .5, joints: .6}, granite_shade: {mottle: .05, scale: .5},
   // Xuanwu Gate's coursed stone face: a stronger mottle than the brick.
-  gate_stone: {mottle: .1, scale: .9},
+  gate_stone: {mottle: .1, scale: .9, courses: [.5, 1.2]},
+  // The Ming wall: brick courses on its faces (drawn larger than the real 10 cm bricks, to read at a
+  // distance). It was one flat grey (the owner's build 12 views: "plain grey").
+  ming_brick: {mottle: .07, scale: .5, courses: [.25, .62]},
   hedge: {mottle: .12, scale: 1.2}, vine: {mottle: .16, scale: 1.4}, water: {mottle: 0, scale: 1},
   // Skyline towers: painted floor bands and mullions, windows that light up at dusk.
   tower_glass: {mottle: .03, scale: .3, windows: 1}, tower_glass_dark: {mottle: .03, scale: .3, windows: 1},
@@ -286,7 +289,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     if (name === 'lamp_white') { mat.emissive = new THREE.Color(0xfff4dc); mat.emissiveIntensity = .8; }
     mat.onBeforeCompile = s => {
       s.uniforms.citySnow = shared.snow; s.uniforms.worldMottle = {value: style.mottle}; s.uniforms.worldScale = {value: style.scale};
-      s.uniforms.worldJoints = {value: style.joints || 0}; s.uniforms.cityTime = shared.time;
+      s.uniforms.worldJoints = {value: style.joints || 0}; s.uniforms.worldCourses = {value: new THREE.Vector2(...(style.courses || [0, 1]))}; s.uniforms.cityTime = shared.time;
       s.uniforms.worldWater = {value: name === 'water' ? 1 : 0};
       // Distance from the shore, for the water's shallows; the lotus beds' season.
       const sh = name === 'water' ? shore() : NO_SHORE;
@@ -301,7 +304,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.skyClip = {value: new THREE.Vector4(...(meta.skyline_clip || [1, -1, 1, -1]))};
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nattribute float wallTop;varying float vTop;\n#endif\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;\n#ifdef FACADE_TOP\nvTop=wallTop;\n#endif\n');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops,worldLotus,citySeason;uniform vec3 hazeColor;uniform vec4 skyClip,shoreBox;uniform sampler2D shoreTex;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
+      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops,worldLotus,citySeason;uniform vec3 hazeColor;uniform vec2 worldCourses;uniform vec4 skyClip,shoreBox;uniform sampler2D shoreTex;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -315,6 +318,21 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           float joint=smoothstep(.46,.49,max(e.x,e.y))*(1.-smoothstep(.08,.4,fw))*smoothstep(.85,.98,vUp);
           diffuseColor.rgb*=1.-joint*.22*worldJoints;
           float tone=lwHash(floor(slab));diffuseColor.rgb*=1.+(tone-.5)*.06*worldJoints*smoothstep(.85,.98,vUp);
+          // Masonry courses on upright faces: (course height, block length) in metres, every other course
+          // offset by half a block; rain streaks down the face. The face's own normal gives the run along it.
+          if(worldCourses.x>0.){
+            vec3 fn=normalize(cross(dFdx(vWorldPos),dFdy(vWorldPos)));
+            float upright=1.-smoothstep(.3,.6,abs(fn.y));
+            float run=dot(vWorldPos.xz,normalize(vec2(-fn.z,fn.x)+1e-5));
+            vec2 bk=vec2(run/worldCourses.y,vWorldPos.y/worldCourses.x);
+            float bw=max(fwidth(bk.x),fwidth(bk.y));
+            bk.x+=step(.5,fract(bk.y*.5))*.5;
+            vec2 be=abs(fract(bk)-.5);
+            float seen=(1.-smoothstep(.1,.42,bw))*upright;
+            diffuseColor.rgb*=1.-max(smoothstep(.42,.49,be.y),smoothstep(.465,.495,be.x))*.17*seen;
+            diffuseColor.rgb*=1.+(lwHash(floor(bk))-.5)*.1*seen;
+            diffuseColor.rgb*=1.+(lwNoise(vec2(run*.45,vWorldPos.y*.07))-.55)*.14*upright;
+          }
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.9,.86),citySnow*.7*smoothstep(.4,.9,vUp));
           // Water: drifting brush ripples, and the pale sky at grazing angles.
           if(worldWater>.5){

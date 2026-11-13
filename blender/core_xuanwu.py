@@ -16,9 +16,11 @@ fetched from Overpass on 4 Nov 2026: the core's features.json keeps the wall's l
 """
 import json
 import math
+import os
 from pathlib import Path
 
 import bmesh
+import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
@@ -41,6 +43,13 @@ GATE_ARCHES = (-7.8, 0.0, 7.8)  # three equal round-headed passages (one until 1
 GATE_R = 2.2                    # each 4.4 m wide, its crown 5.5 m up
 GATE_SPRING = 3.3
 GATE_WALL_NEAR = 150.0          # the wall this close beside it stands at its height, as in the photograph
+# The two service ways OSM draws through the gate are its paved forecourt, not a street: as asphalt
+# with a centre line they ran straight into the shut middle doors (the owner's build 12 views).
+GATE_FORECOURT = {280718320, 1095550197}
+# The plaque's characters, right to left as inscriptions of 1929 were written (an assumption: no
+# photograph in the repository settles it), in a regular-script font standing in for Cai Yuanpei's hand.
+PLAQUE_TEXT = '門武玄'
+PLAQUE_FONTS = ('C:/Windows/Fonts/STKAITI.TTF', 'C:/Windows/Fonts/simkai.ttf')
 
 # The islands by their OSM outlines' centres (research/xuanwu/FACTS.md), with their planting:
 # shore willow spacing (m), interior kinds and square metres per tree.
@@ -204,13 +213,19 @@ def _pieces(s0, s1, cuts):
     return list(zip(marks, marks[1:]))
 
 
-def build_wall(wall, coll, over, ground):
+def build_wall(wall, coll, over, ground, gate=None, only_gate=False):
     """The wall in runs between its openings; a lintel (Overhead: the walk grid sees under it) over
-    each arch, and Xuanwu Gate's two pavilions on top. Returns (metres built, breaches, arches)."""
+    each arch, and Xuanwu Gate's two pavilions on top. Returns (metres built, breaches, arches).
+    `gate` is Xuanwu Gate's own collection: the wall within GATE_WALL_NEAR of the gate goes there, with
+    a level top at the gate's. In the city-wide mesh its top followed the ground and its parapets
+    came out in 20 cm steps (the owner's build 12 views: "a wobbling top"). `only_gate` builds that
+    stretch alone (for patching a saved city)."""
     bm = bmesh.new()
     lint = bmesh.new()
+    near_bm = bmesh.new()
     built = breaches = arches = 0
     site = gate_site(wall)
+    level = ground(*site[2]) + GATE_TOP if site else None
     for li, w in enumerate(wall.lines):
         pts = [tuple(p) for p in w['pts']]
         total = _length(pts)
@@ -235,15 +250,21 @@ def build_wall(wall, coll, over, ground):
                 for a0, a1 in _pieces(s, g0, cuts):
                     if a1 - a0 > 1.0:
                         near = sg is not None and abs((a0 + a1) / 2 - sg) < GATE_WALL_NEAR
-                        oc.city_wall(bm, _cut(pts, a0, a1), ground, height=GATE_TOP if near else height, width=WALL_W,
-                                     outer_side=side)
+                        if near and gate is not None:
+                            oc.city_wall(near_bm, _cut(pts, a0, a1), ground, height=GATE_TOP, width=WALL_W,
+                                         outer_side=side, top_override=level)
+                        elif not only_gate:
+                            oc.city_wall(bm, _cut(pts, a0, a1), ground, height=GATE_TOP if near else height,
+                                         width=WALL_W, outer_side=side)
                 built += g0 - s
             if arch == 'gate':
                 arches += 1
             elif g1 > g0:
                 span_pts = _cut(pts, max(0.0, g0), min(total, g1))
                 a, b = span_pts[0], span_pts[-1]
-                if arch and math.dist(a, b) > 1.0:
+                if only_gate:
+                    pass
+                elif arch and math.dist(a, b) > 1.0:
                     mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
                     gz = ground(*mid)
                     span = math.dist(a, b)
@@ -255,9 +276,48 @@ def build_wall(wall, coll, over, ground):
                 else:
                     breaches += 1
             s = max(s, g1)
+    if gate is not None:
+        kit.mesh_object('Xuanwu Gate wall', near_bm, gate, ['ming_brick', 'paving'])
+    if only_gate:
+        return built, breaches, arches
     kit.mesh_object('City wall', bm, coll, ['ming_brick', 'paving'])
     kit.mesh_object('City wall arches', lint, over, ['ming_brick', 'paving'])
     return built, breaches, arches
+
+
+def _quad(bm, pts, toward, mi=0):
+    """One face through world points (or existing vertices), wound to face `toward`."""
+    f = bm.faces.new([p if isinstance(p, bmesh.types.BMVert) else bm.verts.new(p) for p in pts])
+    f.normal_update()
+    if f.normal.dot(toward) < 0:
+        f.normal_flip()
+    f.material_index = mi
+    return f
+
+
+def _plaque_text(coll, T, name):
+    """The plaque's characters as a gold mesh, upright at T (the text faces T's -Y). False without a font."""
+    path = next((p for p in PLAQUE_FONTS if os.path.exists(p)), None)
+    if path is None:
+        return False
+    cu = bpy.data.curves.new(name, 'FONT')
+    cu.font = bpy.data.fonts.load(path, check_existing=True)
+    cu.body, cu.size, cu.extrude, cu.space_character = PLAQUE_TEXT, 1.0, 0.02, 1.08
+    cu.align_x, cu.align_y, cu.resolution_u = 'CENTER', 'CENTER', 3
+    ob = bpy.data.objects.new(name + ' curve', cu)
+    coll.objects.link(ob)
+    bpy.context.view_layer.update()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    bpy.data.objects.remove(ob, do_unlink=True)
+    bpy.data.curves.remove(cu)
+    me.name = name
+    me.transform(T @ Matrix.Rotation(math.pi / 2, 4, 'X'))
+    me.materials.clear()
+    me.materials.append(kit.mat('gold'))
+    for poly in me.polygons:
+        poly.use_smooth = False
+    kit.link(bpy.data.objects.new(name, me), coll)
+    return len(me.polygons) > 0
 
 
 def xuanwu_gate(wall, coll, ground, over):
@@ -286,20 +346,28 @@ def xuanwu_gate(wall, coll, ground, over):
     M = Matrix.Translation((g[0], g[1], z0)) @ Matrix.Rotation(yaw, 4, 'Z')
     D = WALL_W + 1.0                # proud of the wall's faces by half a metre
     top = GATE_TOP
-    body, span, rings = bmesh.new(), bmesh.new(), bmesh.new()
+    body, span, rings, vault = bmesh.new(), bmesh.new(), bmesh.new(), bmesh.new()
+    R3 = M.to_3x3()
 
     # Piers: the solid stone between and beside the passages.
     edges = [-GATE_HALF] + [e for c in GATE_ARCHES for e in (c - GATE_R, c + GATE_R)] + [GATE_HALF]
     for x0, x1 in zip(edges[::2], edges[1::2]):
         kit.add_box(body, ((x0 + x1) / 2, 0, (top - 1.0) / 2), (x1 - x0, D, top + 1.0), mi=0, matrix=M)
     for c in GATE_ARCHES:
-        # Over each passage: the stone above its round crown, in strips.
-        n = 28                  # fine enough that the crown reads round, not stepped
+        # Over each passage: a true barrel vault, smooth-shaded, and the stone face above it on both
+        # sides. Until 13 Nov it was 28 flat-bottomed strips, and every strip's edge showed as a line
+        # along the soffit (the owner's build 12 views).
+        n = 32
+        arc = [(c + GATE_R * math.cos(math.pi * k / n), GATE_SPRING + GATE_R * math.sin(math.pi * k / n)) for k in range(n + 1)]
+        rows = [(vault.verts.new(M @ Vector((x, -D / 2, z))), vault.verts.new(M @ Vector((x, D / 2, z)))) for x, z in arc]
         for k in range(n):
-            xa, xb = c - GATE_R + 2 * GATE_R * k / n, c - GATE_R + 2 * GATE_R * (k + 1) / n
-            xm = (xa + xb) / 2 - c
-            zc = GATE_SPRING + math.sqrt(max(0.0, GATE_R * GATE_R - xm * xm))
-            kit.add_box(span, (c + xm, 0, (zc + top) / 2), (xb - xa + 0.02, D, top - zc), mi=0, matrix=M)
+            (xa, za), (xb, zb) = arc[k], arc[k + 1]
+            inward = R3 @ Vector((c - (xa + xb) / 2, 0, GATE_SPRING - (za + zb) / 2))
+            _quad(vault, [rows[k][0], rows[k][1], rows[k + 1][1], rows[k + 1][0]], inward)
+            for face in (-1, 1):
+                y = face * D / 2
+                _quad(span, [M @ Vector(p) for p in ((xa, y, za), (xb, y, zb), (xb, y, top), (xa, y, top))],
+                      R3 @ Vector((0, face, 0)))
         # The ring on both faces: jambs, then the round head in 14 pieces, 0.8 m wide.
         for face in (-1, 1):
             y = face * (D / 2 + 0.06)
@@ -315,11 +383,25 @@ def xuanwu_gate(wall, coll, ground, over):
     # 2 m cells missed (build 12's re-export: the walker went through the doors; that scene's walk.bin
     # was patched shut by hand). From either face it reads as the doors, set back in the passage.
     kit.add_box(body, (GATE_ARCHES[1], 0, (GATE_SPRING + GATE_R) / 2), (2 * GATE_R, 4.4, GATE_SPRING + GATE_R), mi=2, matrix=M)
+    # Two leaves with a dark seam, and rows of gilt studs, as city and palace gates carry.
+    for face in (-1, 1):
+        y = face * 2.2
+        kit.add_box(rings, (GATE_ARCHES[1], y, (GATE_SPRING + GATE_R) / 2), (0.06, 0.06, GATE_SPRING + GATE_R), mi=3, matrix=M)
+        for sx in (-1, 1):
+            for i in range(4):
+                for j in range(6):
+                    kit.add_box(rings, (GATE_ARCHES[1] + sx * (0.4 + i * 0.45), y, 0.55 + j * 0.5), (0.11, 0.12, 0.11), mi=4, matrix=M)
     # The plaque (Cai Yuanpei's calligraphy, 1929) over it: a dark board in a gold frame. The lake
     # face is the same as the street face (the owner, 9 Nov), so on both.
+    # Since 13 Nov with its three characters in gold (it was a blank board), and wide enough for them.
     for face in (-1, 1):
-        kit.add_box(span, (0, face * (D / 2 + 0.08), 7.9), (2.7, 0.1, 1.25), mi=4, matrix=M)
-        kit.add_box(span, (0, face * (D / 2 + 0.14), 7.9), (2.4, 0.1, 0.95), mi=3, matrix=M)
+        kit.add_box(span, (0, face * (D / 2 + 0.08), 7.95), (3.5, 0.1, 1.5), mi=4, matrix=M)
+        kit.add_box(span, (0, face * (D / 2 + 0.14), 7.95), (3.2, 0.1, 1.2), mi=3, matrix=M)
+        T = M @ Matrix.Translation((0, face * (D / 2 + 0.215), 7.95))
+        if face > 0:
+            T = T @ Matrix.Rotation(math.pi, 4, 'Z')
+        if not _plaque_text(over, T, 'Xuanwu Gate plaque ' + ('lake' if face > 0 else 'street')):
+            print('XUANWU PLAQUE: no font, board left blank', flush=True)
     # The walk on top, and a pale stone balustrade along both faces.
     kit.add_box(span, (0, 0, top + 0.05), (2 * GATE_HALF, D - 1.0, 0.1), mi=5, matrix=M)
     for face in (-1, 1):
@@ -332,6 +414,8 @@ def xuanwu_gate(wall, coll, ground, over):
     kit.mesh_object('Xuanwu Gate', body, coll, mats)
     kit.mesh_object('Xuanwu Gate spans', span, over, mats)
     kit.mesh_object('Xuanwu Gate rings', rings, over, mats)
+    for poly in kit.mesh_object('Xuanwu Gate vaults', vault, over, mats).data.polygons:
+        poly.use_smooth = True
 
     # The tower (1984): a long gallery hall with gold railings, a two-storey pavilion at each end.
     def at(lx, ly, lz):

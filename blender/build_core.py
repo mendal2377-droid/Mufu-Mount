@@ -799,7 +799,7 @@ def build_roads(coll, skip):
                     nx, ny = (a[1] - b[1]) / d * width / 2, (b[0] - a[0]) / d * width / 2
                     z = max(z, zground(p[0] + nx, p[1] + ny), zground(p[0] - nx, p[1] - ny))
                 pts3.append((p[0], p[1], z + rise))
-            foot = kind in FOOT
+            foot = kind in FOOT or w.get('id') in xw.GATE_FORECOURT   # Xuanwu Gate's approach: paving
             if not foot:
                 carriageways.append(([p[:2] for p in pts3], width))
             ribbon(bm, uv, pts3, width, 1 if foot else 0, 0.3 + 0.015 * order.get(kind, 0))
@@ -1163,7 +1163,7 @@ def main():
     # grounds run under its buildings.
     roads, avenues = build_roads(c['Roads'], lambda x, y, kind: in_palace(x, y) or in_mufu(x, y)
                                  or (in_zs(x, y) and (kind in FOOT or ZS.covers(x, y))))
-    wall_m, breaches, arches = xw.build_wall(wall, c['Buildings'], c['Overhead'], zground)
+    wall_m, breaches, arches = xw.build_wall(wall, c['Buildings'], c['Overhead'], zground, gate=c['XuanwuGate'])
     pavilions = xw.xuanwu_gate(wall, c['XuanwuGate'], zground, c['XuanwuGateOver'])
     decks = xw.build_bridges(xw_bridges, c['Roads'], xw_level, road_z)
     print('WALL', {'lines': len(wall.lines), 'built_m': round(wall_m), 'breaches': breaches, 'arches': arches,
