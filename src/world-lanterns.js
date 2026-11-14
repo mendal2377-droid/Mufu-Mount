@@ -33,7 +33,10 @@ export const WORLD_LANTERNS = {
     // points a walk from Xinjiekou reaches (tests/lanterns-browser.mjs, 12 Nov).
     mochou: [[-2578, -134], [-2166, -398], [-2694, -690]],
     // Lion Hill: the tower and its two approaches.
-    yuejiang: [[-4008, 6009], [-4008, 5880], [-3880, 6009]],
+    // The first below the tower's north stair: at the tower's centre it fell inside the tower built on
+    // 14 Nov (blender/core_landmarks.py), and the podium is not yet walkable (its stair stops 2 m above
+    // the falling hillside; fixed in the code for the next export).
+    yuejiang: [[-4032, 6054], [-4008, 5880], [-3880, 6009]],
   },
 };
 export const SNAP = 200;

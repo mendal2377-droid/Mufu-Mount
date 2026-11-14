@@ -59,7 +59,8 @@ SETTINGS = {
         'zh': '中山陵 · 音乐台',
     },
     'oldsouth': {
-        'static': ('Ground', 'Water', 'Temple', 'Town', 'Walls', 'City', 'Gates'),
+        # Overhead: the stone over Zhonghua Gate's four passages, which the walk grid's rays pass through.
+        'static': ('Ground', 'Water', 'Temple', 'Town', 'Walls', 'Overhead', 'City', 'Gates'),
         'grids': [{'name': 'fuzimiao', 'x0': -315.0, 'x1': 355.0, 'y0': -375.0, 'y1': 135.0},
                   {'name': 'south', 'x0': -815.0, 'x1': 215.0, 'y0': -1355.0, 'y1': -745.0, 'cell': 1.5}],
         'title': 'The Qinhuai, Fuzimiao, Laomendong & Zhonghua Gate',
@@ -85,12 +86,18 @@ SETTINGS = {
     'core': {
         # XuanwuGate, XuanwuGateOver: the gate's own meshes, for 16-bit positions across 30 m, not the city.
         'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu', 'Zhongshan',
-                   'XuanwuGate', 'XuanwuGateOver'),
+                   'XuanwuGate', 'XuanwuGateOver',
+                   # Landmarks with meshes of their own, for the same reason (blender/core_landmarks.py).
+                   'JimingTemple', 'YuejiangTower', 'DrumTower', 'PalaceGate', 'PalaceGateOver'),
         'uv': True,
         # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
         # the city is for riding and flying. A 4 m grid takes steps up to 1 m, the same 25 % slope
         # the 2.5 m grid allows with 0.65 m (the foot of Mufu Mountain was impassable at 16 %).
-        'grids': [{'name': 'centre', 'x0': -1480.0, 'x1': 2080.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 2.5},
+        'grids': [# Jiming Temple's stairs and terraces, and Yuejiang Tower's podium stair, at 1 m, searched
+                  # first: the temple's upper stair climbs 0.78 m over a 2.5 m cell, more than a step.
+                  {'name': 'jiming', 'x0': 520.0, 'x1': 680.0, 'y0': 2200.0, 'y1': 2420.0, 'cell': 1.0},
+                  {'name': 'yuejiang', 'x0': -4070.0, 'x1': -3950.0, 'y0': 5960.0, 'y1': 6070.0, 'cell': 1.0},
+                  {'name': 'centre', 'x0': -1480.0, 'x1': 2080.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 2.5},
                   # Xuanwu Lake's islands, bridges and causeways at 2 m, searched before the north's
                   # 4 m: a 4.5 m deck on a slant fell between 4 m cell centres (holes and 3 m drops
                   # on 9 of 26 park bridges), and the dyke to Lingzhou met only at cell corners.
@@ -183,7 +190,7 @@ def to_three(v):
 STATIC_COLLECTIONS = SETTINGS[SCENE_ID].get('static', ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates'))
 # Left out of the walk-grid ray cast: trees, moon gates, and anything overhead that people walk under
 # (gate lintels and attics), so the ground beneath stays walkable.
-CAST_EXCLUDE = ('Trees', 'Gates', 'Overhead', 'XuanwuGateOver')
+CAST_EXCLUDE = ('Trees', 'Gates', 'Overhead', 'XuanwuGateOver', 'PalaceGateOver')
 
 
 def collect():

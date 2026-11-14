@@ -34,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import area_common as ac  # noqa: E402
 import kit  # noqa: E402
 import kit_oldcity as oc  # noqa: E402
+import core_landmarks as lm
 import core_xuanwu as xw  # noqa: E402
 import mufu_merge as mm  # noqa: E402
 import zhongshan_merge as zm  # noqa: E402
@@ -932,7 +933,7 @@ def main():
     root = bpy.data.collections.new('Core')
     scene.collection.children.link(root)
     c = {n: ac_coll for n, ac_coll in ((n, bpy.data.collections.new(n)) for n in
-                                       ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'XuanwuGate', 'XuanwuGateOver', 'Trees', 'Prototypes', 'Markers'))}
+                                       ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'XuanwuGate', 'XuanwuGateOver', 'JimingTemple', 'YuejiangTower', 'DrumTower', 'PalaceGate', 'PalaceGateOver', 'Trees', 'Prototypes', 'Markers'))}
     for v in c.values():
         root.children.link(v)
     protos = species_prototypes(plane_prototype(oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes'])), c['Prototypes']), c['Prototypes'])
@@ -954,7 +955,10 @@ def main():
             if o.type != 'MESH' or o.name.startswith('Garden') and 'tree' in o.name.lower():
                 continue
             o.matrix_world = Matrix.Translation((pal.x, pal.y, pal_z)) @ o.matrix_world
-            target.objects.link(o)
+            # The gate in collections of its own: its inscription and iron bars need finer positions
+            # than the city-wide meshes keep (blender/core_landmarks.py).
+            gate = {'Presidential Palace gate': c['PalaceGate'], 'Gate overhead': c['PalaceGateOver'], 'Gate inscription': c['PalaceGateOver']}
+            gate.get(o.name.split('.')[0], target).objects.link(o)
 
     # Mufu Mountain: the app's own detailed model at its real place (blender/mufu_merge.py). Its land
     # replaces the city's there: OSM buildings, roads, infill and trees keep out, the city's ground
@@ -1084,7 +1088,7 @@ def main():
         return ZS is not None and ZS.inside(x, y, 0.0)
 
     def skip(x, y):
-        return in_palace(x, y) or in_mufu(x, y) or in_zs(x, y)
+        return in_palace(x, y) or in_mufu(x, y) or in_zs(x, y) or lm.inside(x, y) is not None
     mx0, mx1, my0, my1 = zone.bbox()
     extra = [{'name': 'mufu', 'x0': max(X0, mx0 - 20), 'x1': min(X1, mx1 + 20), 'y0': max(Y0, my0 - 20),
               'y1': min(Y1, my1 + 20), 'cell': 3.0, 'stepUp': 1.3}]
@@ -1165,6 +1169,10 @@ def main():
                                  or (in_zs(x, y) and (kind in FOOT or ZS.covers(x, y))))
     wall_m, breaches, arches = xw.build_wall(wall, c['Buildings'], c['Overhead'], zground, gate=c['XuanwuGate'])
     pavilions = xw.xuanwu_gate(wall, c['XuanwuGate'], zground, c['XuanwuGateOver'])
+    # Landmarks that had only their OSM footprints as city blocks (blender/core_landmarks.py).
+    print('LANDMARKS', {'jiming pagoda m': round(lm.jiming_temple(c['JimingTemple'], zground), 1),
+                        'yuejiang m': round(lm.yuejiang_tower(c['YuejiangTower'], zground), 1),
+                        'drum tower m': round(lm.drum_tower(c['DrumTower'], zground), 1)}, flush=True)
     decks = xw.build_bridges(xw_bridges, c['Roads'], xw_level, road_z)
     print('WALL', {'lines': len(wall.lines), 'built_m': round(wall_m), 'breaches': breaches, 'arches': arches,
                    'gate_passages': len(THROUGH), 'pavilions': pavilions, 'park_halls': len(halls)}, flush=True)

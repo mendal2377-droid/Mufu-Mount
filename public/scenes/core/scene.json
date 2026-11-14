@@ -18,13 +18,31 @@
     "stepUp": 1.0
    },
    {
+    "name": "jiming",
+    "nx": 160,
+    "ny": 220,
+    "x0": 520.0,
+    "y0": 2200.0,
+    "cell": 1.0,
+    "offset": 277300
+   },
+   {
+    "name": "yuejiang",
+    "nx": 120,
+    "ny": 110,
+    "x0": -4070.0,
+    "y0": 5960.0,
+    "cell": 1.0,
+    "offset": 312500
+   },
+   {
     "name": "centre",
     "nx": 1424,
     "ny": 1488,
     "x0": -1480.0,
     "y0": -1520.0,
     "cell": 2.5,
-    "offset": 277300
+    "offset": 325700
    },
    {
     "name": "xuanwu",
@@ -33,7 +51,7 @@
     "x0": -260.0,
     "y0": 2420.0,
     "cell": 2.0,
-    "offset": 2396212,
+    "offset": 2444612,
     "stepUp": 1.0
    },
    {
@@ -43,7 +61,7 @@
     "x0": -3600.0,
     "y0": 2200.0,
     "cell": 4.0,
-    "offset": 3286212,
+    "offset": 3334612,
     "stepUp": 1.0
    },
    {
@@ -53,7 +71,7 @@
     "x0": -2600.0,
     "y0": 6000.0,
     "cell": 4.0,
-    "offset": 4635212,
+    "offset": 4683612,
     "stepUp": 1.0
    },
    {
@@ -63,7 +81,7 @@
     "x0": -5280.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 5141462,
+    "offset": 5189862,
     "stepUp": 1.0
    },
    {
@@ -73,7 +91,7 @@
     "x0": 2080.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 6024962,
+    "offset": 6073362,
     "stepUp": 1.0
    },
    {
@@ -83,7 +101,7 @@
     "x0": -5280.0,
     "y0": 2200.0,
     "cell": 4.0,
-    "offset": 6748762,
+    "offset": 6797162,
     "stepUp": 1.0
    },
    {
@@ -93,7 +111,7 @@
     "x0": 400.0,
     "y0": 6000.0,
     "cell": 4.0,
-    "offset": 7273762,
+    "offset": 7322162,
     "stepUp": 1.0
    },
    {
@@ -103,7 +121,7 @@
     "x0": 3620.0,
     "y0": -1520.0,
     "cell": 4.0,
-    "offset": 7466262,
+    "offset": 7514662,
     "stepUp": 1.6,
     "zOff": 200
    },
@@ -114,11 +132,11 @@
     "x0": -1698.3500000000004,
     "y0": 8213.51,
     "cell": 3.0,
-    "offset": 9459062,
+    "offset": 9507462,
     "stepUp": 1.3
    }
   ],
-  "walkableCells": 8076961,
+  "walkableCells": 8115203,
   "water": true,
   "roads": true
  },
@@ -573,7 +591,7 @@
  },
  "traffic": [],
  "transit": true,
- "trees": 330477,
- "staticTriangles": 4924587,
+ "trees": 330475,
+ "staticTriangles": 5026179,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: OpenStreetMap contributors (ODbL). Where OSM maps no buildings, rooftops from CMAB (Zhang et al., Scientific Data 2025, CC BY 4.0), traced from satellite imagery. Windows and lanes are drawn by shaders; where OSM has no height, it is estimated from the building's use (OSM's, else CMAB's) and footprint, not measured. Park and forest trees stand where Meta and WRI's canopy height map (Tolan et al. 2024, CC BY 4.0) has trees, at its heights. Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, balconies and air conditioners are drawn from photographs (assumed)."
 }
