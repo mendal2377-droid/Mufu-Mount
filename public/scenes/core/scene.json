@@ -33,7 +33,8 @@
     "x0": -4070.0,
     "y0": 5960.0,
     "cell": 1.0,
-    "offset": 312500
+    "offset": 312500,
+    "stepUp": 1.0
    },
    {
     "name": "centre",
@@ -136,7 +137,7 @@
     "stepUp": 1.3
    }
   ],
-  "walkableCells": 8115203,
+  "walkableCells": 8115204,
   "water": true,
   "roads": true
  },
@@ -592,6 +593,6 @@
  "traffic": [],
  "transit": true,
  "trees": 330475,
- "staticTriangles": 5026179,
+ "staticTriangles": 5055175,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Buildings, heights, colours, roads, parks and water: OpenStreetMap contributors (ODbL). Where OSM maps no buildings, rooftops from CMAB (Zhang et al., Scientific Data 2025, CC BY 4.0), traced from satellite imagery. Windows and lanes are drawn by shaders; where OSM has no height, it is estimated from the building's use (OSM's, else CMAB's) and footprint, not measured. Park and forest trees stand where Meta and WRI's canopy height map (Tolan et al. 2024, CC BY 4.0) has trees, at its heights. Building types follow OSM land use (residential, commercial, industrial); the old walk-ups' colours, balconies and air conditioners are drawn from photographs (assumed)."
 }

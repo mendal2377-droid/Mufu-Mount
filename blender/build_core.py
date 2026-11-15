@@ -933,7 +933,7 @@ def main():
     root = bpy.data.collections.new('Core')
     scene.collection.children.link(root)
     c = {n: ac_coll for n, ac_coll in ((n, bpy.data.collections.new(n)) for n in
-                                       ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'XuanwuGate', 'XuanwuGateOver', 'JimingTemple', 'YuejiangTower', 'DrumTower', 'PalaceGate', 'PalaceGateOver', 'Trees', 'Prototypes', 'Markers'))}
+                                       ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Garden', 'Gates', 'XuanwuGate', 'XuanwuGateOver', 'JimingTemple', 'YuejiangTower', 'DrumTower', 'MochouGarden', 'PalaceGate', 'PalaceGateOver', 'Trees', 'Prototypes', 'Markers'))}
     for v in c.values():
         root.children.link(v)
     protos = species_prototypes(plane_prototype(oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes'])), c['Prototypes']), c['Prototypes'])
@@ -1172,7 +1172,8 @@ def main():
     # Landmarks that had only their OSM footprints as city blocks (blender/core_landmarks.py).
     print('LANDMARKS', {'jiming pagoda m': round(lm.jiming_temple(c['JimingTemple'], zground), 1),
                         'yuejiang m': round(lm.yuejiang_tower(c['YuejiangTower'], zground), 1),
-                        'drum tower m': round(lm.drum_tower(c['DrumTower'], zground), 1)}, flush=True)
+                        'drum tower m': round(lm.drum_tower(c['DrumTower'], zground), 1),
+                        'mochou buildings': lm.mochou_garden(c['MochouGarden'], zground)}, flush=True)
     decks = xw.build_bridges(xw_bridges, c['Roads'], xw_level, road_z)
     print('WALL', {'lines': len(wall.lines), 'built_m': round(wall_m), 'breaches': breaches, 'arches': arches,
                    'gate_passages': len(THROUGH), 'pavilions': pavilions, 'park_halls': len(halls)}, flush=True)

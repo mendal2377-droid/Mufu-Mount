@@ -24,6 +24,13 @@ The Drum Tower (鼓楼, 1382) in Gulou Park: OSM way 135290880, 41 x 21.5 m. A t
 with three arched passages through it, and on top a two-eaved timber hall rebuilt in the Qing. The
 base's 9 m, the hall's size and the grey tiles are read from photographs, not measured; the passages
 are drawn shut (dark arches), the base is not walked through.
+
+Mochou Lake's garden on the south shore (15 Nov): the Shengqi pavilion (胜棋楼, OSM way 854879180),
+where Zhu Yuanzhang and Xu Da are said to have played chess, white walls and red pillars under grey
+upswept double eaves, facing the lake; Yujin Hall (郁金堂, 854879179) on a walled court with a
+pond, a rockery and the white statue of Mochou; Huayan Hall (华严庵, 854879181) and the ferry
+pavilion (待渡亭, 1026024055). Footprints from OSM; heights, the court's layout and the statue's
+place are read from photographs (research/nanjing/BEST-VIEWS.md), not measured.
 """
 import math
 
@@ -35,6 +42,7 @@ import kit_oldcity as oc
 
 kit.PALETTE.setdefault('roof_gold_glaze', '#D9A23A')
 kit.PALETTE.setdefault('drum_red', '#A44A38')     # the Drum Tower's red-washed base
+kit.PALETTE.setdefault('marble_white', '#EEEBE2')  # the Mochou statue
 
 # --- Jiming Temple ---------------------------------------------------------------------------------
 J_PAGODA = Vector((576.5, 2369.5))      # OSM way 957807762's centre
@@ -65,11 +73,41 @@ def _quad(centre, yaw, w, d):
 D_MID = Vector((-657.6, 2093.0))
 D_YAW = math.atan2(26.0, 31.8) + math.pi     # the long side; the front (local -Y) faces south-east, to the square
 
+# --- Mochou Lake's garden ---------------------------------------------------------------------------
+M_FOOT = {
+    'shengqi': [(-2406.1, -692.3), (-2387.3, -696.7), (-2390.5, -710.0), (-2409.3, -705.6)],
+    'yujin': [(-2460.6, -679.6), (-2469.2, -715.0), (-2445.5, -720.6), (-2444.8, -717.7), (-2429.8, -721.3),
+              (-2425.1, -701.9), (-2410.9, -705.3), (-2407.8, -692.2)],
+    'huayan': [(-2425.2, -742.6), (-2415.5, -745.7), (-2417.5, -751.9), (-2427.2, -748.8)],
+    'daidu': [(-2474.7, -723.1), (-2478.1, -733.2), (-2470.9, -735.6), (-2467.4, -725.5)],
+}
+M_STATUE = Vector((-2437.0, -704.0))     # in Yujin Hall's court (the place is assumed)
+M_HALL = Vector((-2455.0, -697.0))       # Yujin Hall, on the court's west side
+
+
+def _frame(pts, pad=0.0):
+    """An outline's oriented box: (centre, yaw of its longest edge, length, depth)."""
+    best = max(range(len(pts)), key=lambda i: math.dist(pts[i], pts[(i + 1) % len(pts)]))
+    a, b = Vector(pts[best]), Vector(pts[(best + 1) % len(pts)])
+    yaw = math.atan2(b.y - a.y, b.x - a.x)
+    R = Matrix.Rotation(-yaw, 2)
+    loc = [R @ Vector(p) for p in pts]
+    x0, x1 = min(p.x for p in loc), max(p.x for p in loc)
+    y0, y1 = min(p.y for p in loc), max(p.y for p in loc)
+    c = Matrix.Rotation(yaw, 2) @ Vector(((x0 + x1) / 2, (y0 + y1) / 2))
+    return c, yaw, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad
+
+
+def _facing_north(yaw):
+    """Of yaw and yaw + pi, the one whose front (local -Y) faces north."""
+    return yaw if math.cos(yaw) < 0 else yaw + math.pi
+
 
 PRECINCTS = {
     'JimingTemple': [tuple(j_axis(u, s).xy) for u, s in ((-39, -38), (39, -38), (39, 150), (-39, 150))],
     'YuejiangTower': _quad(Y_MID, Y_YAW, 70.0, 50.0),
     'DrumTower': _quad(D_MID, D_YAW, 49.0, 30.0),
+    **{f'MochouGarden {k}': _quad(*_frame(v, 1.5)) for k, v in M_FOOT.items()},
 }
 
 
@@ -281,3 +319,78 @@ def drum_tower(coll, ground):
     kit.add_box(trim, (0, -6.5, H + 0.36 + 0.5 + 6.6 + 0.9), (3.6, 0.2, 1.3), mi=1, matrix=M)
     kit.mesh_object('Drum Tower pillars', trim, coll, ['vermilion', 'timber_dark'])
     return H + 0.36 + 0.5 + 6.6 + 1.6 + 4.2
+
+
+def _ring(bm, centre, z, r, h, mi, seg=24):
+    c = bmesh.ops.create_cone(bm, cap_ends=True, segments=seg, radius1=r, radius2=r, depth=h)
+    bmesh.ops.translate(bm, vec=(centre.x, centre.y, z + h / 2), verts=c['verts'])
+    for f in {f for v in c['verts'] for f in v.link_faces}:
+        f.material_index = mi
+
+
+def mochou_garden(coll, ground):
+    """The garden's buildings on Mochou Lake's south shore. Returns the number of buildings."""
+    def at(c):
+        return ground(c.x, c.y)
+    c, yaw, w, d = _frame(M_FOOT['shengqi'])
+    oc.hall('Shengqi pavilion', coll, (c.x, c.y, at(c)), w, d, 5.6, walls='whitewash', roof='tile_dark',
+            yaw=_facing_north(yaw), double=True, plinth=0.9, lift=1.1, roof_h=4.0)
+    # Yujin Hall faces east into its court; a white wall with a tiled coping closes the court's
+    # other sides, open in the middle of each long side.
+    _, yaw, _, _ = _frame(M_FOOT['yujin'])
+    oc.hall('Yujin Hall', coll, (M_HALL.x, M_HALL.y, at(M_HALL)), 16.0, 9.0, 4.6, walls='whitewash', roof='tile_dark',
+            yaw=yaw - math.pi / 2, plinth=0.6, lift=0.9)
+    bm = bmesh.new()
+    mats = ['whitewash', 'tile_dark', 'water', 'granite_shade', 'marble_white']
+    pts = M_FOOT['yujin']
+    for i in range(len(pts)):
+        a, b = Vector(pts[i]), Vector(pts[(i + 1) % len(pts)])
+        L = (b - a).length
+        if L < 1.0 or ((a + b) / 2 - M_HALL).length < 9.0:
+            continue
+        t = (b - a) / L
+        R = Matrix.Rotation(math.atan2(t.y, t.x), 4, 'Z')
+        for s0, s1 in ([(0.0, L / 2 - 1.6), (L / 2 + 1.6, L)] if L > 14 else [(0.0, L)]):
+            p = a + t * ((s0 + s1) / 2)
+            M = Matrix.Translation((p.x, p.y, ground(p.x, p.y))) @ R
+            kit.add_box(bm, (0, 0, 0.7), (s1 - s0, 0.45, 3.4), mi=0, matrix=M)
+            kit.add_box(bm, (0, 0, 2.5), (s1 - s0 + 0.2, 0.9, 0.22), mi=1, matrix=M)
+    z = at(M_STATUE)
+    _ring(bm, M_STATUE, z - 0.2, 5.2, 0.45, 3)         # the pond's stone rim
+    _ring(bm, M_STATUE, z - 0.2, 4.7, 0.5, 2)          # its water, standing a little above the rim's floor
+    for dx, dy, r, h in ((0, 0, 1.6, 1.3), (1.2, -0.6, 1.0, 0.9), (-1.1, 0.7, 0.9, 1.0), (0.3, 1.3, 0.8, 0.6)):
+        sph = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1.0)
+        bmesh.ops.transform(bm, matrix=Matrix.Translation((M_STATUE.x + dx, M_STATUE.y + dy, z + 0.35 + h / 2))
+                            @ Matrix.Diagonal((r, r * 0.85, h, 1)), verts=sph['verts'])
+        for f in {f for v in sph['verts'] for f in v.link_faces}:
+            f.material_index = 3
+    # Mochou: a young woman in a long robe on the rockery, about 3 m tall with her hair up.
+    top = z + 0.35 + 1.3
+    robe = bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=0.55, radius2=0.22, depth=2.2)
+    bmesh.ops.translate(bm, vec=(M_STATUE.x, M_STATUE.y, top + 1.1), verts=robe['verts'])
+    parts = list(robe['verts'])
+    for cx, cy, cz, r in ((0, 0, top + 2.35, (0.21, 0.19, 0.24)), (0, -0.05, top + 2.62, (0.14, 0.14, 0.12)),
+                          (0.3, 0.1, top + 1.85, (0.12, 0.12, 0.38)), (-0.28, 0.12, top + 1.6, (0.12, 0.12, 0.45))):
+        sph = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=1.0)
+        bmesh.ops.transform(bm, matrix=Matrix.Translation((M_STATUE.x + cx, M_STATUE.y + cy, cz)) @ Matrix.Diagonal((*r, 1)),
+                            verts=sph['verts'])
+        parts += sph['verts']
+    for f in {f for v in parts for f in v.link_faces}:
+        f.material_index = 4
+    kit.mesh_object('Mochou court and statue', bm, coll, mats)
+    c, yaw, w, d = _frame(M_FOOT['huayan'])
+    oc.hall('Huayan Hall', coll, (c.x, c.y, at(c)), w, d, 4.0, walls='whitewash', roof='tile_dark',
+            yaw=_facing_north(yaw), plinth=0.5)
+    # The ferry pavilion: four red posts under a pyramid roof, open on every side.
+    c, yaw, w, d = _frame(M_FOOT['daidu'])
+    pb = bmesh.new()
+    M = Matrix.Translation((c.x, c.y, at(c))) @ Matrix.Rotation(yaw, 4, 'Z')
+    kit.add_box(pb, (0, 0, 0.25), (w, d, 0.5), mi=1, matrix=M)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            kit.add_box(pb, (sx * (w / 2 - 0.6), sy * (d / 2 - 0.6), 2.0), (0.3, 0.3, 3.0), mi=0, matrix=M)
+    kit.mesh_object('Ferry pavilion posts', pb, coll, ['vermilion', 'granite_shade'])
+    r = kit.curved_roof('Ferry pavilion roof', coll, (0, 0, 0), w / 2 + 1.0, d / 2 + 1.0, 2.2, ridge_ratio=0.05, lift=0.7,
+                        thickness=0.25, material='tile_dark', ridge_material='tile_dark')
+    r.matrix_world = M @ Matrix.Translation((0, 0, 3.5)) @ r.matrix_world
+    return 5

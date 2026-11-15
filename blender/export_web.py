@@ -88,7 +88,7 @@ SETTINGS = {
         'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu', 'Zhongshan',
                    'XuanwuGate', 'XuanwuGateOver',
                    # Landmarks with meshes of their own, for the same reason (blender/core_landmarks.py).
-                   'JimingTemple', 'YuejiangTower', 'DrumTower', 'PalaceGate', 'PalaceGateOver'),
+                   'JimingTemple', 'YuejiangTower', 'DrumTower', 'MochouGarden', 'PalaceGate', 'PalaceGateOver'),
         'uv': True,
         # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
         # the city is for riding and flying. A 4 m grid takes steps up to 1 m, the same 25 % slope
@@ -96,7 +96,9 @@ SETTINGS = {
         'grids': [# Jiming Temple's stairs and terraces, and Yuejiang Tower's podium stair, at 1 m, searched
                   # first: the temple's upper stair climbs 0.78 m over a 2.5 m cell, more than a step.
                   {'name': 'jiming', 'x0': 520.0, 'x1': 680.0, 'y0': 2200.0, 'y1': 2420.0, 'cell': 1.0},
-                  {'name': 'yuejiang', 'x0': -4070.0, 'x1': -3950.0, 'y0': 5960.0, 'y1': 6070.0, 'cell': 1.0},
+                  {'name': 'yuejiang', 'x0': -4070.0, 'x1': -3950.0, 'y0': 5960.0, 'y1': 6070.0, 'cell': 1.0,
+                   # its stair (0.18 m risers on 0.34 m treads) rises 0.36-0.72 m from one 1 m cell to the next
+                   'stepUp': 1.0},
                   {'name': 'centre', 'x0': -1480.0, 'x1': 2080.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 2.5},
                   # Xuanwu Lake's islands, bridges and causeways at 2 m, searched before the north's
                   # 4 m: a 4.5 m deck on a slant fell between 4 m cell centres (holes and 3 m drops
