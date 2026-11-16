@@ -88,7 +88,7 @@ SETTINGS = {
         'static': ('Ground', 'Water', 'Far', 'Horizon', 'Roads', 'City', 'Buildings', 'Overhead', 'Gates', 'Mufu', 'Zhongshan',
                    'XuanwuGate', 'XuanwuGateOver',
                    # Landmarks with meshes of their own, for the same reason (blender/core_landmarks.py).
-                   'JimingTemple', 'YuejiangTower', 'DrumTower', 'MochouGarden', 'PalaceGate', 'PalaceGateOver'),
+                   'JimingTemple', 'YuejiangTower', 'DrumTower', 'MochouGarden', 'ToutuoRidge', 'ToutuoRidgeOver', 'PalaceGate', 'PalaceGateOver'),
         'uv': True,
         # Walking on the centre at 2.5 m, the north (Gulou to Xuanwu and Xiaguan) at 4 m; elsewhere
         # the city is for riding and flying. A 4 m grid takes steps up to 1 m, the same 25 % slope
@@ -99,6 +99,8 @@ SETTINGS = {
                   {'name': 'yuejiang', 'x0': -4070.0, 'x1': -3950.0, 'y0': 5960.0, 'y1': 6070.0, 'cell': 1.0,
                    # its stair (0.18 m risers on 0.34 m treads) rises 0.36-0.72 m from one 1 m cell to the next
                    'stepUp': 1.0},
+                  # Toutuo Ridge's platform (0.2 m steps) at 1 m, its 425 m above the mountain's zOff.
+                  {'name': 'toutuo', 'x0': 4985.0, 'x1': 5100.0, 'y0': 3340.0, 'y1': 3445.0, 'cell': 1.0, 'stepUp': 1.0, 'zOff': 200},
                   {'name': 'centre', 'x0': -1480.0, 'x1': 2080.0, 'y0': -1520.0, 'y1': 2200.0, 'cell': 2.5},
                   # Xuanwu Lake's islands, bridges and causeways at 2 m, searched before the north's
                   # 4 m: a 4.5 m deck on a slant fell between 4 m cell centres (holes and 3 m drops
@@ -192,7 +194,7 @@ def to_three(v):
 STATIC_COLLECTIONS = SETTINGS[SCENE_ID].get('static', ('Ground', 'Mausoleum axis', 'Music Stage', 'Meiling', 'Gates'))
 # Left out of the walk-grid ray cast: trees, moon gates, and anything overhead that people walk under
 # (gate lintels and attics), so the ground beneath stays walkable.
-CAST_EXCLUDE = ('Trees', 'Gates', 'Overhead', 'XuanwuGateOver', 'PalaceGateOver')
+CAST_EXCLUDE = ('Trees', 'Gates', 'Overhead', 'XuanwuGateOver', 'PalaceGateOver', 'ToutuoRidgeOver')
 
 
 def collect():

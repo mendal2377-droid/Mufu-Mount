@@ -1,4 +1,4 @@
-// Batch 3 checks (15 Nov): Mochou garden, Yuejiang podium, Sacred Way statues.
+// Landmark-pass checks (15-16 Nov): edit the marks for the batch in hand.
 // an oblique from the air, the traveller moved there first so near trees and LODs are the real ones.
 //   PORT=4191 node tests/_landmark-shots.mjs
 import { chromium } from "@playwright/test";
@@ -13,7 +13,8 @@ await page.evaluate(() => { window.__mufu.paused = true; window.__mufu.city.ente
 await page.waitForFunction(() => window.__mufu.city.world?.id === "core", null, { timeout: 600000 });
 // [name, stand x, stand north, target x, target north, target height above the stand's ground, air distance]
 const marks = [
-  ["sacred-way-animals", 4800, 966, 4720, 999, 2, 70], ["wengzhong-figures", 4512, 1140, 4515, 1180, 2, 60],
+  ["toutuo-from-station", 5051, 3366, 5059, 3392, 4, 110], ["toutuo-platform-view", 5059, 3396, -548, 2309, -60, 160],
+  ["toutuo-maitreya", 5064, 3403, 5065.5, 3416.6, 3, 70], ["yuejiang-stair", -4028, 6075, -4024, 6010, 15, 120],
 ];
 const _old = [
   ["zhongshan-arch", 6121, 1800, 6120, 1857, 8, 160], ["zhongshan-hall", 6090, 2400, 6086, 2485, 35, 220],

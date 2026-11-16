@@ -31,6 +31,15 @@ upswept double eaves, facing the lake; Yujin Hall (郁金堂, 854879179) on a wa
 pond, a rockery and the white statue of Mochou; Huayan Hall (华严庵, 854879181) and the ferry
 pavilion (待渡亭, 1026024055). Footprints from OSM; heights, the court's layout and the statue's
 place are read from photographs (research/nanjing/BEST-VIEWS.md), not measured.
+
+Toutuo Ridge (头陀岭, 16 Nov), Purple Mountain's second top, where the cable car arrives (OSM node
+667283025) and where most visitors stand: the ridge's peak (OSM node 2600783562, 425 m) carries a
+viewing platform in three tiers, built in 2017 on steps of about 20 cm (jschina.com.cn, 14 Feb 2017),
+its top a rough circle of over 200 m2 with a railing; a grey-white stone gateway with upswept eaves
+marks the end of the trail and the cable car (meipian.cn travel notes, on the old Toutuo Temple's
+site); the seated bronze Maitreya (OSM node 4386522953) smiles on the ridge among bare boulders.
+The places are OSM's; the platform's radii, the gateway's size and place on the path, the statue's
+size and which way it faces are our reading of photographs and travel notes, not measured.
 """
 import math
 
@@ -43,6 +52,7 @@ import kit_oldcity as oc
 kit.PALETTE.setdefault('roof_gold_glaze', '#D9A23A')
 kit.PALETTE.setdefault('drum_red', '#A44A38')     # the Drum Tower's red-washed base
 kit.PALETTE.setdefault('marble_white', '#EEEBE2')  # the Mochou statue
+kit.PALETTE.setdefault('rock_grey', '#8E8A80')     # Toutuo Ridge's bare boulders
 
 # --- Jiming Temple ---------------------------------------------------------------------------------
 J_PAGODA = Vector((576.5, 2369.5))      # OSM way 957807762's centre
@@ -102,12 +112,22 @@ def _facing_north(yaw):
     """Of yaw and yaw + pi, the one whose front (local -Y) faces north."""
     return yaw if math.cos(yaw) < 0 else yaw + math.pi
 
+# --- Toutuo Ridge -----------------------------------------------------------------------------------
+T_PEAK = Vector((5038.4, 3409.7))        # OSM node 2600783562, Toutuo Ridge, 425 m (the platform: toutuo_ridge)
+T_STATION = Vector((5051.4, 3365.6))     # OSM node 667283025, the cable car's top station
+T_BUDDHA = Vector((5065.5, 3416.6))      # OSM node 4386522953, the bronze Maitreya
+T_TIERS = (13.0, 10.6, 8.4)              # the platform's tiers; the top one ~220 m2
+T_RISE = 0.8                             # each tier four 0.2 m steps above the last
+
 
 PRECINCTS = {
     'JimingTemple': [tuple(j_axis(u, s).xy) for u, s in ((-39, -38), (39, -38), (39, 150), (-39, 150))],
     'YuejiangTower': _quad(Y_MID, Y_YAW, 70.0, 50.0),
+    # The podium stair runs down the hillside past the precinct; a tree stood on it (15 Nov).
+    'YuejiangTower stair': [(-4040.0, 6016.0), (-4016.0, 6016.0), (-4016.0, 6072.0), (-4040.0, 6072.0)],
     'DrumTower': _quad(D_MID, D_YAW, 49.0, 30.0),
     **{f'MochouGarden {k}': _quad(*_frame(v, 1.5)) for k, v in M_FOOT.items()},
+    'ToutuoRidge': [(4992.0, 3345.0), (5092.0, 3345.0), (5092.0, 3442.0), (4992.0, 3442.0)],
 }
 
 
@@ -394,3 +414,108 @@ def mochou_garden(coll, ground):
                         thickness=0.25, material='tile_dark', ridge_material='tile_dark')
     r.matrix_world = M @ Matrix.Translation((0, 0, 3.5)) @ r.matrix_world
     return 5
+
+
+def toutuo_ridge(coll, ground, over):
+    """The viewing platform, the stone gateway, the Maitreya and the boulders on Toutuo Ridge.
+    The gateway's lintels and roofs go in `over`, which the walk grid's ray cast leaves out, so the
+    path runs under them. Returns the platform top's height."""
+    # The platform stands on the built hilltop: the terrain lifts each surveyed peak from the highest
+    # ground within 40 m of its node (blender/build_core.py, SUMMITS), here about 20 m south of it, so
+    # a platform on the node itself stood on the slope, 9 m of hillside under its 13 m radius.
+    P = max((T_PEAK + Vector((dx, dy)) for dx in range(-30, 31, 3) for dy in range(-30, 31, 3) if dx * dx + dy * dy <= 900),
+            key=lambda q: ground(q.x, q.y))
+    gate = T_STATION.lerp(P, 0.35)
+    # The platform: three round tiers on the peak, solid down into the hill. The stair climbs from
+    # the south, the side the gateway and the cable car are on.
+    south = (gate - P).normalized()
+    yaw = math.atan2(south.y, south.x) + math.pi / 2       # local -Y toward the gateway
+    Rm = Matrix.Translation((P.x, P.y, 0)) @ Matrix.Rotation(yaw, 4, 'Z')
+    ring = [Vector((math.cos(a) * T_TIERS[0], math.sin(a) * T_TIERS[0])) for a in [k * math.tau / 24 for k in range(24)]]
+    under = [ground(*(P + v)) for v in ring] + [ground(*P)]
+    z1 = max(max(under) + 0.2, ground(*(P + south * T_TIERS[0])) + 0.6)
+    low = min(under) - 1.0
+    bm = bmesh.new()
+    mats = ['granite', 'granite_shade', 'paving']
+    tops = []
+    for k, r in enumerate(T_TIERS):
+        top = z1 + k * T_RISE
+        tops.append(top)
+        c = bmesh.ops.create_cone(bm, cap_ends=True, segments=32, radius1=r, radius2=r, depth=top - low)
+        bmesh.ops.translate(bm, vec=(P.x, P.y, (top + low) / 2), verts=c['verts'])
+        for f in {f for v in c['verts'] for f in v.link_faces}:
+            f.normal_update()
+            f.material_index = 2 if f.normal.z > 0.5 else 1
+    # Four steps from each tier to the next, on the south axis; from the hill to the first tier,
+    # as many as reach the ground there.
+    for k in (1, 2):
+        kit.stair_flight(bm, (0, 0, 0), 3.2, 4, 0.2, 0.34, mi=2, riser_mi=1,
+                         matrix=Rm @ Matrix.Translation((0, -T_TIERS[k] - 4 * 0.34, tops[k - 1])))
+    n = 1
+    while n < 40:
+        foot = Rm @ Vector((0, -T_TIERS[0] - n * 0.34, 0))
+        if z1 - n * 0.2 <= ground(foot.x, foot.y) + 0.05:
+            break
+        n += 1
+    kit.stair_flight(bm, (0, 0, 0), 3.2, n, 0.2, 0.34, mi=2, riser_mi=1,
+                     matrix=Rm @ Matrix.Translation((0, -T_TIERS[0] - n * 0.34, z1 - n * 0.2)))
+    # A railing round each tier's edge, open where the stair arrives.
+    for k, r in enumerate(T_TIERS):
+        gap = math.asin(min(1.0, 1.9 / r))
+        a0, a1 = -math.pi / 2 + gap, 1.5 * math.pi - gap      # local angles, -Y (the stair) left open
+        m = max(6, int((a1 - a0) * r / 2.4))
+        pts = [Rm @ Vector((math.cos(a0 + (a1 - a0) * q / m) * (r - 0.25), math.sin(a0 + (a1 - a0) * q / m) * (r - 0.25), 0))
+               for q in range(m + 1)]
+        for a, b in zip(pts, pts[1:]):
+            kit.balustrade(bm, (a.x, a.y), (b.x, b.y), tops[k], tops[k], mi=0, post_every=2.4)
+    kit.mesh_object('Toutuo platform', bm, coll, mats)
+
+    # The stone gateway: three bays, grey-white stone, upswept stone roofs; open along the path.
+    g = gate
+    zg = ground(*g)
+    G = Matrix.Translation((g.x, g.y, zg)) @ Matrix.Rotation(yaw, 4, 'Z')
+    gb = bmesh.new()
+    for x in (-5.0, -1.9, 1.9, 5.0):
+        kit.add_box(gb, (x, 0, 0.4), (1.2, 1.2, 0.8), mi=1, matrix=G)            # the post's foot
+        kit.add_box(gb, (x, 0, 3.4), (0.7, 0.7, 6.8), mi=0, matrix=G)
+    kit.mesh_object('Toutuo gateway', gb, coll, ['granite', 'granite_shade'])
+    ob = bmesh.new()
+    kit.add_box(ob, (0, 0, 5.5), (3.8, 0.6, 0.5), mi=0, matrix=G)                # lintels
+    kit.add_box(ob, (0, 0, 6.3), (11.0, 0.7, 0.6), mi=0, matrix=G)
+    kit.add_box(ob, (0, -0.33, 5.9), (2.4, 0.08, 0.5), mi=1, matrix=G)           # the name panel
+    kit.mesh_object('Toutuo gateway lintels', ob, over, ['granite', 'granite_shade'])
+    for x, w, z in ((0.0, 2.5, 7.1), (-3.45, 1.9, 6.7), (3.45, 1.9, 6.7)):
+        r = kit.curved_roof('Toutuo gateway roof', over, (0, 0, 0), w, 1.0, 0.9, lift=0.4, thickness=0.2,
+                            material='granite', ridge_material='granite_shade')
+        r.matrix_world = G @ Matrix.Translation((x, 0, z)) @ r.matrix_world
+
+    # The Maitreya: seated, broad and round, laughing, on a stone pedestal, facing south over the
+    # city (assumed). About 6 m with the pedestal.
+    zb = ground(*T_BUDDHA)
+    B = Matrix.Translation((T_BUDDHA.x, T_BUDDHA.y, zb)) @ Matrix.Rotation(math.pi, 4, 'Z')
+    bb = bmesh.new()
+    kit.add_box(bb, (0, 0, 0.6), (5.2, 4.2, 1.2), mi=1, matrix=B)
+    kit.add_box(bb, (0, 0, 1.3), (4.6, 3.6, 0.2), mi=1, matrix=B)
+    for (cx, cy, cz), r in (((0, 0.2, 2.1), (2.1, 1.5, 0.75)),        # crossed legs, wide
+                            ((0, 0.05, 3.1), (1.45, 1.15, 1.35)),     # the round belly and chest
+                            ((0, -0.05, 3.95), (1.25, 0.95, 0.55)),   # shoulders
+                            ((0, 0.0, 4.85), (0.72, 0.68, 0.78)),     # head, clear of the shoulders
+                            ((-2.05, 0.1, 2.05), (0.85, 0.75, 0.75)), # the cloth bag, at his side
+                            ((1.35, 0.35, 2.6), (0.45, 0.6, 0.45)),   # hand on the knee
+                            ((-1.5, 0.2, 2.75), (0.45, 0.5, 0.45))):  # hand on the bag
+        sph = bmesh.ops.create_uvsphere(bb, u_segments=14, v_segments=8, radius=1.0)
+        bmesh.ops.transform(bb, matrix=B @ Matrix.Translation((cx, cy, cz)) @ Matrix.Diagonal((*r, 1)), verts=sph['verts'])
+        for f in {f for v in sph['verts'] for f in v.link_faces}:
+            f.material_index = 0
+    kit.mesh_object('Toutuo Maitreya', bb, coll, ['bronze', 'granite_shade'])
+
+    # Bare boulders round the peak.
+    rb = bmesh.new()
+    for a, d, r, h in ((0.3, 16, 1.6, 1.1), (1.2, 18, 1.2, 0.9), (2.4, 15.5, 2.0, 1.3), (3.0, 19, 1.0, 0.7),
+                       (4.1, 17, 1.5, 1.0), (5.5, 16.5, 1.3, 0.8)):
+        p = P + Vector((math.cos(a), math.sin(a))) * d
+        sph = bmesh.ops.create_icosphere(rb, subdivisions=1, radius=1.0)
+        bmesh.ops.transform(rb, matrix=Matrix.Translation((p.x, p.y, ground(*p) + h * 0.35)) @ Matrix.Rotation(a, 4, 'Z')
+                            @ Matrix.Diagonal((r, r * 0.8, h, 1)), verts=sph['verts'])
+    kit.mesh_object('Toutuo boulders', rb, coll, ['rock_grey'])
+    return tops[-1]
