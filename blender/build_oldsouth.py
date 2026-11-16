@@ -73,8 +73,23 @@ def collection(name, parent):
     return c
 
 
-HOUSE_MATS = ['whitewash', 'timber_dark', 'tile_dark', 'lantern', 'lantern_glow']
+HOUSE_MATS = ['whitewash', 'timber_dark', 'tile_dark', 'lantern', 'lantern_glow', 'brick_grey', 'timber_brown']
 MI = {'wall': 0, 'timber': 1, 'tile': 2, 'lantern': 3, 'glow': 4}
+# Laomendong (17 Nov): Nanjing's own old-town houses are blue-grey brick with dark brown timber
+# shopfronts and stepped brick gables ("grey brick, small tiles, horse-head walls"), not the
+# whitewashed Huizhou houses of the Qinhuai bank; about one in five is whitewashed (Commons
+# photographs from the city wall, research/oldsouth/FACTS.md). The district is OSM's
+# 老门东历史文化街区 (way 948332291), taken here as its bounding box.
+MI_BRICK = {'wall': 5, 'timber': 6, 'tile': 2, 'lantern': 3, 'glow': 4}
+MENDONG = ((-348.0, 102.0), (-1212.0, -821.0))
+kit.PALETTE.setdefault('brick_grey', '#80878A')      # Nanjing's blue-grey brick (青砖)
+kit.PALETTE.setdefault('timber_brown', '#4A3B30')    # Laomendong's dark brown shopfronts
+kit.PALETTE.setdefault('ink', '#2B2B2E')             # the paifang's characters and couplet boards
+
+
+def in_mendong(x, y):
+    (a, b), (c, d) = MENDONG
+    return a < x < b and c < y < d
 
 
 # --- River banks, bridges, lanterns ------------------------------------------------------------------
@@ -154,8 +169,11 @@ def build_houses(coll, keep):
             off = -w / 2 + uw * (k + 0.5)
             px, py = c[0] + math.cos(a) * off, c[1] + math.sin(a) * off
             M = Matrix.Translation((px, py, zground(px, py))) @ Matrix.Rotation(a + (math.pi if face < 0 else 0), 4, 'Z')
+            # Grey brick in Laomendong; which house stays white is fixed by its place, not the random
+            # stream, so the rest of the town builds as before.
+            grey = in_mendong(px, py) and int(abs(px * 7.3 + py * 3.1)) % 5 != 0
             oc.hui_house(bm, M, uw - 0.3, min(d, 14) - 0.4, floors, steps=2 if uw > 6 else 1, balcony=rnd.random() < 0.6,
-                         lanterns=2 if rnd.random() < 0.5 else 0, mats=MI)
+                         lanterns=2 if rnd.random() < 0.5 else 0, mats=MI_BRICK if grey else MI)
             n += 1
     kit.mesh_object('Old town houses', bm, coll, HOUSE_MATS)
     return n
@@ -304,19 +322,78 @@ def build_baoen(coll):
     oc.glass_tower("Bao'en Pagoda", coll, (BAOEN.x, BAOEN.y, zground(*BAOEN)), levels=9, r0=8.5, r1=6.2, level_h=7.4)
 
 
-def build_laomendong_gate(coll):
-    """老门东 paifang at the lane's head (OSM node), stone with a grey-tile roof."""
+def build_laomendong_gate(coll, over):
+    """老门东 paifang (OSM node 5595508794) at the head of Gutong Lane, as the Commons photographs show it
+    (research/oldsouth/FACTS.md): pale granite, four columns and three bays, the columns rising above
+    three dark-tiled roofs into tall round carved finials (17 m to the top, travel guides); the name
+    board 老門東 in the middle, dark couplet boards on the two inner columns, carved friezes, drum
+    stones at the columns' feet, all on a terrace reached by a broad flight of steps. Spacings and
+    heights are scaled from a photograph against that 17 m, not measured. It faces north, up the
+    promenade. Until 17 Nov: a 7 m frame of four posts.
+    Columns, drum stones and the terrace are in `coll`, which the walk grid's rays see; the beams,
+    boards and roofs over the openings are in `over`, which they pass through."""
     p = Vector((-76.3, -871.55))
-    bm = bmesh.new()
     z = zground(*p)
-    for x in (-5.5, -2.0, 2.0, 5.5):
-        kit.add_box(bm, (p.x + x, p.y, z + 3.5), (0.8, 0.8, 7.0), mi=0)
-    kit.add_box(bm, (p.x, p.y, z + 6.4), (12.0, 1.0, 1.0), mi=0)
-    kit.add_box(bm, (p.x, p.y - 0.55, z + 5.3), (3.6, 0.2, 1.0), mi=1)
-    kit.mesh_object('Laomendong gateway', bm, coll, ['granite_shade', 'gold'])
-    for x, w in ((0, 2.8), (-3.75, 2.2), (3.75, 2.2)):
-        kit.curved_roof('Laomendong roof', coll, (p.x + x, p.y, z + 7.0), w, 1.3, 1.0, lift=0.35, thickness=0.2,
+    G = Matrix.Translation((p.x, p.y, z))
+    rise, n_steps, run = 0.75, 5, 0.38
+    deep = 4.4                                         # the terrace, north to south
+    bm = bmesh.new()                                   # 0 granite, 1 granite_shade, 2 tile_dark, 3 ink
+    kit.add_box(bm, (0, 0, rise / 2), (27.0, deep, rise), mi=1, matrix=G)
+    for side in (1, -1):                               # steps down both faces, where there is no water
+        if water_mask.at(p.x, p.y + side * (deep / 2 + n_steps * run)):
+            print('LAOMENDONG no steps on side', side, flush=True)
+            continue
+        for k in range(n_steps):
+            h = rise * (n_steps - k) / (n_steps + 1)
+            kit.add_box(bm, (0, side * (deep / 2 + run * (k + 0.5)), h / 2), (24.0, run, h), mi=1, matrix=G)
+    top = rise
+    cols = ((-11.35, 11.4), (-5.15, 13.9), (5.15, 13.9), (11.35, 11.4))   # x, shaft top
+    for x, sh in cols:
+        kit.add_box(bm, (x, 0, top + 0.3), (1.9, 1.9, 0.6), mi=1, matrix=G)                     # plinth
+        kit.add_box(bm, (x, 0, (top + sh) / 2 + 0.3), (1.2, 1.2, sh - top - 0.6), mi=0, matrix=G)
+        kit.add_box(bm, (x, 0, sh + 0.35), (1.55, 1.55, 0.7), mi=0, matrix=G)                    # the cap
+        fin = 2.6 if abs(x) < 6 else 2.3
+        c = bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=0.52, radius2=0.52, depth=fin)
+        bmesh.ops.transform(bm, matrix=G @ Matrix.Translation((x, 0, sh + 0.7 + fin / 2)), verts=c['verts'])
+        for q in range(5):                                                                        # carved bands
+            c = bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=0.6, radius2=0.6, depth=0.14)
+            bmesh.ops.transform(bm, matrix=G @ Matrix.Translation((x, 0, sh + 0.9 + q * fin / 5)), verts=c['verts'])
+        c = bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=6, radius=0.52)
+        bmesh.ops.transform(bm, matrix=G @ Matrix.Translation((x, 0, sh + 0.7 + fin)) @ Matrix.Diagonal((1, 1, 0.6, 1)),
+                            verts=c['verts'])
+        for s_ in (1, -1):                                                                         # drum stones
+            kit.add_box(bm, (x, s_ * 1.5, top + 0.55), (0.7, 1.4, 1.1), mi=1, matrix=G)
+            d = bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=0.75, radius2=0.75, depth=0.55)
+            bmesh.ops.transform(bm, matrix=G @ Matrix.Translation((x, s_ * 1.45, top + 1.85)) @ Matrix.Rotation(math.pi / 2, 4, 'Y'),
+                                verts=d['verts'])
+    kit.mesh_object('Laomendong paifang', bm, coll, ['granite', 'granite_shade', 'tile_dark', 'ink'])
+
+    ob = bmesh.new()
+    # Middle bay: a carved frieze, the name board between carved roundels, a frieze, the roof. Side bays lower.
+    for x0, w, lo, board, hi in ((0.0, 9.1, 6.6, (7.6, 10.4), 11.6), (-8.25, 5.0, 4.9, (5.6, 7.8), 9.0),
+                                 (8.25, 5.0, 4.9, (5.6, 7.8), 9.0)):
+        b0, b1 = board
+        kit.add_box(ob, (x0, 0, top + (lo + b0) / 2), (w, 0.8, b0 - lo), mi=1, matrix=G)
+        kit.add_box(ob, (x0, 0, top + (b0 + b1) / 2), (w, 0.6, b1 - b0), mi=0, matrix=G)
+        kit.add_box(ob, (x0, 0, top + (b1 + hi) / 2), (w, 0.8, hi - b1), mi=1, matrix=G)
+        for s_ in (1, -1):
+            kit.add_box(ob, (x0, s_ * 0.42, top + (b0 + b1) / 2), (w * 0.42 if x0 == 0 else w * 0.7, 0.06, (b1 - b0) * 0.78),
+                        mi=0, matrix=G)                                                            # the panel's face
+            if x0 == 0:
+                for rx in (-3.2, 3.2):                                                             # roundels
+                    kit.add_box(ob, (rx, s_ * 0.42, top + (b0 + b1) / 2), (1.5, 0.08, 1.5), mi=1, matrix=G)
+    for x in (-5.15, 5.15):                                                                        # couplet boards
+        for s_ in (1, -1):
+            kit.add_box(ob, (x, s_ * 0.66, top + 7.3), (0.62, 0.1, 6.0), mi=3, matrix=G)
+    kit.mesh_object('Laomendong paifang beams', ob, over, ['granite', 'granite_shade', 'tile_dark', 'ink'])
+    for x, hw, zr, hh in ((0.0, 4.75, 11.7, 1.5), (-8.25, 2.75, 9.05, 1.2), (8.25, 2.75, 9.05, 1.2)):
+        kit.curved_roof('Laomendong roof', over, (p.x + x, p.y, z + top + zr), hw, 1.35, hh, lift=0.3, thickness=0.2,
                         material='tile_dark', ridge_material='tile_dark')
+    # The name, 老門東, read right to left (so written 東門老), on both faces.
+    for s_ in (1, -1):
+        T = G @ Matrix.Translation((0, s_ * 0.47, top + 9.0)) @ Matrix.Rotation(0 if s_ < 0 else math.pi, 4, 'Z')
+        print('LAOMENDONG name', s_, xw._plaque_text(over, T, f'Laomendong name {s_}', text='東門老', size=1.25, material='ink'),
+              flush=True)
 
 
 # --- Planting and markers -------------------------------------------------------------------------
@@ -441,7 +518,7 @@ def main():
     # hid it (a grey shaft with the glass eaves poking out, 14 Nov). The skyline is not drawn here.
     scene['skyline_clip'] = [BAOEN.x - 25, BAOEN.x + 25, BAOEN.y - 25, BAOEN.y + 25]
     lap('build_baoen')
-    build_laomendong_gate(c['Town'])
+    build_laomendong_gate(c['Town'], c['Overhead'])
     lap('build_laomendong_gate')
 
     def keep_house(x, y):
