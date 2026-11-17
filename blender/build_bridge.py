@@ -357,6 +357,68 @@ def gate(coll, gates_coll, target, n, s, t, z, toward):
     ac.add_point(coll, f'Gate {target}@{n}', loc, loc + d * 10)
 
 
+# OSM's ways in the South Bridgehead Park (南堡公园, "Nanbao Park") and along its bank: footways, the park's
+# service road, Baotaqiao West Street. A travel note (Ctrip) describes the park and the riverside belt as
+# big lawns with fitness walkways; until 18 Nov the lawn was bare. Only inside the park's walk grid.
+PARK_WAYS = {'footway': (2.4, 0), 'path': (2.0, 0), 'pedestrian': (3.0, 0), 'steps': (2.4, 0), 'cycleway': (2.4, 0),
+             'service': (4.0, 1), 'residential': (6.0, 1), 'living_street': (5.0, 1)}
+
+
+def build_park_paths(coll, terrain):
+    """Ribbons draped on the terrain mesh itself (a ray down at each point: the 8 m grid's faces lie
+    up to a few decimetres off the DEM between its corners). Returns the dense centre-line points
+    (to keep trees off them) and metres laid by kind."""
+    from mathutils.bvhtree import BVHTree
+    tri = terrain.data
+    bvh = BVHTree.FromPolygons([terrain.matrix_world @ v.co for v in tri.vertices], [list(f.vertices) for f in tri.polygons])
+
+    def h(x, y):
+        hit = bvh.ray_cast(Vector((x, y, 2000.0)), Vector((0, 0, -1)))
+        return None if hit[0] is None else hit[0].z
+
+    def inside(x, y):
+        s, t = ST(x, y)
+        return -258 < s < 328 and -298 < t < -18 and not wet(x, y)
+
+    bm, centre, laid = bmesh.new(), [], {}
+    for w in F['ways']:
+        if w.get('kind') not in PARK_WAYS or len(w['pts']) < 2:
+            continue
+        width, mi = PARK_WAYS[w['kind']]
+        dense = []
+        for a, b in zip(w['pts'], w['pts'][1:]):
+            n = max(1, int(math.dist(a[:2], b[:2]) / 1.5))
+            dense += [(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n) for k in range(n)]
+        dense.append(tuple(w['pts'][-1][:2]))
+        runs, run = [], []
+        for q in dense + [None]:
+            if q is not None and inside(*q) and h(*q) is not None:
+                run.append(q)
+            else:
+                if len(run) >= 2:
+                    runs.append(run)
+                run = []
+        for run in runs:
+            row = []
+            for i, q in enumerate(run):
+                a, b = run[max(0, i - 1)], run[min(len(run) - 1, i + 1)]
+                L = math.dist(a, b) or 1.0
+                nx, ny = -(b[1] - a[1]) / L * width / 2, (b[0] - a[0]) / L * width / 2
+                hs = [z for z in (h(q[0] + nx, q[1] + ny), h(*q), h(q[0] - nx, q[1] - ny)) if z is not None]
+                z = max(hs) + 0.15          # 6 cm fought the lawn in dashes seen from 100 m up
+                row.append((bm.verts.new((q[0] + nx, q[1] + ny, z)), bm.verts.new((q[0] - nx, q[1] - ny, z))))
+            for (l0, r0), (l1, r1) in zip(row, row[1:]):
+                f = bm.faces.new((l0, r0, r1, l1))
+                f.material_index = mi
+                if f.normal.z < 0:
+                    f.normal_flip()
+            centre += run
+            laid[w['kind']] = laid.get(w['kind'], 0.0) + sum(math.dist(a, b) for a, b in zip(run, run[1:]))
+    kit.mesh_object('Park paths', bm, coll, ['paving', 'road'])
+    print('PARK PATHS', {k: round(v) for k, v in laid.items()}, flush=True)
+    return centre
+
+
 def river_lane(s):
     """The navigation channel at s: t from bank to bank (wet), sampled outwards from the bridge."""
     ts = []
@@ -380,7 +442,13 @@ def main():
     protos = oc.extra_prototypes(c['Prototypes'], kit.tree_prototypes(c['Prototypes']))
     x0, x1, y0, y1 = A.extent
     patch = ((max(x0 + 30, -2100.0), min(x1 - 30, 700.0)), (max(y0 + 30, -700.0), min(y1 - 30, 1500.0)))
-    ac.terrain_patch('Terrain bridge', c['Ground'], patch[0], patch[1], ground, ['lawn', 'paving', 'city_ground', 'river_bed'], step=8.0)
+    terrain = ac.terrain_patch('Terrain bridge', c['Ground'], patch[0], patch[1], ground, ['lawn', 'paving', 'city_ground', 'river_bed'], step=8.0)
+    path_pts = build_park_paths(c['Ground'], terrain)
+    path_cells = {(round(x / 2), round(y / 2)) for x, y in path_pts}
+
+    def off_path(x, y):              # trees 3 m or more from a path's centre line
+        i, j = round(x / 2), round(y / 2)
+        return not any((i + a, j + b) in path_cells for a in (-1, 0, 1) for b in (-1, 0, 1))
     ac.outer_apron('Terrain outer', c['Ground'], A, (patch,), lambda x, y: ground(x, y)[0], material='city_ground')
     # The river is OSM's whole Yangtze (it runs on for tens of kilometres), so from the deck it
     # reaches the horizon; the terrain dips below it wherever OSM says river. Beyond the DEM crop a
@@ -425,10 +493,10 @@ def main():
                                lambda x, y: clear(x, y, 40) and not park_mask.at(x, y) and not sky.at(x, y) and not wet(x, y))
     kinds = ['broadleaf', 'broadleaf_sun', 'broadleaf_shade', 'cedar', 'willow']
     trees = ac.scatter(protos, c['Trees'], rnd, kinds, 900, (patch[0][0], patch[0][1]), (patch[1][0], patch[1][1]),
-                       lambda x, y: park_mask.at(x, y) and clear(x, y, 34) and
+                       lambda x, y: park_mask.at(x, y) and clear(x, y, 34) and off_path(x, y) and
                        all(abs(ST(x, y)[0] - tc) > 75 or abs(ST(x, y)[1]) > 75 for tc in TOWERS), zground)
     trees += ac.scatter(protos, c['Trees'], rnd, kinds, 1400, (patch[0][0], patch[0][1]), (patch[1][0], patch[1][1]),
-                        lambda x, y: not wet(x, y) and clear(x, y, 36) and not park_mask.at(x, y) and
+                        lambda x, y: not wet(x, y) and clear(x, y, 36) and not park_mask.at(x, y) and off_path(x, y) and
                         all(abs(ST(x, y)[0] - tc) > 75 or abs(ST(x, y)[1]) > 75 for tc in TOWERS), zground)
 
     # Traffic: two trains on the lower deck, barges up and down the channel, cars both ways.

@@ -29,7 +29,8 @@
    }
   ],
   "walkableCells": 75146,
-  "water": true
+  "water": true,
+  "roads": false
  },
  "labels": {
   "bridge": "the South Bridgehead",
@@ -3538,7 +3539,8 @@
    "phase": 0.3
   }
  ],
- "trees": 1644,
- "staticTriangles": 316561,
+ "transit": false,
+ "trees": 1630,
+ "staticTriangles": 317859,
  "provenance": "Terrain: Copernicus GLO-30 (DLR/Airbus, ESA). Bridge outline, roads, railway, river, park and buildings: OpenStreetMap contributors (ODbL). Structure from published figures; see research/bridge/FACTS.md."
 }

@@ -71,7 +71,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     };mat.customProgramCacheKey=()=>`city-ink-v2-${leaves?'leaves':land?'terrain':stone?'stone':wood?'wood':architectural?'architecture':'paper'}`;return mat;
   }
   const built=buildCityScene(data,shared,inkMaterial,{roads}),{scene,places,routes,ground}=built;
-  const cityDirection=new THREE.Vector3(),skyShared={...shared,uSunDir:{value:cityDirection},uPainted:{value:1}};
+  const cityDirection=new THREE.Vector3(),skyShared={...shared,uSunDir:{value:cityDirection},uPainted:{value:1},uBank:{value:0}};
   const sky=createSkyDome(scene,skyShared).dome;sky.scale.setScalar(5);
   const hemi=new THREE.HemisphereLight(0xcfe6ff,0x7d9456,2.2),sun=new THREE.DirectionalLight(0xffe7b8,2.0);
   scene.add(hemi,sun,sun.target);

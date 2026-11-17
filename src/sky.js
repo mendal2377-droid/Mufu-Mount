@@ -11,6 +11,10 @@ const fragmentShader = `
 uniform float time, sunset, storm, snow, flash, dawn, night;
 uniform vec3 uSunDir;
 uniform float uHorizon;
+// 1: paint the far bank below (the Mufu scene, whose water plane ends at the horizon). 0 in the
+// city and the landmark worlds, which model their own land to the horizon: there the painted
+// shore lay on it as a black line, darkest at dusk (seen from the Yangtze Bridge's deck, 18 Nov).
+uniform float uBank;
 // 1 in the illustrated city: a hand-painted sky of saturated blue, towering flat-based
 // cumulus on the horizon and cel-shaded banks overhead. 0 leaves the Mufu sky untouched.
 uniform float uPainted;
@@ -231,12 +235,12 @@ void main(){
   vec3 bankCol = mix(vec3(0.17, 0.20, 0.18), vec3(0.020, 0.028, 0.045), dusk);
   bankCol = mix(bankCol, vec3(0.40, 0.45, 0.47), storm * 0.55);
   bankCol = mix(bankCol, vec3(0.62, 0.67, 0.70), snow * 0.5);
-  col = mix(col, bankCol, bank * (0.52 + 0.44 * dusk) * (1.0 - storm * 0.35));
+  col = mix(col, bankCol, bank * (0.52 + 0.44 * dusk) * (1.0 - storm * 0.35) * uBank);
 
   // Shore lights, and the long lit line of a crossing, once the sun is down.
   float lamps = smoothstep(0.00055, 0.0, abs(elev - ridge * 0.42));
   float lit = step(0.66, hash(vec2(floor(azim * 620.0), 19.0)));
-  float lightsOn = max(dusk, night);
+  float lightsOn = max(dusk, night) * uBank;
   col += vec3(1.0, 0.63, 0.24) * lamps * lit * lightsOn * 0.85 * (1.0 - storm * 0.8);
   float crossing = smoothstep(0.00030, 0.0, abs(elev - 0.0016))
                  * smoothstep(0.45, 0.9, fbm(vec2(azim * 1.3, 29.0)));
@@ -249,7 +253,7 @@ void main(){
 }`;
 
 export function createSkyDome(scene, shared) {
-  const uniforms = { uPainted: { value: 0 }, ...shared };
+  const uniforms = { uPainted: { value: 0 }, uBank: { value: 1 }, ...shared };
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(18000, 48, 32),
     new THREE.ShaderMaterial({
