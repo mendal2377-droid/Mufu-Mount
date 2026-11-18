@@ -696,6 +696,86 @@ def build_infill(coll, blocked, skip, mark):
     return n
 
 
+def palace_surrounds(c, pal, pal_z, in_palace, protos):
+    """The rest of the Presidential Palace's box (18 Nov). The city keeps OSM's buildings, roads and
+    trees out of in_palace, but the palace model covers only the axis and the West Garden; the rest
+    stood bare grey. Here: OSM's footprints in the box and, where OSM maps none, CMAB's rooftops (up
+    to 800 m2: the larger ones are modern blocks, OSM's 3,600 m2 hotel on the east edge among them,
+    whose hall sat on top of the city's own block there), clear of the model (its objects' plan
+    boxes, 3 m out) and of water, each a single-storey grey-brick hall with a dark tiled roof on its
+    footprint's rectangle (the side courts are old halls; their look is assumed); and the palace
+    world's own trees (art-src/palace.blend) as city trees. Returns (halls, trees)."""
+    hero = []
+    for cname in ('PalaceGate', 'PalaceGateOver', 'Buildings', 'Overhead'):
+        for o in c[cname].all_objects:
+            if o.type != 'MESH':
+                continue
+            bb = [o.matrix_world @ Vector(q) for q in o.bound_box]
+            x0, x1, y0, y1 = min(b.x for b in bb), max(b.x for b in bb), min(b.y for b in bb), max(b.y for b in bb)
+            if in_palace((x0 + x1) / 2, (y0 + y1) / 2):
+                hero.append((x0 - 3, x1 + 3, y0 - 3, y1 + 3))
+
+    def in_hero(x, y):
+        return any(x0 < x < x1 and y0 < y < y1 for x0, x1, y0, y1 in hero)
+
+    def touches(pts):
+        if any(ac.point_in_poly(x, y, pts) for x0, x1, y0, y1 in hero for x, y in ((x0, y0), (x1, y0), (x0, y1), (x1, y1))):
+            return True
+        for a, b in zip(pts, pts[1:] + pts[:1]):
+            n = max(1, int(math.dist(a, b)))
+            if any(in_hero(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n) for k in range(n + 1)):
+                return True
+        return False
+
+    plots, covered = [], set()
+    for b in F['buildings']:
+        pts = b['pts'][:-1] if b['pts'][0] == b['pts'][-1] else list(b['pts'])
+        if len(pts) < 3 or abs(pts[0][0] - pal.x) > 400 or abs(pts[0][1] - pal.y) > 400:
+            continue
+        covered.update(cmab_hits(pts))
+        cx, cy = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+        if in_palace(cx, cy) and abs(area(pts)) <= 800 and not touches(pts):
+            plots.append(pts)
+    for k, (_, _, _, ring) in enumerate(CMAB):
+        cx, cy = CMAB_C[k]
+        if k in covered or not in_palace(cx, cy):
+            continue
+        pts = [tuple(p[:2]) for p in ring]
+        if abs(area(pts)) <= 800 and dry(cx, cy, 2.0) and not touches(pts):
+            plots.append(pts)
+    kit.PALETTE.setdefault('brick_grey', '#80878A')
+    halls = 0
+    for pts in plots:
+        a = abs(area(pts))
+        if a < 12:
+            continue
+        (bx, by), w, d, ang = ac.oriented_box(pts)
+        oc.hall(f'Palace surrounds {halls}', c['Buildings'], (bx, by, zground(bx, by)), max(2.6, w - 2.4), max(2.6, d - 2.4), 4.2,
+                walls='brick_grey', roof='tile_dark', yaw=ang, columns=a > 120, double=a > 700, plinth=0.6)
+        halls += 1
+    # The palace world's trees, on the city's own prototypes (the export reads a tree's kind from
+    # its mesh's name): in the model's courts and garden at the model's height, elsewhere on the
+    # city's ground.
+    meshes = {o.data.name: o.data for o in protos.values()}
+    with bpy.data.libraries.load(str(ROOT / 'art-src' / 'palace.blend')) as (src, dst):
+        dst.collections = [n for n in src.collections if n == 'Trees']
+    trees = 0
+    for coll in dst.collections:
+        for o in list(coll.objects):
+            me = meshes.get(o.data.name.split('.')[0]) if o.type == 'MESH' else None
+            x, y = o.matrix_world.translation.x + pal.x, o.matrix_world.translation.y + pal.y
+            if me is not None and in_palace(x, y):
+                z = o.matrix_world.translation.z + pal_z if in_hero(x, y) else zground(x, y) - 0.2
+                t = bpy.data.objects.new(me.name.replace('proto ', ''), me)
+                sc = o.matrix_world.to_scale().x
+                t.matrix_world = Matrix.Translation((x, y, z)) @ Matrix.Rotation(o.matrix_world.to_euler('XYZ').z, 4, 'Z') @ Matrix.Diagonal((sc, sc, sc, 1))
+                c['Trees'].objects.link(t)
+                trees += 1
+            bpy.data.objects.remove(o, do_unlink=True)
+        bpy.data.collections.remove(coll)
+    return halls, trees
+
+
 # --- Roads ------------------------------------------------------------------------------------------
 WIDTH = {'trunk': 26.0, 'primary': 22.0, 'secondary': 15.0, 'tertiary': 11.0, 'residential': 7.0, 'unclassified': 7.0,
          'living_street': 5.5, 'service': 4.5, 'pedestrian': 7.0, 'footway': 2.6, 'cycleway': 3.0, 'path': 2.0,
@@ -959,6 +1039,7 @@ def main():
             # than the city-wide meshes keep (blender/core_landmarks.py).
             gate = {'Presidential Palace gate': c['PalaceGate'], 'Gate overhead': c['PalaceGateOver'], 'Gate inscription': c['PalaceGateOver']}
             gate.get(o.name.split('.')[0], target).objects.link(o)
+    print('PALACE SURROUNDS', palace_surrounds(c, pal, pal_z, in_palace, protos), flush=True)
 
     # Mufu Mountain: the app's own detailed model at its real place (blender/mufu_merge.py). Its land
     # replaces the city's there: OSM buildings, roads, infill and trees keep out, the city's ground
