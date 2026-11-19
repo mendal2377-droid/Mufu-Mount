@@ -15,7 +15,7 @@ const r = await page.evaluate(() => {
   const S = [5051.4, 3365.6], P = [5059.4, 3391.7];
   w.placeAt({ feet: [S[0], w.ground(S[0], -S[1]), -S[1]], look: [P[0], 0, -P[1]] });
   m.step(1, 0.1);
-  // The road lies 1.2 m below the grass right at the station: let the route finder find the way up.
+  // Since 19 Nov the station road lies on its cross-slope (build_core.settle_roads), 0.3 m over the grass.
   const path = window.__journey.route([S[0], -S[1]], [P[0], -P[1]]).path;
   const end = window.__journey.drive(path, "walk", 1500);
   const prof = []; for (let q = 0; q <= 40; q += 2) { const h = g.height(S[0] + (P[0] - S[0]) * q / 40, -(S[1] + (P[1] - S[1]) * q / 40)); prof.push(h === null ? null : +h.toFixed(2)); }

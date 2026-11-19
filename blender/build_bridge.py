@@ -405,7 +405,10 @@ def build_park_paths(coll, terrain):
                 L = math.dist(a, b) or 1.0
                 nx, ny = -(b[1] - a[1]) / L * width / 2, (b[0] - a[0]) / L * width / 2
                 hs = [z for z in (h(q[0] + nx, q[1] + ny), h(*q), h(q[0] - nx, q[1] - ny)) if z is not None]
-                z = max(hs) + 0.15          # 6 cm fought the lawn in dashes seen from 100 m up
+                # 0.3 m, as the city's roads: 6 cm fought the lawn in dashes seen from 100 m up, and
+                # 15 cm still did on one slope (19 Nov): the export joins the Ground collection into one
+                # mesh stored in 16 bits over the whole world's bounds, about 0.1 m steps in height.
+                z = max(hs) + 0.3
                 row.append((bm.verts.new((q[0] + nx, q[1] + ny, z)), bm.verts.new((q[0] - nx, q[1] - ny, z))))
             for (l0, r0), (l1, r1) in zip(row, row[1:]):
                 f = bm.faces.new((l0, r0, r1, l1))

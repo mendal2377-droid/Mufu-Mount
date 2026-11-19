@@ -953,6 +953,42 @@ def carriageway_test(cell=40.0):
     return on_road
 
 
+def settle_roads(o, grounds, x0, x1, y0, y1, lift=0.3):
+    """Lays the road ribbon inside a box on the ground meshes themselves, each vertex at the ground
+    under it plus lift (19 Nov). By the Zhongshan patches a road lies level across at its higher edge
+    (build_roads), and zground is not the mesh there (Toutuo Ridge stands on the 24 m outer terrain,
+    up to 1.6 m off it): at the cable car station the road stood 0.9-1.3 m over the grass on its
+    downhill side, and the walk up went round it. The ribbon is cut to about 2.5 m first, so the
+    hill cannot bulge through between its 4-12 m samples. Returns the vertices laid."""
+    tris = []
+    for g in grounds:
+        bb = [g.matrix_world @ Vector(q) for q in g.bound_box]
+        if min(b.x for b in bb) < x1 and max(b.x for b in bb) > x0 and min(b.y for b in bb) < y1 and max(b.y for b in bb) > y0:
+            tris.append(BVHTree.FromPolygons([g.matrix_world @ v.co for v in g.data.vertices], [tuple(p.vertices) for p in g.data.polygons]))
+
+    def inside(v):
+        return x0 < v.co.x < x1 and y0 < v.co.y < y1
+
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    for _ in range(3):
+        long = [e for e in bm.edges if inside(e.verts[0]) and inside(e.verts[1]) and e.calc_length() > 2.5]
+        if not long:
+            break
+        bmesh.ops.subdivide_edges(bm, edges=long, cuts=1, use_grid_fill=True)
+    laid = 0
+    for v in bm.verts:
+        if inside(v):
+            hs = [h[0].z for t in tris for h in [t.ray_cast(Vector((v.co.x, v.co.y, 2000.0)), Vector((0, 0, -1)))] if h[0] is not None]
+            if hs:
+                v.co.z = max(hs) + lift
+                laid += 1
+    bm.to_mesh(o.data)
+    bm.free()
+    o.data.update()
+    return laid
+
+
 # --- Trees ------------------------------------------------------------------------------------------
 # From research/plants/FACTS.md. Roads the city lists as plane avenues (梧桐路):
 PLANE_ROADS = ('中山路', '中山东路', '中山北路', '中山南路', '中央路', '长江路', '北京西路', '瞻园路', '黄埔路', '瑞金路', '颐和路',
@@ -1248,6 +1284,8 @@ def main():
     # grounds run under its buildings.
     roads, avenues = build_roads(c['Roads'], lambda x, y, kind: in_palace(x, y) or in_mufu(x, y)
                                  or (in_zs(x, y) and (kind in FOOT or ZS.covers(x, y))))
+    print('TOUTUO ROAD SETTLED', settle_roads(roads, [g for g in c['Ground'].all_objects if g.type == 'MESH'],
+                                              4992.0, 5092.0, 3345.0, 3442.0), flush=True)
     wall_m, breaches, arches = xw.build_wall(wall, c['Buildings'], c['Overhead'], zground, gate=c['XuanwuGate'])
     pavilions = xw.xuanwu_gate(wall, c['XuanwuGate'], zground, c['XuanwuGateOver'])
     # Landmarks that had only their OSM footprints as city blocks (blender/core_landmarks.py).
