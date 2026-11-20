@@ -762,13 +762,15 @@ def palace_surrounds(c, pal, pal_z, in_palace, protos):
     trees = 0
     for coll in dst.collections:
         for o in list(coll.objects):
+            # Its own location, turn and scale (the trees have no parent): an appended object in no
+            # scene has an identity matrix_world, which stacked all 293 trees on the palace origin.
             me = meshes.get(o.data.name.split('.')[0]) if o.type == 'MESH' else None
-            x, y = o.matrix_world.translation.x + pal.x, o.matrix_world.translation.y + pal.y
+            x, y = o.location.x + pal.x, o.location.y + pal.y
             if me is not None and in_palace(x, y):
-                z = o.matrix_world.translation.z + pal_z if in_hero(x, y) else zground(x, y) - 0.2
+                z = o.location.z + pal_z if in_hero(x, y) else zground(x, y) - 0.2
                 t = bpy.data.objects.new(me.name.replace('proto ', ''), me)
-                sc = o.matrix_world.to_scale().x
-                t.matrix_world = Matrix.Translation((x, y, z)) @ Matrix.Rotation(o.matrix_world.to_euler('XYZ').z, 4, 'Z') @ Matrix.Diagonal((sc, sc, sc, 1))
+                sc = o.scale.x
+                t.matrix_world = Matrix.Translation((x, y, z)) @ Matrix.Rotation(o.rotation_euler.z, 4, 'Z') @ Matrix.Diagonal((sc, sc, sc, 1))
                 c['Trees'].objects.link(t)
                 trees += 1
             bpy.data.objects.remove(o, do_unlink=True)

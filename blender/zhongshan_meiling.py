@@ -252,7 +252,10 @@ class Meiling:
 
     def spawn_points(self):
         z = self.pad_z
-        front = (PALACE.x, PALACE.y - D / 2 - 9.0 - 3.6 - 14.0, z)
+        # The front spot is 26 m out, past the levelled pad, where the ground has dropped about 2.5 m:
+        # at pad height the spawn stood that far over the slope (2.7 m in the city's 4 m walk grid).
+        fy = PALACE.y - D / 2 - 9.0 - 3.6 - 14.0
+        front = (PALACE.x, fy, min(z, self.ground(PALACE.x, fy)[0]))
         terrace = (PALACE.x, PALACE.y - D / 2 - 6.0, z + 1.6)
         gate = (PALACE.x + PAD[0] - 6.0, PALACE.y - PAD[1] + 5.0, z)
         return {'front': front, 'terrace': terrace, 'gate': gate, 'palace': (PALACE.x, PALACE.y, z + 8)}

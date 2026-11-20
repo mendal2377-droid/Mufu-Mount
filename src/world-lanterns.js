@@ -26,8 +26,10 @@ export const WORLD_LANTERNS = {
     // The tower's foot; halfway down Zhongshan Road; just north of Gulou (not on the Gulou spawn
     // itself, -470, 2000, where arriving picked it up before the visitor had looked round).
     zifeng: [[-548, 2309], [-500, 2150], [-480, 2060]],
-    // The gate; the axis behind it; the west garden.
-    palace: [[808, 314], [798, 489], [720, 480]],
+    // The gate; the axis behind it; the west garden. The garden's first spot (720, 480) snapped into a
+    // pocket that the palace's own trees, in the city since build 13 (20 Nov), close off; this is the
+    // garden path just north, which a walk from the palace spawn reaches.
+    palace: [[808, 314], [798, 489], [702, 498]],
     // Round Mochou Lake: north, east and south-west shores. First guesses at the shore (-2535, -150;
     // -2300, -400; -2700, -650) snapped onto ground cut off from the paths, so these are the nearest
     // points a walk from Xinjiekou reaches (tests/lanterns-browser.mjs, 12 Nov).

@@ -533,6 +533,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       if(tr?.busRide){if(openRidePick())return;world.getOffBus(busOff);
         if(world.transit.busRide)toast('Getting off at the next stop');return;}
       if(tr?.waiting){tr.cancelWait();toast('Stopped waiting');return;}
+      // A moon gate within its 3 m comes first, as the hint promises: Xinjiekou's gate stands inside
+      // the metro entrance's 6 m, so F opened the station instead of the glide to the palace.
+      const gate0=!picked&&world.nearestGate();
+      if(gate0){world.startGlide(world.spawn(gate0.target),{from:true});toast(`Gliding to ${world.label(gate0.target)} · any key to land`);return;}
       const near=picked||world.nearestTransit();
       // At a stop: choose the line and where to get off first.
       if(near?.kind==='bus'&&!near.picked&&world.transit.linesAt(near.stop).length){openBusPick(near);return;}
