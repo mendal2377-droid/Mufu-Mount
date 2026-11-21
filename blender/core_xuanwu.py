@@ -43,6 +43,9 @@ GATE_ARCHES = (-7.8, 0.0, 7.8)  # three equal round-headed passages (one until 1
 GATE_R = 2.2                    # each 4.4 m wide, its crown 5.5 m up
 GATE_SPRING = 3.3
 GATE_WALL_NEAR = 150.0          # the wall this close beside it stands at its height, as in the photograph
+# The wall's footing: "the base is laid with stone blocks" (a walker's note on the Xuanwu Gate to Jiefang
+# Gate stretch, offpeaktrip.com, Sept 2022). How high it shows is not given; 1.2 m is our guess.
+WALL_PLINTH = 1.2
 # The two service ways OSM draws through the gate are its paved forecourt, not a street: as asphalt
 # with a centre line they ran straight into the shut middle doors (the owner's build 12 views).
 GATE_FORECOURT = {280718320, 1095550197}
@@ -252,10 +255,10 @@ def build_wall(wall, coll, over, ground, gate=None, only_gate=False):
                         near = sg is not None and abs((a0 + a1) / 2 - sg) < GATE_WALL_NEAR
                         if near and gate is not None:
                             oc.city_wall(near_bm, _cut(pts, a0, a1), ground, height=GATE_TOP, width=WALL_W,
-                                         outer_side=side, top_override=level)
+                                         outer_side=side, top_override=level, plinth=WALL_PLINTH)
                         elif not only_gate:
                             oc.city_wall(bm, _cut(pts, a0, a1), ground, height=GATE_TOP if near else height,
-                                         width=WALL_W, outer_side=side)
+                                         width=WALL_W, outer_side=side, plinth=WALL_PLINTH)
                 built += g0 - s
             if arch == 'gate':
                 arches += 1
@@ -277,10 +280,10 @@ def build_wall(wall, coll, over, ground, gate=None, only_gate=False):
                     breaches += 1
             s = max(s, g1)
     if gate is not None:
-        kit.mesh_object('Xuanwu Gate wall', near_bm, gate, ['ming_brick', 'paving'])
+        kit.mesh_object('Xuanwu Gate wall', near_bm, gate, ['ming_brick', 'paving', 'gate_ashlar'])
     if only_gate:
         return built, breaches, arches
-    kit.mesh_object('City wall', bm, coll, ['ming_brick', 'paving'])
+    kit.mesh_object('City wall', bm, coll, ['ming_brick', 'paving', 'gate_ashlar'])
     kit.mesh_object('City wall arches', lint, over, ['ming_brick', 'paving'])
     return built, breaches, arches
 

@@ -1439,6 +1439,39 @@ def main():
                 park_trees += 1
     trees += park_trees
     print('PARK TREES', park_trees, flush=True)
+    # The Ming wall's feet (21 Nov): the canopy map has tall trees hugging the wall (north of Xuanwu
+    # Gate a belt 40 m across, over both its feet), but the strip at its foot is not OSM green space,
+    # so the lattice above left it bare grey on the city side. Two rows each side, 5 and 9 m off the
+    # face, every 7 m, where the canopy covers the cell, scaled to its height. "Tall fir and pine
+    # trees flank the wall" at the gate (offpeaktrip.com, Sept 2022): conifers, drawn as cedar (as
+    # the mountain's pine above), with the city's camphor and scholar trees; the mix is our guess.
+    wall_kinds = ['cedar', 'cedar', 'cedar', 'camphor', 'scholar']
+    wall_tall = {k: max(protos[k].dimensions.z, 1.0) for k in set(wall_kinds)}
+    wall_trees = 0
+    for w in wall.lines:
+        pts = [tuple(p) for p in w['pts']]
+        for off in (xw.WALL_W / 2 + 5.0, xw.WALL_W / 2 + 9.0):
+            for side in (-1, 1):
+                line = ac.polyline_offset(pts, side * off)
+                run, nxt = 0.0, rnd.uniform(0, 7)
+                for i in range(1, len(line)):
+                    seg = (line[i] - line[i - 1]).length
+                    while nxt < run + seg:
+                        q = line[i - 1].lerp(line[i], (nxt - run) / max(seg, 1e-6))
+                        nxt += 7.0
+                        x, y = q.x + rnd.uniform(-1, 1), q.y + rnd.uniform(-1, 1)
+                        cover, h = canopy_at(x, y)
+                        if h < 3 or rnd.random() >= cover or green_mask.at(x, y) or foot_mask.at(x, y) or in_palace(x, y):
+                            continue
+                        if blocked(x, y) or not crown_clear(x, y, 3.5) or not dry(x, y):
+                            continue
+                        k = rnd.choice(wall_kinds)
+                        kit.place(protos[k], c['Trees'], (x, y, zground(x, y) - 0.2), rnd.uniform(0, 6.28),
+                                  min(1.4, max(0.55, h / wall_tall[k] * rnd.uniform(.85, 1.05))))
+                        wall_trees += 1
+                    run += seg
+    trees += wall_trees
+    print('WALL TREES', wall_trees, flush=True)
     # Purple Mountain's forest (OSM relation 16455205). Its secondary forest has turned from planted
     # Masson pine to deciduous broadleaf: in forest-gap surveys sweetgum (枫香) is in every plot, then
     # castor aralia, white oak, Chinese pistache and cork oak; conifers about 10 % of the reserve,

@@ -26,8 +26,11 @@ const PAINT = {
   // The Presidential Palace gate's grey stone blocks; the Drum Tower's red-washed brick.
   palace_stone: {mottle: .06, scale: .7, courses: [.55, 1.3]}, drum_red: {mottle: .12, scale: .6, courses: [.3, .7]},
   // The Ming wall: brick courses on its faces (drawn larger than the real 10 cm bricks, to read at a
-  // distance). It was one flat grey (the owner's build 12 views: "plain grey").
-  ming_brick: {mottle: .07, scale: .5, courses: [.25, .62]},
+  // distance). It was one flat grey (the owner's build 12 views: "plain grey"). Since 21 Nov bluish
+  // grey with the odd brick of another colour: "mostly dense bluish-gray, with a few ... white
+  // porcelain bricks, and an occasional red or yellow one" (a walker's note on the Xuanwu Gate to
+  // Jiefang Gate stretch, offpeaktrip.com, Sept 2022). The shares are our guess.
+  ming_brick: {mottle: .07, scale: .5, courses: [.25, .62], odd: 1, tint: [.88, .95, 1.08]},
   hedge: {mottle: .12, scale: 1.2}, vine: {mottle: .16, scale: 1.4}, water: {mottle: 0, scale: 1},
   // Skyline towers: painted floor bands and mullions, windows that light up at dusk.
   tower_glass: {mottle: .03, scale: .3, windows: 1}, tower_glass_dark: {mottle: .03, scale: .3, windows: 1},
@@ -292,7 +295,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     mat.onBeforeCompile = s => {
       s.uniforms.citySnow = shared.snow; s.uniforms.worldMottle = {value: style.mottle}; s.uniforms.worldScale = {value: style.scale};
       s.uniforms.worldJoints = {value: style.joints || 0}; s.uniforms.worldCourses = {value: new THREE.Vector2(...(style.courses || [0, 1]))}; s.uniforms.cityTime = shared.time;
-      s.uniforms.worldWater = {value: name === 'water' ? 1 : 0};
+      s.uniforms.worldWater = {value: name === 'water' ? 1 : 0}; s.uniforms.worldOdd = {value: style.odd || 0};
+      s.uniforms.worldTint = {value: new THREE.Vector3(...(style.tint || [1, 1, 1]))};
       // Distance from the shore, for the water's shallows; the lotus beds' season.
       const sh = name === 'water' ? shore() : NO_SHORE;
       s.uniforms.shoreTex = {value: sh.tex}; s.uniforms.shoreBox = {value: sh.box};
@@ -306,7 +310,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.skyClip = {value: new THREE.Vector4(...(meta.skyline_clip || [1, -1, 1, -1]))};
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nattribute float wallTop;varying float vTop;\n#endif\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;\n#ifdef FACADE_TOP\nvTop=wallTop;\n#endif\n');
-      s.fragmentShader = 'uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops,worldLotus,citySeason;uniform vec3 hazeColor;uniform vec2 worldCourses;uniform vec4 skyClip,shoreBox;uniform sampler2D shoreTex;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
+      s.fragmentShader = 'uniform float worldOdd;uniform vec3 worldTint;uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops,worldLotus,citySeason;uniform vec3 hazeColor;uniform vec2 worldCourses;uniform vec4 skyClip,shoreBox;uniform sampler2D shoreTex;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -314,6 +318,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           vec2 q=vWorldPos.xz*worldScale;
           float m=lwNoise(q)*.65+lwNoise(q*3.7)*.35;
           diffuseColor.rgb*=1.+(m-.5)*2.*worldMottle;
+          diffuseColor.rgb*=worldTint;
           // Stone slabs on level stone: staggered 1.6 x 1.1 m joints, faded out where they would alias.
           vec2 slab=vWorldPos.xz/vec2(1.6,1.1);slab.x+=step(.5,fract(slab.y*.5))*.5;
           vec2 e=abs(fract(slab)-.5);float fw=max(fwidth(slab.x),fwidth(slab.y));
@@ -333,6 +338,10 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             float seen=(1.-smoothstep(.1,.42,bw))*upright;
             diffuseColor.rgb*=1.-max(smoothstep(.42,.49,be.y),smoothstep(.465,.495,be.x))*.17*seen;
             diffuseColor.rgb*=1.+(lwHash(floor(bk))-.5)*.1*seen;
+            // The odd brick of another colour (the Ming wall): grey-brown, white, red or yellow.
+            if(worldOdd>0.){float ob=lwHash(floor(bk)+vec2(17.3,5.1));
+              vec3 oc=ob<.06?vec3(1.14,.98,.8):ob<.075?vec3(1.38,1.36,1.3):ob<.081?vec3(1.3,.8,.68):ob<.087?vec3(1.28,1.12,.7):vec3(1.);
+              diffuseColor.rgb*=mix(vec3(1.),oc,seen*worldOdd);}
             diffuseColor.rgb*=1.+(lwNoise(vec2(run*.45,vWorldPos.y*.07))-.55)*.14*upright;
           }
           diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.9,.86),citySnow*.7*smoothstep(.4,.9,vUp));

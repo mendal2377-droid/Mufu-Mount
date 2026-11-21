@@ -216,10 +216,11 @@ def hui_house(bm, M, w, d, floors=2, *, steps=2, balcony=True, lanterns=0, mats=
 # --- The Ming city wall ------------------------------------------------------------------------------
 
 def city_wall(bm, pts, ground, *, height=14.0, width=12.0, outer_side=1, mi_brick=0, mi_top=1, merlon_every=2.6,
-              top_override=None):
+              top_override=None, plinth=0.0, mi_plinth=2):
     """Grey-brick wall along a polyline: a battered body, a paved walkway on top, crenellated
     parapet on the outer side and a low parapet inside. ground(x, y) gives the foot height; the
-    top follows the smoothed foot plus height so the walkway has no sudden steps."""
+    top follows the smoothed foot plus height so the walkway has no sudden steps. plinth: the height of
+    a stone footing over the foot on both faces, 6 cm proud (material mi_plinth); 0 for none."""
     pts = [Vector(p) for p in pts]
     if len(pts) < 2:
         return
@@ -245,6 +246,9 @@ def city_wall(bm, pts, ground, *, height=14.0, width=12.0, outer_side=1, mi_bric
         zb = min(base[i], base[i + 1]) - 1.0
         R = Matrix.Translation((mid.x, mid.y, 0)) @ Matrix.Rotation(ang, 4, 'Z')
         add_box(bm, (0, 0, (zb + zt) / 2), (seg + 0.05, width, zt - zb), mi=mi_brick, matrix=R)
+        if plinth > 0:
+            zp = max(base[i], base[i + 1]) + plinth
+            add_box(bm, (0, 0, (zb + zp) / 2), (seg + 0.05, width + 0.12, zp - zb), mi=mi_plinth, matrix=R)
         add_box(bm, (0, 0, zt + 0.05), (seg + 0.05, width - 1.6, 0.1), mi=mi_top, matrix=R)
         add_box(bm, (0, -width / 2 + 0.3, zt + 0.55), (seg + 0.05, 0.6, 1.1), mi=mi_brick, matrix=R)   # inner parapet
         add_box(bm, (0, width / 2 - 0.35, zt + 0.6), (seg + 0.05, 0.7, 1.2), mi=mi_brick, matrix=R)     # outer parapet
