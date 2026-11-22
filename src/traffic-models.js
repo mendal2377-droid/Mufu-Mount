@@ -29,7 +29,7 @@ function profile(points, width, bevel = .06) {
     else if (round) { const [nx, ny] = points[(i + 1) % points.length]; s.quadraticCurveTo(x, y, (x + nx) / 2, (y + ny) / 2); }
     else s.lineTo(x, y);
   });
-  const g = new THREE.ExtrudeGeometry(s, {depth: width - 2 * bevel, bevelEnabled: true, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 2, curveSegments: 6});
+  const g = new THREE.ExtrudeGeometry(s, {depth: width - 2 * bevel, bevelEnabled: true, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 1, curveSegments: 4});
   // Shape x (forward) to world z; the extrusion (shape z) to world -x; centred.
   g.rotateY(-Math.PI / 2).translate((width - 2 * bevel) / 2, 0, 0);
   return g;
@@ -44,20 +44,59 @@ function limb(a, b, r) {
 const wheel = (r, w, x, y, z, seg = 14) => new THREE.CylinderGeometry(r, r, w, seg).rotateZ(Math.PI / 2).translate(x, y, z);
 const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
 
-/** A saloon: {paint, trim}. paint: lower body and roof; trim: glasshouse, tyres, hubs, lamps, grille. */
-export function carModel() {
-  const lower = profile([[-2.3, .3], [2.3, .3], [2.32, .62, 1], [1.95, .86], [1.0, .93], [-1.75, .93], [-2.25, .86, 1], [-2.32, .56]], 1.78, .08);
-  const roof = profile([[.42, 1.33], [.36, 1.42, 1], [.2, 1.47], [-.95, 1.47], [-1.08, 1.42, 1], [-1.12, 1.33]], 1.56, .05);
-  const glass = profile([[1.02, .9], [.42, 1.36], [-1.12, 1.36], [-1.72, .9]], 1.5, .04);
-  const trim = [tint(plain(glass), 0x3d4b58)];
-  for (const [x, z] of [[-.83, 1.42], [.83, 1.42], [-.83, -1.42], [.83, -1.42]]) {
-    trim.push(tint(plain(wheel(.33, .24, x, .33, z)), 0x1e1f21), tint(plain(wheel(.17, .26, x, .33, z, 10)), 0xb9bcbf));
+// Body types and their shares of the cars drawn. SUV, saloon and MPV from China's 2024 retail sales
+// (CPCA, first half: SUV 4.88 M, saloon 4.48 M, MPV 0.48 M); the saloons' split into saloon and
+// hatchback, the taxis (Nanjing has 9,168 metered taxis and about 57,000 ride-hailing cars, which look
+// like any other car) and the vans are ours. Dimensions are typical of each kind, not a make.
+export const BODY_TYPES = [
+  // [name, share, length, width, ride, belt, roof, front glass z, roof front z, roof rear z, rear glass z, wheel]
+  ['suv', 47, 4.7, 1.88, .38, 1.08, 1.72, 1.08, .45, -1.85, -2.2, .37],
+  ['saloon', 33, 4.65, 1.8, .3, .93, 1.47, 1.0, .42, -1.1, -1.72, .33],
+  ['hatchback', 7, 4.15, 1.76, .3, .92, 1.5, .95, .35, -1.5, -1.92, .31],
+  ['mpv', 5, 5.0, 1.88, .33, 1.02, 1.84, 1.55, 1.0, -2.1, -2.32, .35],
+  ['taxi', 5, 4.65, 1.8, .3, .93, 1.47, 1.0, .42, -1.1, -1.72, .33],
+  ['van', 3, 4.6, 1.76, .3, 1.0, 1.95, 1.95, 1.5, .55, .55, .31],
+];
+
+/**
+ * A car of one body type: {paint, trim, plates}. paint: body, roof, pillars and mirrors (the car's own
+ * colour); trim: glass, tyres, hubs, lamps, grille, roof rails or taxi sign; plates: front and back
+ * (blue, or green for an electric car, set per car).
+ */
+export function carModel(type) {
+  const [name, , L, W, ride, belt, roofH, fg, rf, rr, rg, wr] = BODY_TYPES.find(b => b[0] === type) || BODY_TYPES[1];
+  const h = L / 2, van = name === 'van';
+  const lower = profile([[-h, ride], [h, ride], [h + .03, belt - .3, 1], [h - .3, belt - .06], [fg, belt], [van ? -h + .05 : rg, belt],
+    [-h + .06, belt - .07, 1], [-h - .02, ride + .25]], W, .08);
+  const paint = [plain(lower)];
+  const trim = [], gw = W - .28;
+  if (van) {
+    // A light van: the cab's glass, then the cargo box to the roof.
+    trim.push(tint(plain(profile([[fg + .02, belt - .02], [rf, roofH - .1], [rr + .1, roofH - .1], [rr + .1, belt - .02]], gw, .04)), 0x3d4b58));
+    paint.push(plain(profile([[rr + .12, belt - .05], [rr + .12, roofH], [-h + .04, roofH, 1], [-h, roofH - .1], [-h, belt - .05]], W - .02, .05)));
+    paint.push(plain(box(W - .1, .08, rf - rr, 0, roofH - .04, (rf + rr) / 2)));
+  } else {
+    trim.push(tint(plain(profile([[fg + .02, belt - .02], [rf, roofH - .08], [rr, roofH - .08], [rg, belt - .02]], gw, .04)), 0x3d4b58));
+    paint.push(plain(profile([[rf + .06, roofH - .12], [rf, roofH - .03, 1], [rf - .15, roofH], [rr + .12, roofH], [rr - .02, roofH - .03, 1], [rr - .06, roofH - .12]], gw + .08, .04)));
+    // Pillars between the side windows: one on a saloon, two on the long bodies.
+    const pillars = name === 'mpv' || name === 'suv' ? [rf + (rr - rf) * .38, rf + (rr - rf) * .74] : [(rf + rr) / 2];
+    for (const z of pillars) paint.push(plain(box(gw + .03, roofH - belt - .05, .11, 0, (roofH + belt) / 2, z)));
   }
-  for (const x of [-.6, .6]) {
-    trim.push(tint(plain(box(.38, .13, .06, x, .7, 2.33)), 0xfff4d8), tint(plain(box(.4, .12, .06, x, .76, -2.33)), 0xc8302a));
+  // Mirrors at the foot of the windscreen.
+  for (const x of [-1, 1]) paint.push(plain(box(.1, .12, .2, x * (W / 2 + .06), belt + .1, fg - .12)));
+  // Tyres with pale hubs; lamps; grille.
+  const axle = Math.min(1.45, h - .82);
+  for (const [x, z] of [[-1, axle], [1, axle], [-1, -axle], [1, -axle]]) {
+    trim.push(tint(plain(wheel(wr, .24, x * (W / 2 - .07), wr, z)), 0x1e1f21), tint(plain(wheel(wr * .5, .26, x * (W / 2 - .07), wr, z, 10)), 0xb9bcbf));
   }
-  trim.push(tint(plain(box(.8, .14, .05, 0, .5, 2.34)), 0x2a2d30));   // grille
-  return {paint: mergeGeometries([plain(lower), plain(roof)]), trim: mergeGeometries(trim)};
+  for (const x of [-1, 1]) {
+    trim.push(tint(plain(box(.36, .12, .06, x * (W / 2 - .3), belt - .2, h + .02)), 0xfff4d8), tint(plain(box(.38, .12, .06, x * (W / 2 - .28), belt - .14, -h - .02)), 0xc8302a));
+  }
+  trim.push(tint(plain(box(W * .45, .14, .05, 0, ride + .2, h + .03)), 0x2a2d30));
+  if (name === 'suv') for (const x of [-1, 1]) trim.push(tint(plain(box(.05, .05, rf - rr, x * (gw / 2 - .05), roofH + .04, (rf + rr) / 2)), 0x2a2d30));
+  if (name === 'taxi') trim.push(tint(plain(box(.62, .2, .28, 0, roofH + .1, (rf + rr) / 2)), 0xfff0b8));
+  const plates = mergeGeometries([plain(box(.44, .14, .03, 0, ride + .42, h + .05)), plain(box(.44, .14, .03, 0, belt - .32, -h - .05))]);
+  return {paint: mergeGeometries(paint), trim: mergeGeometries(trim), plates};
 }
 
 /**
@@ -85,5 +124,7 @@ export function bikeModel() {
   const coat = mergeGeometries([plain(limb([0, 1.0, -.38], [0, 1.4, -.28], .17)),
     plain(limb([-.2, 1.38, -.27], [-.3, 1.17, .45], .055)), plain(limb([.2, 1.38, -.27], [.3, 1.17, .45], .055))]);
   const helmet = new THREE.SphereGeometry(.15, 12, 8, 0, Math.PI * 2, 0, Math.PI * .55).translate(0, 1.66, -.25);
-  return {shell: mergeGeometries([plain(rear), plain(shield)]), trim: mergeGeometries(trim), coat, helmet: plain(helmet)};
+  // A delivery rider's insulated box on the rack behind the seat (coloured per platform).
+  const deliveryBox = box(.44, .4, .4, 0, 1.0, -.95);
+  return {shell: mergeGeometries([plain(rear), plain(shield)]), trim: mergeGeometries(trim), coat, helmet: plain(helmet), box: plain(deliveryBox)};
 }

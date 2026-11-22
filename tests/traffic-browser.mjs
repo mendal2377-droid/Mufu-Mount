@@ -1,5 +1,6 @@
 // Cars and e-bikes in the city (item 44, step 4; design/STREET-LIFE-PLAN.md), audited in the browser:
 //   loaded     the street file loads and the traffic runs
+//   mix        body types near their shares; one e-bike in eight a delivery rider
 //   once each  no two vehicles drawn at the same spot
 //   on road    every drawn car stands on a road cell of the walk grid (95 % at least: a way's centre
 //              line and the stamped road differ by a lane at bends), none on water
@@ -44,6 +45,10 @@ try {
 
   const peak = await at(8.5);
   check("loaded", peak.stats.cars > 0, JSON.stringify(peak.stats));
+  // The mix: body types near their shares (SUV 47, saloon 33 in a hundred), delivery riders one e-bike in eight.
+  const k = peak.stats.kinds, suv = k.suv / peak.stats.cars, saloon = k.saloon / peak.stats.cars, del = peak.stats.delivery / peak.stats.bikes;
+  check("mix", Math.abs(suv - .47) < .06 && Math.abs(saloon - .33) < .06 && Math.abs(del - .125) < .04 && k.taxi > 0 && k.mpv > 0 && k.van > 0,
+    `${JSON.stringify(k)}; SUV ${(suv * 100).toFixed(0)} %, saloon ${(saloon * 100).toFixed(0)} %, delivery ${(del * 100).toFixed(0)} % of e-bikes`);
   // No vehicle drawn twice: a stretch's index window once wrapped round a short way's loop.
   const twins = await page.evaluate(() => { const seen = new Set(); let n = 0;
     for (const [, x, , z] of window.__mufu.city.world.traffic.positions()) { const k = `${Math.round(x * 4)},${Math.round(z * 4)}`; if (seen.has(k)) n++; seen.add(k); }

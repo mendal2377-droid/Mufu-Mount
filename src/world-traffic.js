@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {carModel, bikeModel} from './traffic-models.js';
+import {BODY_TYPES, carModel, bikeModel} from './traffic-models.js';
 
 // Cars and e-bikes on the city's roads (item 44, step 4, slice 1; design/STREET-LIFE-PLAN.md, where
 // every number below has its source or is marked as ours). The roads are OSM's drivable surface ways
@@ -90,22 +90,64 @@ export async function createWorldTraffic({world}) {
 
   // Toon shading in the city's own bands (as the buildings), so the traffic sits in the painted scene.
   const toon = (c, vertexColors = false) => new THREE.MeshToonMaterial({color: c, gradientMap: world.bands || null, vertexColors});
-  const car = carModel(), bike = bikeModel();
-  const cars = new THREE.InstancedMesh(car.paint, toon(0xffffff), CAR_CAP);
-  const glass = new THREE.InstancedMesh(car.trim, toon(0xffffff, true), CAR_CAP);
+  // One set of instanced meshes per body type (src/traffic-models.js): its paint, trim and plates.
+  const kinds = BODY_TYPES.map(([name, share]) => {
+    const m = carModel(name);
+    const k = {name, share, paint: new THREE.InstancedMesh(m.paint, toon(0xffffff), CAR_CAP), trim: new THREE.InstancedMesh(m.trim, toon(0xffffff, true), CAR_CAP),
+      plates: new THREE.InstancedMesh(m.plates, toon(0xffffff), CAR_CAP), n: 0};
+    k.meshes = [k.paint, k.trim, k.plates];
+    return k;
+  });
+  const shareSum = kinds.reduce((a, k) => a + k.share, 0);
+  const bike = bikeModel();
   const bikes = new THREE.InstancedMesh(bike.shell, toon(0xffffff), BIKE_CAP);
   const bikeTrim = new THREE.InstancedMesh(bike.trim, toon(0xffffff, true), BIKE_CAP);
   const riders = new THREE.InstancedMesh(bike.coat, toon(0xffffff), BIKE_CAP);
   const helmets = new THREE.InstancedMesh(bike.helmet, toon(0xffffff), BIKE_CAP);
+  const boxes = new THREE.InstancedMesh(bike.box, toon(0xffffff), BIKE_CAP);
+  const colored = [...kinds.flatMap(k => [k.paint, k.plates]), bikes, riders, helmets, boxes];
   // Colours set on every instance before the first draw, so each shader is built with them.
-  for (const m of [cars, bikes, riders, helmets]) for (let i = 0; i < m.instanceMatrix.count; i++) m.setColorAt(i, new THREE.Color(0xffffff));
-  const carMeshes = [cars, glass], bikeMeshes = [bikes, bikeTrim, riders, helmets], meshes = [...carMeshes, ...bikeMeshes];
+  for (const m of colored) for (let i = 0; i < m.instanceMatrix.count; i++) m.setColorAt(i, new THREE.Color(0xffffff));
+  const bikeMeshes = [bikes, bikeTrim, riders, helmets], meshes = [...kinds.flatMap(k => k.meshes), ...bikeMeshes, boxes];
   for (const m of meshes) { m.name = 'Street traffic'; m.frustumCulled = false; m.count = 0; world.scene.add(m); }
   const paint = [], color = new THREE.Color();
   for (const [n, c] of PAINT) for (let i = 0; i < n; i++) paint.push(c);
   const coats = [0x3b5e8c, 0x3a3a3e, 0x9a4036, 0xd9d2c4, 0x56755a, 0x7a7a84, 0xc98a3a], hats = [0xf2c230, 0xeeece6, 0x2f6fc0, 0xd84a3a, 0xe58aa0];
   // E-bike bodies: white, black, red, blue, pink, mint (our reading of street photographs; no count found).
   const shells = [0xf0eee8, 0x34373b, 0xb8433a, 0x3d64a8, 0xe9a3b4, 0x8fcfbf];
+  // Plates: blue, or green for a new-energy car: 12 % of China's cars at the end of 2025 (Ministry of
+  // Public Security; Nanjing's own share is not published).
+  const PLATE_BLUE = 0x2457b8, PLATE_GREEN = 0x6cc48c, GREEN_SHARE = .12;
+  // Delivery riders, their box and jacket in the platform's colour: Meituan yellow, Ele.me blue, two to
+  // one. Their share of the e-bikes is ours (no count for Nanjing found): one in eight.
+  const DELIVERY = .125, MEITUAN = [0xf3c22f, 0xf3c22f], ELEME = [0x1f8bdc, 0x1f8bdc];
+
+  /** The body type of car `id` (a stable hash), weighted by the shares. */
+  function kindOf(id) {
+    let r = id * shareSum;
+    for (const k of kinds) { if ((r -= k.share) < 0) return k; }
+    return kinds[0];
+  }
+  function drawCar(seed, i, y) {
+    const k = kindOf(hash(i, seed + 5));
+    if (k.n >= CAR_CAP) return false;
+    place(k.meshes, k.n, y);
+    // Vans are mostly white (ours).
+    const c = k.name === 'van' && hash(i, seed + 3) < .7 ? 0xf1efe8 : paint[Math.floor(hash(i, seed + 3) * paint.length)];
+    k.paint.setColorAt(k.n, color.setHex(c));
+    k.plates.setColorAt(k.n, color.setHex(hash(i, seed + 13) < GREEN_SHARE ? PLATE_GREEN : PLATE_BLUE));
+    k.n++;
+    return true;
+  }
+  let nd = 0;
+  function drawBike(seed, i, y, nb) {
+    place(bikeMeshes, nb, y);
+    const job = hash(i, seed + 15), delivery = job < DELIVERY, brand = job < DELIVERY * 2 / 3 ? MEITUAN : ELEME;
+    bikes.setColorAt(nb, color.setHex(shells[Math.floor(hash(i, seed + 11) * shells.length)]));
+    riders.setColorAt(nb, color.setHex(delivery ? brand[0] : coats[Math.floor(hash(i, seed + 7) * coats.length)]));
+    helmets.setColorAt(nb, color.setHex(delivery ? brand[1] : hats[Math.floor(hash(i, seed + 9) * hats.length)]));
+    if (delivery && nd < BIKE_CAP) { place([boxes], nd, y); boxes.setColorAt(nd, color.setHex(brand[0])); nd++; }
+  }
 
   const dummy = new THREE.Object3D(), at = {x: 0, z: 0, yaw: 0};
   let near = [], lastPick = -1e9, lastAt = [Infinity, Infinity];
@@ -149,6 +191,8 @@ export async function createWorldTraffic({world}) {
     update(t, hour, eye) {
       if (Math.hypot(eye.x - lastAt[0], eye.z - lastAt[1]) > 60 || t - lastPick > 5) { pick(eye.x, eye.z); lastPick = t; }
       let nc = 0, nb = 0;
+      for (const k of kinds) k.n = 0;
+      nd = 0;
       const r2 = RADIUS * RADIUS;
       for (const {w, spans} of near) {
         const dirs = w.oneway ? [w.oneway] : [1, -1];
@@ -177,31 +221,23 @@ export async function createWorldTraffic({world}) {
                 if (y == null) continue;
                 if (bike) {
                   if (nb >= BIKE_CAP) continue;
-                  place(bikeMeshes, nb, y);
-                  bikes.setColorAt(nb, color.setHex(shells[Math.floor(hash(i, seed + 11) * shells.length)]));
-                  const hsh = hash(i, seed + 7);
-                  riders.setColorAt(nb, color.setHex(coats[Math.floor(hsh * coats.length)]));
-                  helmets.setColorAt(nb, color.setHex(hats[Math.floor(hash(i, seed + 9) * hats.length)]));
+                  drawBike(seed, i, y, nb);
                   nb++;
-                } else {
-                  if (nc >= CAR_CAP) continue;
-                  place(carMeshes, nc, y);
-                  cars.setColorAt(nc, color.setHex(paint[Math.floor(hash(i, seed + 3) * paint.length)]));
-                  nc++;
-                }
+                } else if (drawCar(seed, i, y)) nc++;
               }
             }
           }
         }
       }
-      cars.count = glass.count = nc; bikes.count = bikeTrim.count = riders.count = helmets.count = nb;
+      for (const k of kinds) for (const m of k.meshes) m.count = k.n;
+      bikes.count = bikeTrim.count = riders.count = helmets.count = nb; boxes.count = nd;
       for (const m of meshes) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-      traffic.stats = {cars: nc, bikes: nb};
+      traffic.stats = {cars: nc, bikes: nb, delivery: nd, kinds: Object.fromEntries(kinds.map(k => [k.name, k.n]))};
     },
     /** Where each drawn car and e-bike stands, for the audit (tests/traffic-browser.mjs). */
     positions() {
       const out = [], m = new THREE.Matrix4(), p = new THREE.Vector3();
-      for (const [mesh, kind] of [[cars, 'car'], [bikes, 'bike']]) for (let i = 0; i < mesh.count; i++) { mesh.getMatrixAt(i, m); p.setFromMatrixPosition(m); out.push([kind, p.x, p.y, p.z]); }
+      for (const [mesh, kind] of [...kinds.map(k => [k.paint, 'car']), [bikes, 'bike']]) for (let i = 0; i < mesh.count; i++) { mesh.getMatrixAt(i, m); p.setFromMatrixPosition(m); out.push([kind, p.x, p.y, p.z]); }
       return out;
     },
   };

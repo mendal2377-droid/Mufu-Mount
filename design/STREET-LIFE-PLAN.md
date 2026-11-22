@@ -82,6 +82,18 @@ wheels with hubs and lamps, and step-through e-bikes with seated, helmeted rider
 own toon shading (src/traffic-models.js). Update cost kept at about 2.5 ms a frame by working out only
 the vehicles on the stretches of road within reach.
 
+**The mix (owner, 23 Nov: "still a distance from the real traffic").** Body types by China's 2024
+retail sales ([CPCA via Sina, first half](https://finance.sina.cn/2024-07-08/detail-inccmqph1405782.d.html):
+SUV 4.88 M, saloon 4.48 M, MPV 0.48 M; SUVs 49.4 % for the year): SUV 47, saloon 33, hatchback 7
+(**ours**: the saloons split), MPV 5, taxi 5, van 3 in a hundred. Nanjing has 9,168 metered taxis and
+about 57,000 ride-hailing cars ([Nanjing transport bureau, 2025](https://jtj.nanjing.gov.cn/njsjtysj/202602/P020260211591059618560.doc));
+the taxis' and vans' shares are **ours**, and no source for Nanjing's taxi colours was found, so a
+taxi is any colour with a roof sign. Green plates on 12 % of cars, China's new-energy share at the
+end of 2025 ([Xinhua](https://www.news.cn/politics/20260126/85ac0fb013d149569de8eacbdd3020f5/c.html));
+Nanjing's is not published. Delivery riders, one e-bike in eight (**ours**: no count), Meituan
+yellow and Ele.me blue two to one. Each car has a glasshouse split by pillars, mirrors, plates,
+lamps; SUVs roof rails, taxis a roof sign. Checked: tests/traffic-browser.mjs "mix".
+
 Not modelled: turning at junctions, traffic lights, cars stopping for each other, the traveller or
 the buses (they pass through); the elevated roads and the tunnels; lamps lit at night; parked cars.
 
