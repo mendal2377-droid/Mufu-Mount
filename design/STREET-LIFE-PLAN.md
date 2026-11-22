@@ -122,7 +122,40 @@ waves Nanjing runs on its main roads, cars stopping for the traveller or the bus
 signal heads (the lights are not drawn); the elevated roads and the tunnels; lamps lit at night; parked
 cars.
 
+## Slice 2: people and boats (rules, 23 November)
+
+**What the sources give.** Xuanwu Lake: 19 million visits in 2025, about 52,000 a day; close to its
+180,000 capacity on fine weekends ([Yangtse Evening Post, Apr 2026](https://www.yzwb.net/news/yw/202604/t20260408_340059.html)).
+Its own park map lists pleasure boats, kayaks, paddleboards, dragon boats and rowing boats, kayaks
+from 9:00 to 17:00 ([xuanwuhu.net park map, Sept 2025](https://xuanwuhu.net/UploadFile/20250930114958.pdf));
+about 600 boats from 11 piers were all out at Qingming 2026. **Not found:** how long visitors stay;
+any count of people on Nanjing's pavements.
+
+**The rules.**
+- **Walkers** on OSM's footways, pedestrian streets, paths and steps (255, 16, 48 and 15 km).
+  Xuanwu Lake's paths: the day's average visitors present at once for an average stay of 2 hours
+  (**ours**) over its day curve, spread over its 19 km of footway, about 520 a kilometre at the
+  midday peak; elsewhere 40 a kilometre on footways and three times that on pedestrian streets
+  (**ours**: no count). The owner's calmer street applies (35 %). A day curve of our own: few before
+  7, a midday and an evening peak, few after 22.
+- Walkers keep to their path at 1.1 to 1.5 m/s, both ways, and fade in and out at its ends; they do
+  not stop, sit, meet or avoid each other.
+- **Boats on Xuanwu Lake** from 9:00 to 17:00: the day's share of the 600 (52,000 / 180,000 of
+  them on an average day), with the calmer street's 35 %: about 60. Mostly small canopied electric
+  pleasure boats, some kayaks and a few paddleboards (**our shares**), wandering the open water and
+  turning before the shore.
+
+**Built and checked (23 Nov).** src/world-people.js (paths.json from tools/street-ways.py: 2,430
+walkers' ways, 131 in Xuanwu's park) and src/xuanwu-boats.js. Walkers are low-poly figures in the
+muted coats of a city street, legs striding, drawn within 300 m. Boats: canopied electric pleasure
+boats with passengers, kayaks and paddleboards. Checked in the browser (tests/people-browser.mjs):
+756 walkers round Huanzhou at 16:30, all on walkable ground, none on water, 24 at 3:00; walking
+1.2 m a second; no boats at 8:00, 61 at noon, all still afloat after 5 minutes and none within 2 m
+of the shore; 2.4 ms a frame for walkers and boats. Unit tests: tests/world-people.test.js.
+
+Not modelled: people stopping, sitting, queuing or crossing streets; walkers passing through each
+other and through the traffic; boats keeping to piers, docking or avoiding each other; birds.
+
 ## Later slices
 
-People on the squares and lake paths, cyclists in the parks, rowing boats on Xuanwu Lake (600 at
-the holiday peak, from 11 piers), birds; each with its own audit.
+Birds; cyclists in the parks; the traffic lights drawn; each with its own audit.

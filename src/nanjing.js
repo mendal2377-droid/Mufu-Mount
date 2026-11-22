@@ -12,6 +12,8 @@ import {loadLandmarkWorld} from './landmark-world.js';
 import {createWorldLanterns} from './world-lanterns.js';
 import {createWorldSeats} from './world-seats.js';
 import {createWorldTraffic} from './world-traffic.js';
+import {createWorldPeople} from './world-people.js';
+import {createXuanwuBoats} from './xuanwu-boats.js';
 import {createJourneys} from './world-journeys.js';
 import {createMusic} from './generative-music.js';
 
@@ -143,6 +145,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(w.benches===undefined)w.benches=createWorldSeats({world:w});
     // Cars and e-bikes on the roads (src/world-traffic.js), loaded once; null where a world has no streets.json.
     if(w.traffic===undefined){w.traffic=null;createWorldTraffic({world:w}).then(tr=>{w.traffic=tr;});}
+    // People on the footways, pedestrian streets and lake paths (src/world-people.js).
+    if(w.people===undefined){w.people=null;createWorldPeople({world:w}).then(p=>{w.people=p;});}
+    // Boats out on Xuanwu Lake (src/xuanwu-boats.js); null in a world without it.
+    if(w.boats===undefined)w.boats=w.id==='core'?createXuanwuBoats({world:w}):null;
     if(w.keepsakes===undefined)w.keepsakes=createWorldLanterns({world:w,game,camera,onPick:(id,index,r)=>gameView.present(id,index,r)});
     // Journeys (src/world-journeys.js): real trips to make here, ticked off in the menu.
     if(w.journeys===undefined)w.journeys=createJourneys(w.id,storage);
@@ -378,6 +384,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     const wasGliding=world.gliding;
     world.frame(dt,t,weather,cityDirection,camera);
     world.traffic?.update(t,weather.hour??12,camera.position);
+    world.people?.update(t,weather.hour??12,camera.position);
+    world.boats?.update(t,weather.hour??12);
     if(wasGliding&&!world.gliding){
       // Touchdown: level the chase camera behind the traveller, looking where they ran out.
       camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');

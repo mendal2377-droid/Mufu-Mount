@@ -1,4 +1,4 @@
-"""Street ways for the city's traffic (design/STREET-LIFE-PLAN.md): the drivable surface roads of
+"""Street ways for the city's traffic (and walkers' ways for its people, paths.json) (design/STREET-LIFE-PLAN.md): the drivable surface roads of
 research/core/data/features.json, written to public/scenes/core/streets.json for src/world-traffic.js.
 
 Kept: motorway to living street and their links (OSM `highway`). Left out: service roads, footways and
@@ -22,6 +22,10 @@ from collections import defaultdict
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / 'research/core/data/features.json'
 OUT = ROOT / 'public/scenes/core/streets.json'
+PATHS = ROOT / 'public/scenes/core/paths.json'
+WALKS = ['footway', 'pedestrian', 'path', 'steps']
+# Xuanwu Lake's park, as the box src/xuanwu-life.js uses (x east, north).
+LAKE = (-260, 1700, 2560, 4620)
 SIGNALS = ROOT / 'research/core/data/osm-core-signals.json'
 LAT0, LON0 = 32.0418, 118.7838   # the core's origin (scene.json); the flat projection of blender/zhongshan_merge.py
 CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street',
@@ -124,6 +128,20 @@ def main():
         ways.append([CLASSES.index(kind), oneway, lanes, flat])
         p = w['pts']
         metres[kind] = metres.get(kind, 0) + sum(math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]) for i in range(1, len(p)))
+    # Walkers' ways (src/world-people.js): [kind, park, [x0, z0, ...]], park 1 inside Xuanwu Lake's box.
+    walks = []
+    for w in feats['ways']:
+        kind, tags = w.get('kind'), w.get('tags') or {}
+        if kind not in WALKS or len(w['pts']) < 2 or tags.get('tunnel') not in (None, 'no'):
+            continue
+        mx = sum(p[0] for p in w['pts']) / len(w['pts']); mn = sum(p[1] for p in w['pts']) / len(w['pts'])
+        park = int(LAKE[0] < mx < LAKE[1] and LAKE[2] < mn < LAKE[3])
+        flat = []
+        for x, n in w['pts']:
+            flat += [round(x, 1), round(-n, 1)]
+        walks.append([WALKS.index(kind), park, flat])
+    PATHS.write_text(json.dumps({'kinds': WALKS, 'ways': walks}, separators=(',', ':')), encoding='utf-8')
+    print(f'{len(walks)} ways for walkers ({sum(w[1] for w in walks)} in Xuanwu park), {PATHS.stat().st_size // 1024} KB')
     lights = junctions(ways)
     OUT.write_text(json.dumps({'classes': CLASSES, 'ways': ways, 'junctions': lights}, separators=(',', ':')), encoding='utf-8')
     print(f'{len(ways)} ways, {len(lights)} signal junctions ({sum(j[2] for j in lights)} with a mapped signal), '
