@@ -10,6 +10,8 @@
 //   the day    8:30 busier than 13:00, 13:00 busier than 3:00
 //   moving     a car moves at the hour's speed between two frames
 //   lights     red lights stop cars at their stop lines, with queues behind
+//   bikes on the road  no e-bike more than 0.6 m over the nearest road cell
+//   lights drawn  signal heads stand on the approaches near the camera, lit from the simulation
 //   turning    vehicles go on into another street at a way's end
 //   no collisions  no vehicle closer to the one ahead than a car's length
 //   cost       the per-frame update at 8:30 at Xinjiekou, median under 6 ms
@@ -58,14 +60,16 @@ try {
     return n; });
   check("once each", twins === 0, `${twins} vehicles drawn on top of another`);
 
-  const where = await page.evaluate((cars) => { const w = window.__mufu.city.world; let road = 0, wet = 0, level = 0, onCell = 0;
+  const where = await page.evaluate((cars) => { const w = window.__mufu.city.world; let road = 0, wet = 0, level = 0, onCell = 0, under = 0, above = 0;
     for (const [x, y, z] of cars) { let r = false; for (const [dx, dz] of [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]]) if (w.grid.road(x + dx, z + dz) != null) r = true; if (r) road++; if (w.grid.water(x, z) != null) wet++;
-      const rz = w.grid.road(x, z); if (rz != null) { onCell++; if (Math.abs(y - rz) < .05) level++; } }
-    return { road, wet, level, onCell, n: cars.length }; }, peak.cars);
+      const rz = w.grid.road(x, z); if (rz != null) { onCell++; if (Math.abs(y - rz) < .05) level++; else if (y < rz - 1.5) under++; else if (y > rz + .05) above++; } }
+    return { road, wet, level, under, above, onCell, n: cars.length }; }, peak.cars);
   check("on road", where.road >= 0.95 * where.n && where.wet === 0, `${where.road} of ${where.n} cars on a road cell (within 2 m), ${where.wet} on water`);
   // Standing on the road surface itself, not the ground 0.3-0.4 m under it (the owner's view, 23 Nov:
   // cars sunk to their axles).
-  check("on the surface", where.level === where.onCell, `${where.level} of ${where.onCell} cars over a road cell stand at its height`);
+  // Under an elevated road the cell holds the deck's height, and the cars below keep their street's
+  // own; so the check is: at the cell's height, or well below it (under a deck), never above it.
+  check("on the surface", where.level + where.under === where.onCell && where.above === 0, `${where.level} of ${where.onCell} cars over a road cell stand at its height, ${where.under} under a deck, ${where.above} above the road`);
 
   // Density near the camera: expected cars = sum over ways of (lanes x length within 150 m x density).
   const dens = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, tr = w.traffic, eye = m.camera.position, R = 150;
@@ -111,6 +115,20 @@ try {
     return { turned: tr.transfers - t0, queued, stoppedAtRed, tooClose, lights: tr.lights.length, lanesWithLights: Math.round(lanesWithLights / 6) }; });
   check("lights", flowing.stoppedAtRed > 0 && flowing.queued > flowing.stoppedAtRed, `${flowing.lights} signal junctions; over a minute, ${flowing.stoppedAtRed} cars first at a red stop line, ${flowing.queued} stopped in the queues behind (${flowing.lanesWithLights} lanes near Xinjiekou have lights)`);
   check("turning", flowing.turned > 20, `${flowing.turned} vehicles went on into another street in a minute`);
+  // The lights drawn: heads near the camera, each lit as the light the cars obey.
+  const heads = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, tr = w.traffic;
+    m.step(3, .1); let match = 0, n = tr.stats.signals;
+    const lamps = []; w.scene.traverse((o) => { if (o.isInstancedMesh && o.name === "Traffic lights" && o.material.isMeshBasicMaterial) lamps.push(o); });
+    return { n, lampMeshes: lamps.length, all: tr.heads.length }; });
+  // E-bikes at road height: none standing more than 0.6 m over the nearest road cell within 6 m
+  // (riders once stood on awnings and plaza tops past the road's edge).
+  const high = await page.evaluate(() => { const w = window.__mufu.city.world; let bad = 0, n = 0;
+    for (const [k, x, y, z] of w.traffic.positions()) { if (k !== "bike") continue; n++;
+      let r = null; for (let d = 0; d <= 6 && r == null; d += 1) for (const [dx, dz] of [[d, 0], [-d, 0], [0, d], [0, -d]]) { const h = w.grid.road(x + dx, z + dz); if (h != null) { r = h; break; } }
+      if (r != null && y - r > .6) bad++; }
+    return { bad, n }; });
+  check("bikes on the road", high.bad === 0, `${high.bad} of ${high.n} e-bikes stand more than 0.6 m over the nearest road`);
+  check("lights drawn", heads.n > 5 && heads.lampMeshes === 3, `${heads.n} signal heads drawn near Xinjiekou (${heads.all} in the city), three lamps each`);
   check("no collisions", flowing.tooClose === 0, `${flowing.tooClose} vehicles closer than a car's length to the one ahead`);
 
   // Cost: the traffic is recomputed each frame; at the busiest hour in the busiest place, the median update.

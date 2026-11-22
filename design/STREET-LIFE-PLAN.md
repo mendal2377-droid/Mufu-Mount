@@ -119,8 +119,21 @@ Western), so the e-bikes stay ours, the riders' arms now bent at the elbow.
 
 Not modelled: lane changes and overtaking, turns across oncoming traffic waiting for a gap, the green
 waves Nanjing runs on its main roads, cars stopping for the traveller or the buses (they pass through);
-signal heads (the lights are not drawn); the elevated roads and the tunnels; lamps lit at night; parked
+the elevated roads and the tunnels; lamps lit at night; parked
 cars.
+
+**The lights drawn (23 Nov).** A signal head on each approach to the 328 junctions (662 in all): a pole
+at the stop line beyond the outer lane, an arm over the road 6 m up and three lamps side by side, the
+usual form on Nanjing's main roads, lit red, amber (4 s) and green as the simulation's light. The
+poles' places are ours. Checked: tests/traffic-sim.test.js (never green both ways, 4 s of amber) and
+tests/traffic-browser.mjs ("lights drawn").
+
+**Heights on the street (23 Nov).** The walk grid holds the topmost surface of each cell, so under an
+elevated road a vehicle took the deck's height, and past the kerb an e-bike took a planter's or a
+podium's: riders were seen in the air. Each street now has its own height along its middle, every
+4 m, with decks overhead bridged from either side; a vehicle stands on the road cell under it where
+that agrees, else on the street's height. E-bikes ride just inside the kerb. Checked: no car above or
+below its road cell but under a deck; no e-bike more than 0.6 m over the nearest road.
 
 ## Slice 2: people and boats (rules, 23 November)
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {BODY_TYPES, carModel, bikeModel, loadCarModels} from './traffic-models.js';
-import {Lane, CYCLE, STOP_BACK} from './traffic-sim.js';
+import {Lane, CYCLE, STOP_BACK, aspect} from './traffic-sim.js';
 
 // Cars and e-bikes on the city's roads (item 44, step 4, slice 1; design/STREET-LIFE-PLAN.md, where
 // every number below has its source or is marked as ours). The roads are OSM's drivable surface ways
@@ -193,6 +193,57 @@ export async function createWorldTraffic({world}) {
     (starts.get(k) || starts.set(k, []).get(k)).push({w, dir});
   }
 
+  // --- The signal heads: one on each approach to a signal junction --------------------------------
+  // A pole at the stop line on the kerb side, an arm over the road 6 m up, and a head of three lamps
+  // side by side (the usual form on Nanjing's main roads) facing the drivers, lit as the simulation's
+  // light. The pole's place is ours: at the stop line, 2.5 m beyond the outer lane.
+  const heads = [];
+  for (const w of ways) for (const l of w.lights) for (const dir of w.oneway ? [w.oneway] : [1, -1]) {
+    const s = l.s - dir * STOP_BACK;
+    if (s < 0 || s > w.length) continue;
+    const out = (w.oneway ? w.per * LANE_W / 2 : w.per * LANE_W) + 2.5;
+    heads.push({w, s, dir, out, arm: Math.max(2, out - (w.oneway ? 0 : 1.6) - LANE_W * .5), offset: l.j.offset, group: Math.abs(l.uz) >= Math.abs(l.ux) ? 0 : 1});
+  }
+  const HEAD_CAP = 700, POLE_H = 6;
+  const poleMat = new THREE.MeshToonMaterial({color: 0x5d646b, gradientMap: world.bands || null});
+  const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(.11, .14, POLE_H, 8).translate(0, POLE_H / 2, 0), poleMat, HEAD_CAP);
+  // The arm runs along local +x from the pole (the road side), unit length, scaled per head.
+  const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(1, .14, .14).translate(.5, POLE_H - .2, 0), poleMat, HEAD_CAP);
+  const housings = new THREE.InstancedMesh(new THREE.BoxGeometry(1.15, .42, .3).translate(0, POLE_H - .55, 0), new THREE.MeshToonMaterial({color: 0x26292c, gradientMap: world.bands || null}), HEAD_CAP);
+  const lampGeo = x => new THREE.CylinderGeometry(.14, .14, .06, 12).rotateX(Math.PI / 2).translate(x, POLE_H - .55, -.17);
+  // Red, amber, green from the kerb side outwards; each lit or dark per head.
+  const LAMPS = [[-.36, 0xff3b30, 0x4a1512], [0, 0xffb020, 0x4a3410], [.36, 0x35e06b, 0x123f22]];
+  const lamps = LAMPS.map(([x]) => new THREE.InstancedMesh(lampGeo(x), new THREE.MeshBasicMaterial({color: 0xffffff}), HEAD_CAP));
+  for (const m of lamps) for (let i = 0; i < HEAD_CAP; i++) m.setColorAt(i, new THREE.Color(0x222222));
+  const signalMeshes = [poles, arms, housings, ...lamps];
+  for (const m of signalMeshes) { m.name = 'Traffic lights'; m.frustumCulled = false; m.count = 0; world.scene.add(m); }
+  const lampOn = LAMPS.map(([, on]) => new THREE.Color(on).toArray()), lampOff = LAMPS.map(([, , off]) => new THREE.Color(off).toArray());
+  const hp = {x: 0, z: 0, yaw: 0}, HM = new THREE.Matrix4(), HQ = new THREE.Quaternion(), HE = new THREE.Euler(), HV = new THREE.Vector3(), HS = new THREE.Vector3();
+  function drawHeads(t, eye) {
+    let n = 0;
+    const r2 = (RADIUS - 50) ** 2;
+    for (const h of heads) {
+      if (n >= HEAD_CAP) break;
+      along(h.w, h.dir > 0 ? h.s : h.w.length - h.s, h.dir, 0, hp);
+      const dx = hp.x - eye.x, dz = hp.z - eye.z;
+      if (dx * dx + dz * dz > r2) continue;
+      // The pole on the kerb side: right of travel is local -x.
+      const c = Math.cos(hp.yaw), sn = Math.sin(hp.yaw), px = hp.x - c * h.out, pz = hp.z + sn * h.out;
+      const y = world.ground(px, pz) ?? height(hp.x, hp.z);
+      if (y == null) continue;
+      HE.set(0, hp.yaw, 0); HQ.setFromEuler(HE);
+      HM.compose(HV.set(px, y, pz), HQ, HS.set(1, 1, 1)); poles.setMatrixAt(n, HM);
+      HM.compose(HV.set(px, y, pz), HQ, HS.set(h.arm, 1, 1)); arms.setMatrixAt(n, HM);
+      HM.compose(HV.set(px + c * h.arm, y, pz - sn * h.arm), HQ, HS.set(1, 1, 1));
+      housings.setMatrixAt(n, HM);
+      const a = aspect(t, h.offset, h.group), lit = a === 'red' ? 0 : a === 'amber' ? 1 : 2;
+      lamps.forEach((m, k) => { m.setMatrixAt(n, HM); m.instanceColor.array.set(k === lit ? lampOn[k] : lampOff[k], n * 3); });
+      n++;
+    }
+    for (const m of signalMeshes) { m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    return n;
+  }
+
   // --- Lanes in the simulation: the ways near the camera --------------------------------------------
   const lanes = new Map();
   let nextId = 1, transfers = 0, lastT = null, lastHour = null, near = [], lastPick = -1e9, lastAt = [Infinity, Infinity];
@@ -200,7 +251,8 @@ export async function createWorldTraffic({world}) {
   const laneKey = (w, dir, lane) => `${w.index}:${dir}:${lane}`;
   const offsetOf = (w, lane) => {
     const bike = lane === w.per;
-    return w.oneway ? (bike ? w.per * LANE_W / 2 + 1.1 : (lane - (w.per - 1) / 2) * LANE_W) : (bike ? w.per * LANE_W + 1.1 : (lane + .5) * LANE_W);
+    // E-bikes on the carriageway's edge, just inside the kerb, as in Nanjing's non-motor lanes.
+    return w.oneway ? (bike ? w.per * LANE_W / 2 + .5 : (lane - (w.per - 1) / 2) * LANE_W) : (bike ? w.per * LANE_W + .5 : (lane + .5) * LANE_W);
   };
   function makeLane(w, dir, lane, from, to, hour) {
     const bike = lane === w.per;
@@ -294,6 +346,45 @@ export async function createWorldTraffic({world}) {
   // The road's own height first: the road surfaces lie 0.3-0.4 m over the ground (blender/build_core.py,
   // settle_roads), and a car set on the ground sank to its axles. As the buses (src/transit.js).
   const height = (x, z) => world.grid.road(x, z) ?? world.ground(x, z) ?? world.grid.height(x, z);
+  // Each street's own height along its middle, every 4 m. The walk grid holds one surface a cell, the
+  // topmost: under an elevated road it is the deck's, and vehicles on the street below rode up onto it
+  // (23 Nov). A sample standing over 1.5 m above the median of its neighbours is a deck overhead; those,
+  // and samples with no road at all, are bridged from the street's height on either side.
+  const STEP = 4, mid = {x: 0, z: 0, yaw: 0};
+  function profile(w) {
+    if (w.prof) return w.prof;
+    const n = Math.ceil(w.length / STEP) + 1, h = new Array(n);
+    for (let i = 0; i < n; i++) {
+      along(w, Math.min(i * STEP, w.length), 1, 0, mid);
+      h[i] = world.grid.road(mid.x, mid.z) ?? world.grid.road(mid.x + 2, mid.z) ?? world.grid.road(mid.x - 2, mid.z) ?? world.grid.road(mid.x, mid.z + 2) ?? world.grid.road(mid.x, mid.z - 2) ?? world.ground(mid.x, mid.z);
+    }
+    const ok = h.map((v, i) => {
+      if (v == null) return false;
+      const around = h.slice(Math.max(0, i - 6), i + 7).filter(x => x != null).sort((a, b) => a - b);
+      return v - around[Math.floor(around.length / 2)] <= 1.5;
+    });
+    const out = h.slice();
+    for (let i = 0; i < n; i++) {
+      if (ok[i]) continue;
+      let a = i - 1, b = i + 1;
+      while (a >= 0 && !ok[a]) a--;
+      while (b < n && !ok[b]) b++;
+      out[i] = a >= 0 && b < n ? h[a] + (h[b] - h[a]) * (i - a) / (b - a) : a >= 0 ? h[a] : b < n ? h[b] : null;
+    }
+    return (w.prof = out);
+  }
+  /** A vehicle's height: the surface under it where that agrees with its street's profile, else the profile. */
+  function vehicleHeight(w, s, dir, x, z) {
+    const prof = profile(w), d = dir > 0 ? s : w.length - s, f = d / STEP, i = Math.min(prof.length - 1, Math.floor(f));
+    const a = prof[i], b = prof[Math.min(prof.length - 1, i + 1)];
+    const p = a == null ? b : b == null ? a : a + (b - a) * (f - i);
+    // The road right under the vehicle where it agrees with the profile, else the profile (a deck
+    // overhead, or past the road's edge). Never the ground beside the road: past the kerb it can be the
+    // top of a planter or a podium, and an e-bike rode 3.5 m up in the air there (23 Nov).
+    const r = world.grid.road(x, z);
+    if (p == null) return r ?? height(x, z);
+    return r != null && Math.abs(r - p) < .8 ? r : p;
+  }
   // A vehicle's matrix (a turn about y and a move) written straight into each of its meshes: composing
   // it through an Object3D for each of an e-bike's four meshes tripled the frame's cost.
   const M = new Float32Array(16);
@@ -304,7 +395,7 @@ export async function createWorldTraffic({world}) {
   }
 
   const traffic = {
-    ways, lights, get near() { return near; }, get lanes() { return lanes; }, get transfers() { return transfers; },
+    ways, lights, heads, get near() { return near; }, get lanes() { return lanes; }, get transfers() { return transfers; },
     stats: {cars: 0, bikes: 0},
     /** Each frame: t in seconds, the clock's hour, the camera's position. */
     update(t, hour, eye) {
@@ -340,7 +431,7 @@ export async function createWorldTraffic({world}) {
         at.x += q.dx; at.z += q.dz; at.yaw += q.dyaw;
         const dx = at.x - eye.x, dz = at.z - eye.z;
         if (dx * dx + dz * dz > r2) continue;
-        const y = height(at.x, at.z);
+        const y = vehicleHeight(ln.w, Math.min(q.s, ln.length), ln.dir, at.x, at.z);
         if (y == null) continue;
         if (ln.bike) { if (nb < BIKE_CAP) { drawBike(q.id, y, nb); nb++; } }
         else if (drawCar(q.id, y)) nc++;
@@ -348,7 +439,8 @@ export async function createWorldTraffic({world}) {
       for (const k of kinds) for (const m of k.meshes) m.count = k.n;
       bikes.count = bikeTrim.count = riders.count = helmets.count = nb; boxes.count = nd;
       for (const m of meshes) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-      traffic.stats = {cars: nc, bikes: nb, delivery: nd, kinds: Object.fromEntries(kinds.map(k => [k.name, k.n])), lanes: lanes.size, transfers};
+      const signals = drawHeads(t, eye);
+      traffic.stats = {cars: nc, bikes: nb, delivery: nd, kinds: Object.fromEntries(kinds.map(k => [k.name, k.n])), lanes: lanes.size, transfers, signals};
     },
     /** Where each drawn car and e-bike stands, for the audit (tests/traffic-browser.mjs). */
     positions() {

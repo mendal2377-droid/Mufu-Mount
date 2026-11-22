@@ -24,6 +24,13 @@ export function idm(v, v0, gap, dv, p) {
   return p.a * (free - (sStar / Math.max(gap, .1)) ** 2);
 }
 
+/** What the light shows a lane in direction group `group` at time t: 'green', 'amber' (the 4 s after its
+ *  green, which the cars treat as red if they can stop) or 'red'. */
+export function aspect(t, offset, group) {
+  if (green(t, offset, group)) return 'green';
+  const c = ((t + offset) % CYCLE + CYCLE) % CYCLE / CYCLE, end = group === 0 ? GREEN : .5 + GREEN;
+  return c >= end && c < end + 4 / CYCLE ? 'amber' : 'red';
+}
 /** Is the light green for a lane in direction group `group` (0 or 1) at junction phase `offset`, time t? */
 export function green(t, offset, group) {
   const c = ((t + offset) % CYCLE + CYCLE) % CYCLE / CYCLE;

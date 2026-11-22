@@ -41,3 +41,15 @@ test('At the end of the lane a vehicle that cannot go on waits there; one that c
   for (let t = 30; t < 60; t += .1) lane.step(t, .1, () => { left++; return true; });
   assert.ok(left > 0);
 });
+
+test('What the lights show: green, then 4 s of amber, then red; the cross street green only while this one is red', async () => {
+  const {aspect} = await import('../src/traffic-sim.js');
+  let amber = 0;
+  for (let t = 0; t < CYCLE; t += .5) {
+    const a = aspect(t, 0, 0), b = aspect(t, 0, 1);
+    if (a === 'amber') amber += .5;
+    assert.ok(!(a !== 'red' && b === 'green') && !(b !== 'red' && a === 'green'), `both open at ${t}`);
+    assert.equal(a === 'green', green(t, 0, 0));
+  }
+  assert.ok(Math.abs(amber - 4) < .6, `${amber} s of amber`);
+});
