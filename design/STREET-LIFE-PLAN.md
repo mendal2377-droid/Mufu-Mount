@@ -74,6 +74,14 @@ ways (1,227 km) after leaving out 111 tunnels and 25 elevated stretches. Checked
 130 cars within 150 m against the 136 the flows above give; cars moving 6.4 m a second at 13:00;
 2.5 ms a frame to update. Unit tests: tests/world-traffic.test.js.
 
+**Remodelled the same day after the owner's views** ("too brutal in details", cars "stuck in the
+road"): the cars stood on the ground under the road, which the road surfaces overlie by 0.3-0.4 m, so
+they sank to their axles; they now stand on the road's own height, as the buses do (checked: every
+car over a road cell at its height). The boxes are now rounded, bevelled saloons with a glasshouse,
+wheels with hubs and lamps, and step-through e-bikes with seated, helmeted riders, under the city's
+own toon shading (src/traffic-models.js). Update cost kept at about 2.5 ms a frame by working out only
+the vehicles on the stretches of road within reach.
+
 Not modelled: turning at junctions, traffic lights, cars stopping for each other, the traveller or
 the buses (they pass through); the elevated roads and the tunnels; lamps lit at night; parked cars.
 

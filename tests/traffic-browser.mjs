@@ -1,7 +1,9 @@
 // Cars and e-bikes in the city (item 44, step 4; design/STREET-LIFE-PLAN.md), audited in the browser:
 //   loaded     the street file loads and the traffic runs
+//   once each  no two vehicles drawn at the same spot
 //   on road    every drawn car stands on a road cell of the walk grid (95 % at least: a way's centre
 //              line and the stamped road differ by a lane at bends), none on water
+//   surface    every car over a road cell stands at that cell's height, not the ground under the road
 //   density    the cars counted within 150 m of Xinjiekou at 8:30 against the plan's flow / speed over
 //              the mapped road length there (within a factor of 1.5)
 //   the day    8:30 busier than 13:00, 13:00 busier than 3:00
@@ -42,11 +44,20 @@ try {
 
   const peak = await at(8.5);
   check("loaded", peak.stats.cars > 0, JSON.stringify(peak.stats));
+  // No vehicle drawn twice: a stretch's index window once wrapped round a short way's loop.
+  const twins = await page.evaluate(() => { const seen = new Set(); let n = 0;
+    for (const [, x, , z] of window.__mufu.city.world.traffic.positions()) { const k = `${Math.round(x * 4)},${Math.round(z * 4)}`; if (seen.has(k)) n++; seen.add(k); }
+    return n; });
+  check("once each", twins === 0, `${twins} vehicles drawn on top of another`);
 
-  const where = await page.evaluate((cars) => { const w = window.__mufu.city.world; let road = 0, wet = 0;
-    for (const [x, , z] of cars) { let r = false; for (const [dx, dz] of [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]]) if (w.grid.road(x + dx, z + dz) != null) r = true; if (r) road++; if (w.grid.water(x, z) != null) wet++; }
-    return { road, wet, n: cars.length }; }, peak.cars);
+  const where = await page.evaluate((cars) => { const w = window.__mufu.city.world; let road = 0, wet = 0, level = 0, onCell = 0;
+    for (const [x, y, z] of cars) { let r = false; for (const [dx, dz] of [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]]) if (w.grid.road(x + dx, z + dz) != null) r = true; if (r) road++; if (w.grid.water(x, z) != null) wet++;
+      const rz = w.grid.road(x, z); if (rz != null) { onCell++; if (Math.abs(y - rz) < .05) level++; } }
+    return { road, wet, level, onCell, n: cars.length }; }, peak.cars);
   check("on road", where.road >= 0.95 * where.n && where.wet === 0, `${where.road} of ${where.n} cars on a road cell (within 2 m), ${where.wet} on water`);
+  // Standing on the road surface itself, not the ground 0.3-0.4 m under it (the owner's view, 23 Nov:
+  // cars sunk to their axles).
+  check("on the surface", where.level === where.onCell, `${where.level} of ${where.onCell} cars over a road cell stand at its height`);
 
   // Density near the camera: expected cars = sum over ways of (lanes x length within 150 m x density).
   const dens = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, tr = w.traffic, eye = m.camera.position, R = 150;

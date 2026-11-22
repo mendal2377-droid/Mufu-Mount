@@ -1131,7 +1131,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   }
 
   const world = {
-    id, meta, scene, sky, seats, staticTriangles, treeTriangles, traveller,
+    id, meta, scene, sky, seats, staticTriangles, treeTriangles, traveller, bands,   // bands: the toon shading steps, shared with what is added at runtime
     overview: false,     // set while this world is the home page's aerial view
     spawn(name = 'axis') {
       const s = meta.spawns[name] || Object.values(meta.spawns)[0];
