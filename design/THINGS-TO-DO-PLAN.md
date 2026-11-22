@@ -40,6 +40,16 @@ with ways to move through it, but little to do once you arrive.
    - Seats at the 5 mapped viewpoints, the summit, the lake embankment, each island, the wall top
      beside Xuanwu Gate and the Mufu riverside.
    - OSM maps no benches, so the exact spots are ours; the plan and the credits say so.
+   - **Done (22 Nov), browser code only (src/world-seats.js):** 11 benches. The summit, three of the
+     mapped viewpoints (Daosheng, Linggu, Wenyuan Square), the Yangtze below Mufu Mountain, Xuanwu
+     Lake's west shore inside the gate, and one on each of the five islands. Each spot follows a rule:
+     a mapped place, or the water's edge nearest a known spot; level, clear of trunks and walls, with
+     room behind for the camera, and joined to the paths. Each faces the water, the open view off the
+     hill, or a named sight (Lingzhou looks to Purple Mountain). Hint, F to sit on the plank, the
+     music as at the Music Stage. Audit: tests/seats-browser.mjs (every bench placed, reachable on
+     foot, sat on, F not taken by a gate, stop, dock or bell). Not placed: Mufu Mountain's two
+     viewpoints (deep in the wood in our model, trees on every side) and the wall top by Xuanwu Gate
+     (not walkable in our model).
 4. **Life.** People on the squares and lake paths, cyclists, cars on the avenues by road class,
    rowing boats on Xuanwu Lake, birds. The largest piece; its density rules need research first.
 5. **Landmark moments,** with Xuanwu phase 2 (item 38): the island landmarks, and a bell to ring.

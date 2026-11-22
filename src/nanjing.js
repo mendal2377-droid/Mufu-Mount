@@ -10,6 +10,7 @@ import {createCityGame} from './city-game-view.js';
 import {STAMPS,FACTS,rankFor,MUFU_PHOTOS_NEEDED} from './city-game.js';
 import {loadLandmarkWorld} from './landmark-world.js';
 import {createWorldLanterns} from './world-lanterns.js';
+import {createWorldSeats} from './world-seats.js';
 import {createJourneys} from './world-journeys.js';
 import {createMusic} from './generative-music.js';
 
@@ -137,6 +138,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(!active||state.overview||selected!==p)return;
     exitWorld();world=w;scene.remove(camera);w.scene.add(camera);postfx.setScene(w.scene);
     // Jinling Keepsakes in this world, hung once (the same progress as the atlas's lanterns).
+    // Benches at the places a visitor stops to look (src/world-seats.js), placed once.
+    if(w.benches===undefined)w.benches=createWorldSeats({world:w});
     if(w.keepsakes===undefined)w.keepsakes=createWorldLanterns({world:w,game,camera,onPick:(id,index,r)=>gameView.present(id,index,r)});
     // Journeys (src/world-journeys.js): real trips to make here, ticked off in the menu.
     if(w.journeys===undefined)w.journeys=createJourneys(w.id,storage);
@@ -405,7 +408,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       else if(!world.transit?.busRide&&!world.transit?.metroRide&&!world.transit?.waiting&&world.nearestTransit()){const tr=world.nearestTransit();lastSeatHint=t;
         const wait=tr.kind==='metro'?world.transit.nextTrain(tr.line,tr.stop):0,next=wait<60?'next train under a minute':`next train ${Math.round(wait/60)} min`;
         toast(tr.kind==='bus'?`Bus stop · ${tr.stop.en} ${tr.stop.name} · F to wait for the bus`:`${tr.stop.en} Station · ${tr.line.en} · ${next} · F to enter`);}
-      else if(world.nearestSeat(null,2.5)){lastSeatHint=t;toast('F to sit');}}
+      else if(world.nearestSeat(null,2.5)){const s=world.nearestSeat(null,2.5);lastSeatHint=t;toast(s.label?`A bench at ${s.label} · F to sit and look`:'F to sit');}}
     const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
   }
   const api={...built,data,game,gameView,refreshPins,renderPassport,renderPlaces,

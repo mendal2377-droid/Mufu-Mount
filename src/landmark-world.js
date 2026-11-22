@@ -580,6 +580,13 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const key = `${Math.floor(t[1] / 10)},${Math.floor(t[3] / 10)}`;
     (trunks.get(key) || trunks.set(key, []).get(key)).push([t[1], t[3], (spec.lamp ? .15 : spec.r * .09 * t[5]) + .45]);
   }
+  // Is a trunk within r of (x, z)? For placing benches (src/world-seats.js): not every tree is stamped
+  // out of the walk grid.
+  function nearTrunk(x, z, r) {
+    for (let i = Math.floor((x - r) / 10); i <= Math.floor((x + r) / 10); i++) for (let j = Math.floor((z - r) / 10); j <= Math.floor((z + r) / 10); j++)
+      for (const [tx, tz] of trunks.get(`${i},${j}`) || []) if (Math.hypot(tx - x, tz - z) < r) return true;
+    return false;
+  }
   const eyeTmp = new THREE.Vector3();
   // Move `eye` towards `target` until no trunk stands between them, lifting it a little when it
   // has to come close.
@@ -1134,7 +1141,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     },
     ground: (x, z) => surface(x, z),
     // For route-finding in tests (tests/mufu-journey-browser.mjs): the walk grid as it is.
-    grid: {height: (x, z) => heightAt(x, z), road: (x, z) => roadAt(x, z), stepUp: (x, z) => stepAt(x, z)},
+    grid: {height: (x, z) => heightAt(x, z), road: (x, z) => roadAt(x, z), stepUp: (x, z) => stepAt(x, z), water: (x, z) => waterAt(x, z),
+      trunk: (x, z, r) => nearTrunk(x, z, r)},
     get body() { return body; },
     get heading() { return heading; },
     get view() { return view; },
@@ -1286,7 +1294,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
         if (forward || side) { world.stand(); return false; }
         seated.t = Math.min(1, seated.t + dt * .8);
         const s = seated.seat, k = THREE.MathUtils.smootherstep(seated.t, 0, 1);
-        const target = new THREE.Vector3(s.position[0], heightAt(s.position[0], s.position[2]) ?? s.position[1], s.position[2]);
+        // A bench lifts the traveller onto its plank (src/world-seats.js); terraces have none.
+        const target = new THREE.Vector3(s.position[0], (heightAt(s.position[0], s.position[2]) ?? s.position[1]) + (s.lift || 0), s.position[2]);
         body.lerpVectors(seated.from, target, k);
         heading = Math.atan2(s.look[0] - s.position[0], s.look[2] - s.position[2]);
         return false;
