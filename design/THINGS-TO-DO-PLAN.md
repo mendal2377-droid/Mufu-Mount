@@ -52,6 +52,8 @@ with ways to move through it, but little to do once you arrive.
      (not walkable in our model).
 4. **Life.** People on the squares and lake paths, cyclists, cars on the avenues by road class,
    rowing boats on Xuanwu Lake, birds. The largest piece; its density rules need research first.
+   - **Researched and planned (23 Nov): design/STREET-LIFE-PLAN.md.** Slice 1 done: cars and e-bikes
+     on the roads by class and hour, from Nanjing's published counts (src/world-traffic.js).
 5. **Landmark moments,** with Xuanwu phase 2 (item 38): the island landmarks, and a bell to ring.
 
 Steps 1 and 2 can be coded while build 12 runs and checked in the browser after it.

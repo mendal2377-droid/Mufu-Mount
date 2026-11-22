@@ -1517,6 +1517,7 @@ function frame(elapsed) {
 
   if (city?.active) {
     updateGrade(dt);updateSunPosition();
+    weather.hour=state.hour;   // the clock, for the city's traffic (src/world-traffic.js)
     const footstep=city.frame(dt,t,weather,sunDirection);
     if(footstep) audio.footstep(weather);
     audio.update(weather,.35,state.moving,state.flying);
