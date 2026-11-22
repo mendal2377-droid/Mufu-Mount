@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {BODY_TYPES, carModel, bikeModel} from './traffic-models.js';
+import {BODY_TYPES, carModel, bikeModel, loadCarModels} from './traffic-models.js';
 import {Lane, CYCLE, STOP_BACK} from './traffic-sim.js';
 
 // Cars and e-bikes on the city's roads (item 44, step 4, slice 1; design/STREET-LIFE-PLAN.md, where
@@ -50,9 +50,13 @@ export function speed(kind, hour, bike = false) {
   const [free, peak] = bike ? EBIKE_SPEED : SPEED[base(kind)] || [30, 15];
   return free + (peak - free) * flowShare(hour);
 }
-/** Metres between vehicles in one lane: speed / (flow per lane). */
+// The owner's choice (23 Nov, "less traffic"): a calmer street than the counts. Cars at 45 % of the
+// counted flow, e-bikes at 35 %; the counts above stay as they are, so the street can be made busier
+// again by raising these.
+export const CALM = {car: .45, bike: .35};
+/** Metres between vehicles in one lane: speed / (flow per lane, as drawn). */
 export function spacing(kind, hour, lanes, bike = false) {
-  const q = flow(kind, hour) * (bike ? EBIKES[base(kind)] : 1) / (bike ? 1 : lanes);
+  const q = flow(kind, hour) * (bike ? EBIKES[base(kind)] * CALM.bike : CALM.car) / (bike ? 1 : lanes);
   return q > 0 ? speed(kind, hour, bike) * 1000 / q : Infinity;
 }
 
@@ -95,8 +99,13 @@ export async function createWorldTraffic({world}) {
   // Toon shading in the city's own bands (as the buildings), so the traffic sits in the painted scene.
   const toon = (c, vertexColors = false) => new THREE.MeshToonMaterial({color: c, gradientMap: world.bands || null, vertexColors});
   // One set of instanced meshes per body type (src/traffic-models.js): its paint, trim and plates.
+  // Kenney's cars, stretched to real sizes; the generated ones if they fail to load (or, for comparing
+  // the two, when localStorage 'mufu-cars' is 'own').
+  let own = false;
+  try { own = localStorage.getItem('mufu-cars') === 'own'; } catch { /* storage blocked: Kenney's */ }
+  const kenney = own ? null : await loadCarModels().catch(e => { console.warn('Car models did not load; drawing the generated ones.', e); return null; });
   const kinds = BODY_TYPES.map(([name, share]) => {
-    const m = carModel(name);
+    const m = kenney?.[name] || carModel(name);
     const k = {name, share, paint: new THREE.InstancedMesh(m.paint, toon(0xffffff), CAR_CAP), trim: new THREE.InstancedMesh(m.trim, toon(0xffffff, true), CAR_CAP),
       plates: new THREE.InstancedMesh(m.plates, toon(0xffffff), CAR_CAP), n: 0};
     k.meshes = [k.paint, k.trim, k.plates];

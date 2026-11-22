@@ -120,11 +120,91 @@ export function bikeModel() {
     tint(plain(box(.11, .08, .22, -.12, .4, .18)), 0x222222), tint(plain(box(.11, .08, .22, .12, .4, .18)), 0x222222),
     tint(plain(new THREE.SphereGeometry(.12, 10, 8).translate(0, 1.62, -.24)), 0xe6c4a3),
   ];
-  // Torso leaning a little forward, arms reaching to the bars.
-  const coat = mergeGeometries([plain(limb([0, 1.0, -.38], [0, 1.4, -.28], .17)),
-    plain(limb([-.2, 1.38, -.27], [-.3, 1.17, .45], .055)), plain(limb([.2, 1.38, -.27], [.3, 1.17, .45], .055))]);
+  // Torso upright, a little forward; shoulders; arms bent at the elbow to the grips, as a seated rider
+  // holds the bars (the straight arms of the first version read as stiff).
+  const coat = mergeGeometries([plain(limb([0, 1.0, -.4], [0, 1.36, -.32], .16)), plain(limb([-.17, 1.4, -.3], [.17, 1.4, -.3], .07)),
+    plain(limb([-.2, 1.38, -.3], [-.24, 1.13, -.08], .05)), plain(limb([-.24, 1.13, -.08], [-.3, 1.17, .45], .045)),
+    plain(limb([.2, 1.38, -.3], [.24, 1.13, -.08], .05)), plain(limb([.24, 1.13, -.08], [.3, 1.17, .45], .045))]);
   const helmet = new THREE.SphereGeometry(.15, 12, 8, 0, Math.PI * 2, 0, Math.PI * .55).translate(0, 1.66, -.25);
   // A delivery rider's insulated box on the rack behind the seat (coloured per platform).
   const deliveryBox = box(.44, .4, .4, 0, 1.0, -.95);
   return {shell: mergeGeometries([plain(rear), plain(shield)]), trim: mergeGeometries(trim), coat, helmet: plain(helmet), box: plain(deliveryBox)};
 }
+
+// --- Kenney's Car Kit (CC0, www.kenney.nl; public/models/kenney-car-kit) -----------------------------
+// The owner (23 Nov) asked for vehicles more real in shape than the generated ones above. Kenney's
+// cars have the features those lack (sloping screens, wheel arches, bumpers, set-in lamps) but toy
+// proportions (2.5 m long, 1.3 m tall), so each body is stretched to its type's real size from
+// BODY_TYPES and the wheels, kept round, are set at the stretched axles. Their palette texture is
+// read once: triangles in the body's main colour become the per-car paint; the rest (glass, lamps,
+// tyres, trim) keep their own colours as vertex colours, under the city's toon shading.
+const KENNEY = {suv: 'suv', saloon: 'sedan', hatchback: 'hatchback-sports', mpv: 'van', taxi: 'taxi', van: 'van'};
+
+/** Load the Car Kit's bodies for every BODY_TYPES entry: {type: {paint, trim, plates}}; null on failure. */
+export async function loadCarModels(base = '/models/kenney-car-kit/') {
+  const {GLTFLoader} = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const loader = new GLTFLoader(), out = {};
+  let pixels = null, size = 0;
+  for (const [type, , L, W, ride, , roof] of BODY_TYPES) {
+    const gltf = await loader.loadAsync(`${base}${KENNEY[type]}.glb`);
+    gltf.scene.updateMatrixWorld(true);
+    const parts = [];
+    // Not the SUV's spare wheel on its tailgate: stretched, it stood out, and few cars here carry one.
+    gltf.scene.traverse(o => { if (o.isMesh && o.name !== 'wheel-back') parts.push(o); });
+    if (!pixels) {
+      const img = parts[0].material.map.image, c = document.createElement('canvas');
+      c.width = c.height = size = img.width;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      pixels = g.getImageData(0, 0, size, size).data;
+    }
+    const texel = (u, v) => { const x = Math.min(size - 1, Math.max(0, Math.floor(u * size))), y = Math.min(size - 1, Math.max(0, Math.floor(v * size))), i = (y * size + x) * 4; return [pixels[i], pixels[i + 1], pixels[i + 2]]; };
+    // Each triangle's colour, from the texture under its middle, in the model's own frame.
+    const tris = [];
+    for (const m of parts) {
+      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      g.applyMatrix4(m.matrixWorld);
+      const p = g.attributes.position, uv = g.attributes.uv;
+      for (let i = 0; i < p.count; i += 3) {
+        const u = (uv.getX(i) + uv.getX(i + 1) + uv.getX(i + 2)) / 3, v = (uv.getY(i) + uv.getY(i + 1) + uv.getY(i + 2)) / 3;
+        tris.push({wheel: m.name.startsWith('wheel'), node: m.name, col: texel(u, v), pts: [0, 1, 2].map(k => new THREE.Vector3(p.getX(i + k), p.getY(i + k), p.getZ(i + k)))});
+      }
+    }
+    // The paint: the hue covering the most body area, leaving out greys, the pale glass and the dark
+    // trim. The texture shades each colour in a gradient, so colours are grouped by hue (12 degree bins).
+    const hsl = {h: 0, s: 0, l: 0}, tmp = new THREE.Color();
+    const bin = col => { tmp.setRGB(col[0] / 255, col[1] / 255, col[2] / 255).getHSL(hsl); return hsl.s < .3 || hsl.l > .82 || hsl.l < .22 ? -1 : Math.floor(hsl.h * 30) % 30; };
+    const area = new Array(30).fill(0);
+    for (const t of tris) {
+      t.bin = t.wheel ? -1 : bin(t.col);
+      if (t.bin < 0) continue;
+      area[t.bin] += new THREE.Vector3().crossVectors(t.pts[1].clone().sub(t.pts[0]), t.pts[2].clone().sub(t.pts[0])).length();
+    }
+    const paintBin = area.indexOf(Math.max(...area));
+    const isPaint = t => t.bin >= 0 && Math.min(Math.abs(t.bin - paintBin), 30 - Math.abs(t.bin - paintBin)) <= 1;
+    // The body's box, for stretching it to the real size.
+    const box = new THREE.Box3();
+    for (const t of tris) if (!t.wheel) for (const q of t.pts) box.expandByPoint(q);
+    const sx = W / (box.max.x - box.min.x), sz = L / (box.max.z - box.min.z), sy = roof / box.max.y;
+    const cz = (box.max.z + box.min.z) / 2;
+    const paintPos = [], trimPos = [], trimCol = [];
+    for (const t of tris) {
+      let pts;
+      if (t.wheel) {
+        // Round wheels: scaled by the height only, moved to the stretched axle.
+        const c = new THREE.Vector3();
+        for (const q of t.pts) c.add(q);
+        const hub = tris.find(o => o.node === t.node)._hub ||= (() => { const b = new THREE.Box3(); for (const o of tris) if (o.node === t.node) for (const q of o.pts) b.expandByPoint(q); return b.getCenter(new THREE.Vector3()); })();
+        pts = t.pts.map(q => new THREE.Vector3(hub.x * sx + (q.x - hub.x) * sy, q.y * sy, (hub.z - cz) * sz + (q.z - hub.z) * sy));
+      } else pts = t.pts.map(q => new THREE.Vector3(q.x * sx, q.y * sy, (q.z - cz) * sz));
+      const flat = pts.flatMap(q => [q.x, q.y, q.z]);
+      if (!t.wheel && isPaint(t)) paintPos.push(...flat);
+      else { trimPos.push(...flat); const c = new THREE.Color().setRGB(t.col[0] / 255, t.col[1] / 255, t.col[2] / 255, THREE.SRGBColorSpace); for (let k = 0; k < 3; k++) trimCol.push(c.r, c.g, c.b); }
+    }
+    const geo = (pos, col) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); if (col) g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals(); return g; };
+    const h = L / 2;
+    out[type] = {paint: geo(paintPos), trim: geo(trimPos, trimCol),
+      plates: mergeGeometries([plain(box3(.44, .14, .03, 0, ride + .28, h + .03)), plain(box3(.44, .14, .03, 0, ride + .38, -h - .03))])};
+  }
+  return out;
+}
+const box3 = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);

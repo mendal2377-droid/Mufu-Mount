@@ -106,6 +106,17 @@ each direction, offsets scattered. Checked at Xinjiekou at 8:30 (tests/traffic-b
 minute 292 cars first at a red stop line and 2,420 waiting behind, 1,335 vehicles turning into
 another street, none closer than a car's length to the one ahead.
 
+**Calmer, and real car shapes (owner, 23 Nov: "less traffic and more real in shape").** The street is
+drawn calmer than the counts by the owner's choice: cars at 45 % of the counted flow, e-bikes at 35 %
+(CALM in src/world-traffic.js; the counts themselves unchanged). At Xinjiekou at 8:30 that is 290
+cars and 357 e-bikes within 450 m. The cars are now Kenney's Car Kit (kenney.nl, CC0; downloaded with
+the owner's go-ahead, public/models/kenney-car-kit with its licence): saloon, SUV, hatchback, taxi and
+van, each body stretched to its type's real length, width and height and its round wheels set at the
+stretched axles; the main body colour, found by hue in the kit's palette, is repainted per car from the
+colour mix. Quaternius's CC0 car pack was the other candidate; its Google Drive share refused with
+"Quota exceeded" on 23 Nov. No CC0 e-bike model was found (the Poly Pizza scooters are CC BY and
+Western), so the e-bikes stay ours, the riders' arms now bent at the elbow.
+
 Not modelled: lane changes and overtaking, turns across oncoming traffic waiting for a gap, the green
 waves Nanjing runs on its main roads, cars stopping for the traveller or the buses (they pass through);
 signal heads (the lights are not drawn); the elevated roads and the tunnels; lamps lit at night; parked

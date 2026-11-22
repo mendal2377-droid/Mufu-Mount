@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {CLASSES, PEAK, PROFILE, flowShare, flow, speed, spacing} from '../src/world-traffic.js';
+import {CLASSES, PEAK, PROFILE, CALM, flowShare, flow, speed, spacing} from '../src/world-traffic.js';
 
 test('The day: the morning peak at 8:30 is the busiest hour, the night the quietest; the peak hour is 7-9 % of the day', () => {
   const max = Math.max(...PROFILE.map((_, h) => flowShare(h + .5)));
@@ -21,8 +21,8 @@ test('Flows by class follow the counts: the avenues 2,130 an hour a direction at
   assert.ok(speed('primary', 8.5) === 20 && speed('primary', 3) > 38, 'slow at the peak, free at night');
 });
 
-test('Spacing: an avenue lane at the peak every 25-35 m; at 3 am hundreds of metres; no e-bikes on trunks', () => {
-  const peak = spacing('primary', 8.5, 3);
+test('Spacing: an avenue lane at the peak every 25-35 m at the counted flow (drawn calmer, as the owner chose); at 3 am hundreds of metres; no e-bikes on trunks', () => {
+  const peak = spacing('primary', 8.5, 3) * CALM.car;
   assert.ok(peak > 25 && peak < 35, `${peak} m`);
   assert.ok(spacing('primary', 3, 3) > 300);
   assert.equal(spacing('trunk', 8, 3, true), Infinity);

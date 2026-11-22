@@ -75,7 +75,7 @@ try {
     for (const way of tr.near) { const k = way.kind.replace("_link", ""), link = way.kind.endsWith("_link") ? .5 : 1, dirs = way.oneway ? 1 : 2;
       let inside = 0; for (let i = 1; i < way.pts.length; i++) { const a = way.pts[i - 1], b = way.pts[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.ceil(L / 2);
         for (let j = 0; j < n; j++) { const x = a[0] + (b[0] - a[0]) * (j + .5) / n, z = a[1] + (b[1] - a[1]) * (j + .5) / n; if (Math.hypot(x - eye.x, z - eye.z) < R) inside += L / n; } }
-      want += dirs * inside / 1000 * (P[k] * link) / S[k]; }
+      want += dirs * inside / 1000 * (P[k] * link * 0.45) / S[k]; }   // 0.45: the owner's calmer street (CALM.car)
     const got = tr.positions().filter((p) => p[0] === "car" && Math.hypot(p[1] - eye.x, p[3] - eye.z) < R).length;
     return { want: Math.round(want), got }; });
   check("density", dens.got > dens.want / 1.5 && dens.got < dens.want * 1.5, `${dens.got} cars within 150 m of Xinjiekou at 8:30, the plan's flows give ${dens.want}`);
