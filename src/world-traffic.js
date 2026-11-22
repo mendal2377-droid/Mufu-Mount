@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import {BODY_TYPES, carModel, bikeModel} from './traffic-models.js';
+import {Lane, CYCLE, STOP_BACK} from './traffic-sim.js';
 
 // Cars and e-bikes on the city's roads (item 44, step 4, slice 1; design/STREET-LIFE-PLAN.md, where
 // every number below has its source or is marked as ours). The roads are OSM's drivable surface ways
 // (public/scenes/core/streets.json, from tools/street-ways.py).
 //
-// The model is deliberately plain: each lane is a steady stream at the hour's speed and spacing,
-// entering where its way begins and leaving where it ends. No turning at junctions, no lights, no
-// collisions. Only the ways within RADIUS of the camera are drawn.
+// Each lane is simulated (src/traffic-sim.js): vehicles follow the one ahead, stop at red lights at the
+// signal junctions (streets.json: OSM's mapped signals and the crossings of main roads, our rule) and
+// in the queues behind them, and at a way's end turn into a street that leaves the same point. Cars
+// arrive at the lanes' ends at the hour's flow. Only the ways near the camera are simulated, and only
+// the vehicles within RADIUS drawn. Not modelled: lane changes, overtaking, turns across traffic
+// waiting for a gap, pedestrians, parking.
 
 export const CLASSES = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street',
   'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link'];
@@ -128,48 +132,154 @@ export async function createWorldTraffic({world}) {
     for (const k of kinds) { if ((r -= k.share) < 0) return k; }
     return kinds[0];
   }
-  function drawCar(seed, i, y) {
-    const k = kindOf(hash(i, seed + 5));
+  function drawCar(id, y) {
+    const k = kindOf(hash(id, 5));
     if (k.n >= CAR_CAP) return false;
     place(k.meshes, k.n, y);
     // Vans are mostly white (ours).
-    const c = k.name === 'van' && hash(i, seed + 3) < .7 ? 0xf1efe8 : paint[Math.floor(hash(i, seed + 3) * paint.length)];
+    const c = k.name === 'van' && hash(id, 3) < .7 ? 0xf1efe8 : paint[Math.floor(hash(id, 3) * paint.length)];
     k.paint.setColorAt(k.n, color.setHex(c));
-    k.plates.setColorAt(k.n, color.setHex(hash(i, seed + 13) < GREEN_SHARE ? PLATE_GREEN : PLATE_BLUE));
+    k.plates.setColorAt(k.n, color.setHex(hash(id, 13) < GREEN_SHARE ? PLATE_GREEN : PLATE_BLUE));
     k.n++;
     return true;
   }
   let nd = 0;
-  function drawBike(seed, i, y, nb) {
+  function drawBike(id, y, nb) {
     place(bikeMeshes, nb, y);
-    const job = hash(i, seed + 15), delivery = job < DELIVERY, brand = job < DELIVERY * 2 / 3 ? MEITUAN : ELEME;
-    bikes.setColorAt(nb, color.setHex(shells[Math.floor(hash(i, seed + 11) * shells.length)]));
-    riders.setColorAt(nb, color.setHex(delivery ? brand[0] : coats[Math.floor(hash(i, seed + 7) * coats.length)]));
-    helmets.setColorAt(nb, color.setHex(delivery ? brand[1] : hats[Math.floor(hash(i, seed + 9) * hats.length)]));
+    const job = hash(id, 15), delivery = job < DELIVERY, brand = job < DELIVERY * 2 / 3 ? MEITUAN : ELEME;
+    bikes.setColorAt(nb, color.setHex(shells[Math.floor(hash(id, 11) * shells.length)]));
+    riders.setColorAt(nb, color.setHex(delivery ? brand[0] : coats[Math.floor(hash(id, 7) * coats.length)]));
+    helmets.setColorAt(nb, color.setHex(delivery ? brand[1] : hats[Math.floor(hash(id, 9) * hats.length)]));
     if (delivery && nd < BIKE_CAP) { place([boxes], nd, y); boxes.setColorAt(nd, color.setHex(brand[0])); nd++; }
   }
 
-  const dummy = new THREE.Object3D(), at = {x: 0, z: 0, yaw: 0};
-  let near = [], lastPick = -1e9, lastAt = [Infinity, Infinity];
-  // Ways whose box comes within RADIUS of (x, z), and on each the stretches [from, to] (metres along it)
-  // whose segments come within RADIUS + 60: only vehicles there are worked out each frame. Refreshed
-  // when the camera has moved 60 m.
-  function pick(x, z) {
-    const reach = RADIUS + 60, r2 = reach * reach;
+  const at = {x: 0, z: 0, yaw: 0};
+
+  // --- The road graph: signal stops along each way, and which streams leave each way's end ---------
+  // A stream is (way, direction); its lanes are 0..per-1 for cars and `per` for e-bikes.
+  const lights = (data.junctions || []).map(([x, z, mapped], i) => ({x, z, mapped, offset: hash(i, 77) * CYCLE}));
+  const lightGrid = new Map();
+  for (const j of lights) { const k = `${Math.floor(j.x / 50)},${Math.floor(j.z / 50)}`; (lightGrid.get(k) || lightGrid.set(k, []).get(k)).push(j); }
+  // Junctions within 8 m of a way's line: [{s along the way, light, segment direction}].
+  for (const w of ways) {
+    w.lights = [];
+    for (let i = 1; i < w.pts.length; i++) {
+      const [ax, az] = w.pts[i - 1], [bx, bz] = w.pts[i], ux = bx - ax, uz = bz - az, L = Math.hypot(ux, uz) || 1;
+      const seen = new Set();
+      for (let gx = Math.floor((Math.min(ax, bx) - 8) / 50); gx <= Math.floor((Math.max(ax, bx) + 8) / 50); gx++)
+        for (let gz = Math.floor((Math.min(az, bz) - 8) / 50); gz <= Math.floor((Math.max(az, bz) + 8) / 50); gz++)
+          for (const j of lightGrid.get(`${gx},${gz}`) || []) {
+            if (seen.has(j)) continue;
+            seen.add(j);
+            const k = ((j.x - ax) * ux + (j.z - az) * uz) / (L * L);
+            if (k < 0 || k > 1) continue;
+            if (Math.hypot(ax + ux * k - j.x, az + uz * k - j.z) < 8) w.lights.push({s: w.cum[i - 1] + k * L, j, ux: ux / L, uz: uz / L});
+          }
+    }
+  }
+  const nodeKey = (p) => `${Math.round(p[0] * 2)},${Math.round(p[1] * 2)}`;
+  const starts = new Map();   // node -> streams that begin there
+  for (const w of ways) for (const dir of w.oneway ? [w.oneway] : [1, -1]) {
+    const k = nodeKey(dir > 0 ? w.pts[0] : w.pts.at(-1));
+    (starts.get(k) || starts.set(k, []).get(k)).push({w, dir});
+  }
+
+  // --- Lanes in the simulation: the ways near the camera --------------------------------------------
+  const lanes = new Map();
+  let nextId = 1, transfers = 0, lastT = null, lastHour = null, near = [], lastPick = -1e9, lastAt = [Infinity, Infinity];
+  const newId = () => nextId++;
+  const laneKey = (w, dir, lane) => `${w.index}:${dir}:${lane}`;
+  const offsetOf = (w, lane) => {
+    const bike = lane === w.per;
+    return w.oneway ? (bike ? w.per * LANE_W / 2 + 1.1 : (lane - (w.per - 1) / 2) * LANE_W) : (bike ? w.per * LANE_W + 1.1 : (lane + .5) * LANE_W);
+  };
+  function makeLane(w, dir, lane, from, to, hour) {
+    const bike = lane === w.per;
+    if (!isFinite(spacing(w.kind, hour, w.per, bike))) return null;
+    // Stop lines: STOP_BACK before each junction, in the lane's travel; the light's half of the cycle by
+    // the lane's heading there (north-south one half, east-west the other).
+    const stops = w.lights.map(l => {
+      const at = (dir > 0 ? l.s : w.length - l.s) - STOP_BACK;
+      return {at, offset: l.j.offset, group: Math.abs(l.uz) >= Math.abs(l.ux) ? 0 : 1};
+    }).filter(st => st.at > 1).sort((p, q) => p.at - q.at);
+    const ln = new Lane({length: w.length, v0: speed(w.kind, 3, bike) / 3.6, bike, stops, key: laneKey(w, dir, lane)});
+    Object.assign(ln, {w, dir, lane, off: offsetOf(w, lane)});
+    ln.from = from; ln.to = to;
+    return ln;
+  }
+  // The ways within reach of (x, z) and the stretch of each to simulate: from 250 m before the first
+  // point within reach (so vehicles arrive already moving) to 80 m past the last.
+  function pick(x, z, hour) {
+    const reach = RADIUS + 60, r2 = reach * reach, keep = new Set();
     near = [];
     for (const w of ways) {
       if (!(w.box[0] - reach < x && w.box[2] + reach > x && w.box[1] - reach < z && w.box[3] + reach > z)) continue;
-      const spans = [];
+      let lo = Infinity, hi = -Infinity;
       for (let j = 1; j < w.pts.length; j++) {
         const [ax, az] = w.pts[j - 1], [bx, bz] = w.pts[j], ux = bx - ax, uz = bz - az, L2 = ux * ux + uz * uz || 1;
         const k = Math.max(0, Math.min(1, ((x - ax) * ux + (z - az) * uz) / L2)), px = ax + ux * k - x, pz = az + uz * k - z;
         if (px * px + pz * pz > r2) continue;
-        const last = spans.at(-1);
-        if (last && last[1] === w.cum[j - 1]) last[1] = w.cum[j]; else spans.push([w.cum[j - 1], w.cum[j]]);
+        lo = Math.min(lo, w.cum[j - 1]); hi = Math.max(hi, w.cum[j]);
       }
-      if (spans.length) near.push({w, spans});
+      if (lo > hi) continue;
+      near.push(w);
+      for (const dir of w.oneway ? [w.oneway] : [1, -1]) {
+        const a = dir > 0 ? lo : w.length - hi, b = dir > 0 ? hi : w.length - lo;
+        const from = Math.max(0, a - 250), to = Math.min(w.length, b + 80);
+        for (let lane = 0; lane <= w.per; lane++) {
+          const key = laneKey(w, dir, lane), bike = lane === w.per, gap = spacing(w.kind, hour, w.per, bike), v = speed(w.kind, hour, bike) / 3.6;
+          let ln = lanes.get(key);
+          if (!ln) {
+            ln = makeLane(w, dir, lane, from, to, hour);
+            if (!ln) continue;
+            lanes.set(key, ln);
+            ln.fill(from, to, gap, v, newId);
+          } else {
+            // The stretch moved with the camera: drop what left it, fill what it gained.
+            const oa = ln.from, ob = ln.to;
+            ln.from = from; ln.to = to;
+            ln.vehicles = ln.vehicles.filter(q => q.s >= from && q.s <= to);
+            if (from < oa) ln.fill(from, Math.min(oa, to), gap, v, newId);
+            if (to > ob) ln.fill(Math.max(ob, from), to, gap, v, newId);
+          }
+          keep.add(key);
+        }
+      }
     }
+    for (const key of [...lanes.keys()]) if (!keep.has(key)) lanes.delete(key);
     lastAt = [x, z];
+  }
+
+  // A vehicle at a lane's end: into a stream leaving the same point, straight on more often than
+  // turning, never back the way it came. Returns false to wait (the lane it turns into is full).
+  const pos = {x: 0, z: 0, yaw: 0}, pos2 = {x: 0, z: 0, yaw: 0};
+  function leave(ln, q) {
+    if (ln.to < ln.length - .5) return true;            // the end of the stretch, out of sight: gone
+    const end = ln.dir > 0 ? ln.w.pts.at(-1) : ln.w.pts[0];
+    along(ln.w, ln.length - .01, ln.dir, ln.off, pos);
+    const options = [];
+    for (const st of starts.get(nodeKey(end)) || []) {
+      if (st.w === ln.w) continue;
+      let cands;
+      if (ln.bike) { const b = lanes.get(laneKey(st.w, st.dir, st.w.per)); cands = b && b.from === 0 ? [b] : []; }
+      else { cands = []; for (let l = 0; l < st.w.per; l++) { const t = lanes.get(laneKey(st.w, st.dir, l)); if (t && t.from === 0) cands.push(t); } }
+      if (!cands.length) continue;
+      along(st.w, .5, st.dir, 0, pos2);
+      const turn = Math.abs(Math.atan2(Math.sin(pos2.yaw - pos.yaw), Math.cos(pos2.yaw - pos.yaw)));
+      options.push({cands, weight: turn < .5 ? 3 : turn < 2.2 ? 1 : .2});
+    }
+    if (!options.length) return true;                    // a dead end or the edge of the map: gone
+    let r = hash(q.id, transfers + 31) * options.reduce((a, o) => a + o.weight, 0), chosen = options[0];
+    for (const o of options) { if ((r -= o.weight) < 0) { chosen = o; break; } }
+    const target = chosen.cands[Math.floor(hash(q.id, 41) * chosen.cands.length)];
+    if (!target.entryFree()) return false;
+    // Carry the vehicle across, keeping where it was drawn: the difference fades over its first metres.
+    along(target.w, 0, target.dir, target.off, pos2);
+    q.dx = pos.x - pos2.x; q.dz = pos.z - pos2.z; q.dyaw = Math.atan2(Math.sin(pos.yaw - pos2.yaw), Math.cos(pos.yaw - pos2.yaw)); q.fade = 1;
+    q.s = 0; q.wait = false;
+    target.vehicles.push(q);
+    transfers++;
+    return true;
   }
 
   // The road's own height first: the road surfaces lie 0.3-0.4 m over the ground (blender/build_core.py,
@@ -185,54 +295,51 @@ export async function createWorldTraffic({world}) {
   }
 
   const traffic = {
-    ways, get near() { return near.map(n => n.w); },
+    ways, lights, get near() { return near; }, get lanes() { return lanes; }, get transfers() { return transfers; },
     stats: {cars: 0, bikes: 0},
     /** Each frame: t in seconds, the clock's hour, the camera's position. */
     update(t, hour, eye) {
-      if (Math.hypot(eye.x - lastAt[0], eye.z - lastAt[1]) > 60 || t - lastPick > 5) { pick(eye.x, eye.z); lastPick = t; }
+      // A jump of the clock (the time slider) starts the streets again at the new hour's numbers;
+      // the clock's own running changes them through the arrivals.
+      const jump = lastHour == null ? 0 : (((hour - lastHour) % 24) + 24) % 24;
+      if (Math.min(jump, 24 - jump) > .25) { lanes.clear(); lastPick = -1e9; }
+      lastHour = hour;
+      if (Math.hypot(eye.x - lastAt[0], eye.z - lastAt[1]) > 60 || t - lastPick > 5) { pick(eye.x, eye.z, hour); lastPick = t; }
+      // Simulate in steps of at most 0.1 s; a jump of the clock (a test, a pause) is not driven through.
+      let dt = lastT == null ? 0 : t - lastT;
+      lastT = t;
+      if (dt < 0 || dt > 2) dt = 0;
+      for (let left = dt; left > 1e-6;) {
+        const h = Math.min(.1, left);
+        left -= h;
+        const now = t - left;
+        for (const ln of lanes.values()) {
+          ln.step(now, h, q => leave(ln, q));
+          // Arrivals at the stretch's start at the hour's flow, while the lane holds fewer than it should.
+          const gap = spacing(ln.w.kind, hour, ln.w.per, ln.bike), v = speed(ln.w.kind, hour, ln.bike) / 3.6;
+          if (isFinite(gap) && ln.vehicles.length < (ln.to - ln.from) / gap * 1.1 && ln.entryFree() && Math.random() < v / gap * h)
+            ln.vehicles.push({s: ln.from, v: Math.min(v, ln.vehicles.at(-1)?.v ?? v), id: newId(), dx: 0, dz: 0, dyaw: 0});
+        }
+      }
+      // Draw what is within RADIUS.
       let nc = 0, nb = 0;
       for (const k of kinds) k.n = 0;
       nd = 0;
       const r2 = RADIUS * RADIUS;
-      for (const {w, spans} of near) {
-        const dirs = w.oneway ? [w.oneway] : [1, -1];
-        for (const dir of dirs) {
-          for (let lane = 0; lane <= w.per; lane++) {
-            const bike = lane === w.per;
-            const g = spacing(w.kind, hour, w.per, bike);
-            if (!isFinite(g)) continue;
-            const v = speed(w.kind, hour, bike) / 3.6, n = Math.ceil(w.length / g), loop = n * g;
-            const off = w.oneway ? (bike ? w.per * LANE_W / 2 + 1.1 : (lane - (w.per - 1) / 2) * LANE_W) : (bike ? w.per * LANE_W + 1.1 : (lane + .5) * LANE_W);
-            const seed = w.index * 131 + (dir > 0 ? 0 : 61) + lane * 17;
-            // Vehicle i stands at (v t + i g + jitter) mod loop; on a stretch [a, b] only the indices
-            // whose slot falls there (one either side for the jitter) can be in it.
-            const start = (v * t) % loop;
-            for (const [fa, fb] of spans) {
-              const a = dir > 0 ? fa : w.length - fb, b = dir > 0 ? fb : w.length - fa;
-              const k0 = Math.floor((a - start) / g) - 1, k1 = Math.ceil((b - start) / g) + 1;
-              for (let k = Math.max(k0, k1 - n + 1); k <= k1; k++) {   // at most one loop: no vehicle twice
-                const i = ((k % n) + n) % n;
-                const s = (start + i * g + g * .6 * hash(i, seed)) % loop;
-                if (s < a || s > b || s > w.length) continue;
-                along(w, s, dir, off, at);
-                const dx = at.x - eye.x, dz = at.z - eye.z;
-                if (dx * dx + dz * dz > r2) continue;
-                const y = height(at.x, at.z);
-                if (y == null) continue;
-                if (bike) {
-                  if (nb >= BIKE_CAP) continue;
-                  drawBike(seed, i, y, nb);
-                  nb++;
-                } else if (drawCar(seed, i, y)) nc++;
-              }
-            }
-          }
-        }
+      for (const ln of lanes.values()) for (const q of ln.vehicles) {
+        along(ln.w, Math.min(q.s, ln.length), ln.dir, ln.off, at);
+        at.x += q.dx; at.z += q.dz; at.yaw += q.dyaw;
+        const dx = at.x - eye.x, dz = at.z - eye.z;
+        if (dx * dx + dz * dz > r2) continue;
+        const y = height(at.x, at.z);
+        if (y == null) continue;
+        if (ln.bike) { if (nb < BIKE_CAP) { drawBike(q.id, y, nb); nb++; } }
+        else if (drawCar(q.id, y)) nc++;
       }
       for (const k of kinds) for (const m of k.meshes) m.count = k.n;
       bikes.count = bikeTrim.count = riders.count = helmets.count = nb; boxes.count = nd;
       for (const m of meshes) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-      traffic.stats = {cars: nc, bikes: nb, delivery: nd, kinds: Object.fromEntries(kinds.map(k => [k.name, k.n]))};
+      traffic.stats = {cars: nc, bikes: nb, delivery: nd, kinds: Object.fromEntries(kinds.map(k => [k.name, k.n])), lanes: lanes.size, transfers};
     },
     /** Where each drawn car and e-bike stands, for the audit (tests/traffic-browser.mjs). */
     positions() {

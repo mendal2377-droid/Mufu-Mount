@@ -9,6 +9,9 @@
 //              the mapped road length there (within a factor of 1.5)
 //   the day    8:30 busier than 13:00, 13:00 busier than 3:00
 //   moving     a car moves at the hour's speed between two frames
+//   lights     red lights stop cars at their stop lines, with queues behind
+//   turning    vehicles go on into another street at a way's end
+//   no collisions  no vehicle closer to the one ahead than a car's length
 //   cost       the per-frame update at 8:30 at Xinjiekou, median under 6 ms
 // Shots: test-results/shots/traffic-<name>.png. Time is driven with __mufu.step.
 //
@@ -91,10 +94,29 @@ try {
     return d[Math.floor(d.length / 2)]; });
   check("moving", moved > 3 && moved < 15, `median car moved ${moved.toFixed(1)} m in 1 s (expected 5-11 m/s at 13:00)`);
 
+  // Movement (owner, 23 Nov: "how it moves"): a minute at 8:30 at Xinjiekou.
+  const flowing = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, tr = w.traffic;
+    m.setClock(8.5, { sky: "clear", season: "summer" }); m.step(2, 0.1);
+    const t0 = tr.transfers; let queued = 0, stoppedAtRed = 0, tooClose = 0, lanesWithLights = 0;
+    for (let k = 0; k < 6; k++) {
+      m.step(100, 0.1);
+      for (const ln of tr.lanes.values()) {
+        if (ln.stops.length) lanesWithLights++;
+        const vs = ln.vehicles;
+        for (let i = 1; i < vs.length; i++) if (vs[i - 1].s - vs[i].s < ln.p.len - .01) tooClose++;
+        for (const st of ln.stops) { const at = vs.filter((q) => q.s > st.at - 60 && q.s <= st.at + .5 && q.v < .3);
+          if (at.length) { queued += at.length; if (at.some((q) => st.at - q.s < 3)) stoppedAtRed++; } }
+      }
+    }
+    return { turned: tr.transfers - t0, queued, stoppedAtRed, tooClose, lights: tr.lights.length, lanesWithLights: Math.round(lanesWithLights / 6) }; });
+  check("lights", flowing.stoppedAtRed > 0 && flowing.queued > flowing.stoppedAtRed, `${flowing.lights} signal junctions; over a minute, ${flowing.stoppedAtRed} cars first at a red stop line, ${flowing.queued} stopped in the queues behind (${flowing.lanesWithLights} lanes near Xinjiekou have lights)`);
+  check("turning", flowing.turned > 20, `${flowing.turned} vehicles went on into another street in a minute`);
+  check("no collisions", flowing.tooClose === 0, `${flowing.tooClose} vehicles closer than a car's length to the one ahead`);
+
   // Cost: the traffic is recomputed each frame; at the busiest hour in the busiest place, the median update.
   const cost = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, tr = w.traffic, ms = [];
     m.setClock(8.5, { sky: "clear", season: "summer" });
-    for (let i = 0; i < 30; i++) { const t0 = performance.now(); tr.update(100 + i * .05, 8.5, m.camera.position); ms.push(performance.now() - t0); }
+    for (let i = 0; i < 30; i++) { const t0 = performance.now(); tr.update(m.clockT = (m.clockT ?? 1000) + .05, 8.5, m.camera.position); ms.push(performance.now() - t0); }
     ms.sort((a, b) => a - b); return { median: +ms[15].toFixed(2), worst: +ms[29].toFixed(2), near: tr.near.length }; });
   check("cost", cost.median < 6, `median ${cost.median} ms a frame, worst ${cost.worst} ms, over ${cost.near} ways near the camera`);
 

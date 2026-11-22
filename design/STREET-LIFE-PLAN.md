@@ -94,8 +94,22 @@ Nanjing's is not published. Delivery riders, one e-bike in eight (**ours**: no c
 yellow and Ele.me blue two to one. Each car has a glasshouse split by pillars, mirrors, plates,
 lamps; SUVs roof rails, taxis a roof sign. Checked: tests/traffic-browser.mjs "mix".
 
-Not modelled: turning at junctions, traffic lights, cars stopping for each other, the traveller or
-the buses (they pass through); the elevated roads and the tunnels; lamps lit at night; parked cars.
+**How it moves (owner, 23 Nov).** Each lane near the camera is now simulated (src/traffic-sim.js):
+vehicles follow the one ahead by the Intelligent Driver Model (Treiber, Hennecke and Helbing 2000;
+its usual urban parameters, not measured in Nanjing), stop at red lights and queue behind them, and
+at a way's end go on into a street leaving the same point, straight on three times as often as a
+turn. Lights stand at 328 junctions: 84 hold one of the 120 signals OSM maps here (fetched from
+Overpass on 23 Nov, research/core/data/osm-core-signals.json); the rest are crossings of main roads
+(both secondary or bigger, or a primary and a tertiary; **our rule**: OSM's signals are far too few).
+A 120 s cycle (**ours**: Nanjing publishes none; Beijing's Di'anmen Street runs 161 s), 42 % green to
+each direction, offsets scattered. Checked at Xinjiekou at 8:30 (tests/traffic-browser.mjs): over a
+minute 292 cars first at a red stop line and 2,420 waiting behind, 1,335 vehicles turning into
+another street, none closer than a car's length to the one ahead.
+
+Not modelled: lane changes and overtaking, turns across oncoming traffic waiting for a gap, the green
+waves Nanjing runs on its main roads, cars stopping for the traveller or the buses (they pass through);
+signal heads (the lights are not drawn); the elevated roads and the tunnels; lamps lit at night; parked
+cars.
 
 ## Later slices
 
