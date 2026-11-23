@@ -12,6 +12,14 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 // Beijing survey, are ours. The shares and group sizes below are ours. Each group feeds on the ground or sits in a crown, takes off for
 // the trees when the walker comes too close, and settles again; all roost unseen at night.
 //
+// Flights: night herons feed by night and rest by day, so from 17:00 they leave Heping Gate's reeds
+// one by one to feed along the lake's shores, and come back from 5:30 (the windows and their 1.5 hours
+// are ours). Cormorants gather in their hundreds at dusk on Qianzhou island in the Yangtze's Jiajiang
+// channel (Yangtse Evening Post, November 2025); that Xuanwu Lake's come and go from there, arriving in
+// lines from 7:00 and leaving from 16:00, is ours. The clock stands still unless someone moves it, so
+// each window is a stream: the birds whose turn it is at the clock's hour are in the air, flying at
+// their real speed.
+//
 // Xuanwu Lake in winter (xuanwuhu.net, Yangtse Evening Post, Modern Express), each where it was seen:
 // over 200 mandarin ducks off Heping Gate (the old Shence Gate) in November, about 100 in February;
 // coots off the north shore, over a hundred by day and some hundreds at dusk; 30 to 40 cormorants by
@@ -51,6 +59,12 @@ export const WATER = [
   ['heron', 100, HEPING, 60, 30],
   ['mallard', 40, null, 0, 0],
 ];
+// Flights (ours, from the birds' habits above): [start of the window, its length h, speed m/s, height m].
+export const FLIGHTS = {heronOut: [17, 1.5, 6, 18], heronBack: [5.5, 1.5, 6, 18], cormorantIn: [7, 1.5, 14, 30], cormorantOut: [16, 1.5, 14, 30]};
+// Where the cormorants fly to and from: the Jiajiang, by Jiangxin Island (32.0310 N, 118.7013 E,
+// Wikipedia), as [x east, north]. Qianzhou itself, in the Jiajiang, was not found on a map; only the
+// bearing matters here, as the flights start and end 3 km out.
+export const QIANZHOU = [-7782, -1189];
 /** How many of the winter flock are on the lake in this season (0 spring, 1 summer, 2 autumn,
  *  3 winter, round again): all in winter, none in summer; autumn and spring for the arrivals in late
  *  October to November and the departures in March. */
@@ -298,7 +312,15 @@ export function createWorldBirds({world, season}) {
       const roost = name === 'heron' ? grid.crowns(centre[0], centre[1], spread + 60) : [];
       return {spec, name, centre, spots, roost, birds: []};
     });
-    return {wet, flocks};
+    // The herons' night feeding: the lake's banks, 3 to 6 m from its water, on a 20 m lattice.
+    const banks = [];
+    for (let x = PARK.x0; x < PARK.x1; x += 20) for (let n = PARK.n0; n < PARK.n1; n += 20) {
+      const z = -n;
+      if (grid.water(x, z) == null && grid.height(x, z) != null && ![0, 2, 4, 6].some(k => grid.water(x + Math.cos(k * .785) * 3, z + Math.sin(k * .785) * 3) != null)
+        && [0, 1, 2, 3, 4, 5, 6, 7].some(k => grid.water(x + Math.cos(k * .785) * 6, z + Math.sin(k * .785) * 6) != null)) banks.push([x, z]);
+    }
+    for (const f of flocks) f.banks = f.name === 'heron' ? banks.filter(p => Math.hypot(p[0] - f.centre[0], p[1] - f.centre[1]) < 1500) : [];
+    return {wet, flocks, banks};
   })() : null;
   function bird(f, i) {
     const p = f.spots.length ? f.spots[Math.floor(hash(i, 41 + f.name.length) * f.spots.length)] : null;
@@ -308,8 +330,49 @@ export function createWorldBirds({world, season}) {
     // A heron on the bank faces the water.
     let yaw = hash(i, 61) * 6.283;
     if (f.name === 'heron' && p) for (let k = 0; k < 8; k++) if (grid.water(p[0] + Math.cos(k * .785) * 6, p[1] + Math.sin(k * .785) * 6) != null) { yaw = Math.atan2(Math.cos(k * .785), Math.sin(k * .785)); break; }
-    return {kind, x: p ? p[0] + r[0] : 0, z: p ? p[1] + r[1] : 0, phase: hash(i, 59) * 6.283, yaw, dive: 0, len: LEN[kind] * (.92 + .16 * hash(i, 67)),
+    // Herons: when each leaves and comes back, and where it feeds. Cormorants: their line (nine to a
+    // line, ours) and when it comes and goes.
+    const team = Math.floor(i / 9), slot = i % 9;
+    const fl = f.name === 'heron' ? {out: FLIGHTS.heronOut[0] + FLIGHTS.heronOut[1] * hash(i, 89), back: FLIGHTS.heronBack[0] + FLIGHTS.heronBack[1] * hash(i, 97),
+      feed: f.banks.length ? f.banks[Math.floor(hash(i, 101) * f.banks.length)] : p}
+      : f.name === 'cormorant' ? {out: FLIGHTS.cormorantOut[0] + FLIGHTS.cormorantOut[1] * hash(team, 103), back: FLIGHTS.cormorantIn[0] + FLIGHTS.cormorantIn[1] * hash(team, 107), slot} : null;
+    return {kind, fl, x: p ? p[0] + r[0] : 0, z: p ? p[1] + r[1] : 0, phase: hash(i, 59) * 6.283, yaw, dive: 0, len: LEN[kind] * (.92 + .16 * hash(i, 67)),
       perch: f.roost.length && hash(i, 71) < .7 ? perchOn(f.roost[Math.floor(hash(i, 73) * f.roost.length)], hash(i, 79), hash(i, 83)) : null};
+  }
+  /** Is the hour within [from, to), round midnight if need be? */
+  const inHours = (h, from, to) => { to %= 24; return from <= to ? h >= from && h < to : h >= from || h < to; };
+  let flying = 0, air = [];
+  /** Draw a bird in the air if this hour is its turn to fly; true if it is flying. */
+  function flight(f, b, t, hour, eye) {
+    const heron = f.name === 'heron', fl = b.fl;
+    const [, , speed, top] = heron ? FLIGHTS.heronOut : FLIGHTS.cormorantIn;
+    let from, to;
+    if (heron) { from = [b.x, b.z]; to = fl.feed; }
+    else {
+      // From the Jiajiang: the line comes in over the city, 3 km out along that bearing.
+      const dx = QIANZHOU[0] - b.x, dz = -QIANZHOU[1] - b.z, d = Math.hypot(dx, dz);
+      from = [b.x + dx / d * 3000, b.z + dz / d * 3000]; to = [b.x, b.z];
+    }
+    const dist = Math.max(1, Math.hypot(to[0] - from[0], to[1] - from[1])), dur = dist / speed, span = dur / 3600;
+    // Out (herons to feed, cormorants to Qianzhou) or back: is this hour within the flight that
+    // starts at the bird's time?
+    const out = inHours(hour, fl.out, fl.out + span), back = inHours(hour, fl.back, fl.back + span);
+    if (!out && !back) return false;
+    // The clock stands still: the bird flies its leg over and over at its real speed (a stream).
+    const u = (t / dur + b.phase / 6.283) % 1;
+    // Herons go out from home to feed; cormorants come back from Qianzhou to the lake.
+    let [ax, az] = from, [bx, bz] = to;
+    if (heron ? back : out) { [ax, az] = to; [bx, bz] = from; }
+    // A cormorant's place in its line: back and to one side of the one ahead (ours: 2.5 m, 1.5 m).
+    const ex = (bx - ax) / dist, ez = (bz - az) / dist, k = fl.slot != null ? Math.ceil(fl.slot / 2) : 0, side = (fl.slot % 2 ? 1 : -1) * k * 1.5, rear = k * 2.5;
+    const x = ax + (bx - ax) * u - ex * rear - ez * side, z = az + (bz - az) * u - ez * rear + ex * side;
+    flying++;
+    if (Math.hypot(x - eye.x, z - eye.z) > 900) return true;
+    const ga = height(ax, az) ?? grid.water(ax, az) ?? 8, gb = height(bx, bz) ?? grid.water(bx, bz) ?? 8;
+    const y = ga + (gb - ga) * u + top * Math.min(1, 6.4 * u * (1 - u));
+    draw(b.kind, x, y, z, Math.atan2(ex, ez), heron ? 1.35 : 0, b.len, Math.sin(t * (heron ? 9 : 11) + b.phase));
+    air.push([b.kind, x, y, z, ex, ez]);
+    return true;
   }
   let lastT = null;
   function updateLake(t, hour, eye) {
@@ -320,16 +383,21 @@ export function createWorldBirds({world, season}) {
       const want = f.spots.length ? flockSize(f.spec, sv, hour) : 0;
       while (f.birds.length < want) f.birds.push(bird(f, f.birds.length));
       f.birds.length = want;
-      if (f.centre && Math.hypot(f.centre[0] - eye.x, f.centre[1] - eye.z) > 700 && f.name !== 'mallard') continue;
+      if (f.centre && Math.hypot(f.centre[0] - eye.x, f.centre[1] - eye.z) > 700 && f.name !== 'mallard' && f.name !== 'heron' && f.name !== 'cormorant') continue;
       for (const b of f.birds) {
-        if (Math.hypot(b.x - eye.x, b.z - eye.z) > 500) continue;
+        if (b.fl && flight(f, b, t, hour, eye)) continue;
         if (f.name === 'heron') {
-          // By day most roost in the trees by the reeds; from dusk they stand at the water's edge.
-          const day = hour > 6.5 && hour < 17;
-          if (day && b.perch) draw('heron', b.perch[0], b.perch[1], b.perch[2], b.perch[3], 0, b.len, 0);
-          else { const y = height(b.x, b.z) ?? 0; draw('heron', b.x, y, b.z, b.yaw, .15 * Math.sin(t * .3 + b.phase), b.len, 0); }
+          // At home by day: most roost in the trees by the reeds, the rest stand on the bank. Out on the
+          // lake's banks by night, feeding.
+          const home = inHours(hour, b.fl.back, b.fl.out), [x, z] = home ? [b.x, b.z] : b.fl.feed;
+          if (Math.hypot(x - eye.x, z - eye.z) > 500) continue;
+          if (home && b.perch && hour > 7) draw('heron', b.perch[0], b.perch[1], b.perch[2], b.perch[3], 0, b.len, 0);
+          else draw('heron', x, height(x, z) ?? 0, z, home ? b.yaw : b.phase, .15 * Math.sin(t * .3 + b.phase), b.len, 0);
           continue;
         }
+        if (Math.hypot(b.x - eye.x, b.z - eye.z) > 500) continue;
+        // Cormorants are on the lake only between their morning and evening flights.
+        if (f.name === 'cormorant' && !inHours(hour, b.fl.back, b.fl.out)) continue;
         // A slow paddle about its spot; away from a walker or boat closer than 15 m (ours).
         const a = t * .05 + b.phase, ox = Math.sin(a) * 3, oz = Math.cos(a * .8) * 3;
         const d = Math.hypot(b.x - w.x, b.z - w.z);
@@ -350,9 +418,12 @@ export function createWorldBirds({world, season}) {
   const birds = {
     stats: {birds: 0},
     get groups() { return groups; }, get lake() { return lake; }, get flushes() { return flushes; },
+    /** The birds drawn in flight to or from the lake this frame: [kind, x, y, z, fx, fz]. */
+    get air() { return air; },
     /** Each frame: t in seconds, the clock's hour, the camera's position. */
     update(t, hour, eye) {
       for (const k of Object.values(kinds)) k.n = 0;
+      flying = 0; air = [];
       updateLand(t, hour, eye);
       updateLake(t, hour, eye);
       let n = 0;
@@ -360,7 +431,7 @@ export function createWorldBirds({world, season}) {
         for (const m of [k.body, k.wing]) { m.count = k.n; m.instanceMatrix.needsUpdate = true; }
         n += k.n;
       }
-      birds.stats = {birds: n, ...Object.fromEntries(Object.entries(kinds).map(([name, k]) => [name, k.n]))};
+      birds.stats = {birds: n, flying, ...Object.fromEntries(Object.entries(kinds).map(([name, k]) => [name, k.n]))};
     },
     /** Every land bird near the camera, for the audit: [kind, state, x, y, z]. */
     land() {

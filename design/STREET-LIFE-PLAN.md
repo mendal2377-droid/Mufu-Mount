@@ -312,7 +312,50 @@ Not modelled:
 - the rest of Purple Mountain's 29.9 km ring, which OSM does not map as a greenway here
 - overtaking, teams bunching or stopping, riders meeting walkers on a shared path
 
+## Slice 5: birds in flight (searched 23 November 2026)
+
+**What the record says.** Little.
+- No count was found of swifts, swallows or crows roosting over Nanjing, and nothing on Xuanwu
+  Lake's birds flying to roost. (The swifts' counts found are Beijing's.)
+- **Cormorants.** In the Yangtze's Jiajiang channel by Jiangxin Island, a hundred and more feed by
+  day, and at dusk some hundreds gather on Qianzhou island
+  ([Yangtse Evening Post, November 2025](https://www.yzwb.net/news/jiangsu/nanjing/202511/t20251125_293411.html),
+  from a search summary).
+- **Night herons.** They feed at night and rest by day. Xuanwu Lake's gather by day in Heping Gate's
+  reeds (slice 3).
+- **Where Qianzhou is.** OSM does not name it and no map position was found. Jiangxin Island, beside
+  which the Jiajiang runs, is at 32.0310 N, 118.7013 E
+  ([Wikipedia](https://en.wikipedia.org/wiki/Jiangxin_Island)).
+
+So the flights are the lake's own flocks going to and from where they feed and roost.
+
+**The rules (ours, from those habits).**
+- **Night herons** leave Heping Gate one by one from 17:00 over an hour and a half. They fly at
+  6 m/s, up to 18 m high, to feed on the lake's banks within 1.5 km, and stay there through the
+  night. They come back from 5:30 over an hour and a half.
+- **Cormorants** come to the lake in lines of nine from 7:00 over an hour and a half, and leave from
+  16:00. They fly at 14 m/s, up to 30 m high, on the bearing of the Jiajiang (starting and ending
+  3 km out). A line flies in echelon, each bird 2.5 m behind and 1.5 m to the side of the one
+  ahead. That Xuanwu Lake's cormorants roost with the Jiajiang's is **ours**.
+- **The clock stands still** unless someone moves it, so each window is a stream. The birds whose
+  turn has come at the clock's hour, and whose flight is not over, are in the air, flying their leg
+  again and again at their real speed. At dusk that is two or three herons at a time; a line of
+  cormorants is up for about 3.5 minutes in its window.
+
+**Built and checked (23 Nov).** In src/world-birds.js: the herons fly with legs trailing and wings
+beating, and the cormorants fly in their lines. Checked in the browser (tests/birds-browser.mjs,
+"flights"):
+- 3 herons in the air just after the first one's turn, as many as were due.
+- At noon none in the air, and all 100 herons at Heping Gate.
+- At 22:00 only 12 still at Heping Gate; the rest are on the banks round the lake.
+- No cormorants on the lake at 20:00, and a line of 9 in the air as it came in.
+
+Not modelled:
+- swifts and swallows over the city in summer, and gulls on the Yangtze (no counts found)
+- the land birds' longer flights between parks
+- birds startled into the air by a boat
+
 ## Later slices
 
-Birds in flight overhead; riders on the riverside once the walkable world reaches it; each with its
-own audit.
+Riders on the riverside once the walkable world reaches it; swifts and swallows if a count turns
+up; each with its own audit.

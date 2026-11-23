@@ -2,6 +2,8 @@
 //   density    land birds round Huanzhou at 8:00 near the survey's 22 a hectare of green; none at 22:00
 //   placed     every ground bird on walkable ground, none on water; every perched one in a crown
 //   flushing   a feeding group takes to the trees when the walker comes up, and comes down again
+//   flights    herons fly out at dusk to feed round the lake, and are away at night; cormorants come in
+//              lines and are gone by evening
 //   flocks     Xuanwu Lake in winter: each flock its reported size, every swimmer on the lake's water,
 //              the herons on the bank; in summer only the resident herons
 //   cost       birds updated in under 2 ms a frame
@@ -79,6 +81,25 @@ try {
   check("flocks", W.mandarin === 150 && W.coot === 150 && lake.dusk.coot === 300 && W.cormorant === 35 && W.heron === 100 && W.mallard === 40
       && lake.summer.mandarin === 0 && lake.summer.coot === 0 && lake.summer.heron === 30 && lake.dry === 0 && lake.bank === lake.herons,
     `winter ${JSON.stringify(W)}, coots at 17:00 ${lake.dusk.coot}; summer ${JSON.stringify(lake.summer)}; ${lake.dry} of ${lake.swim} swimmers off the water, ${lake.bank} of ${lake.herons} herons on the bank`);
+
+  // Flights: the herons' stream out at dusk and their night away; the cormorants' lines and their
+  // night on Qianzhou.
+  const fl = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, b = w.birds;
+    const herons = b.lake.flocks.find((f) => f.name === "heron"), corms = b.lake.flocks.find((f) => f.name === "cormorant");
+    const at = (hour, [x, z]) => { m.setClock(hour, { sky: "clear", season: "winter" }); w.placeAt({ feet: [x, w.ground(x, z) ?? 8, z], look: [x, 8, z - 10] }); m.step(2, .1); return { ...b.stats }; };
+    m.setClock(12, { sky: "clear", season: "winter" }); m.step(300, .1);
+    const home = herons.centre, station = corms.centre;
+    // Herons due in the air just after the first heron's turn: those whose turn has come and whose flight is not over.
+    const h = herons.birds[0].fl.out + .002, due = herons.birds.filter((q) => { const d = Math.hypot(q.fl.feed[0] - q.x, q.fl.feed[1] - q.z) / 6 / 3600; return h >= q.fl.out && h < q.fl.out + d; }).length;
+    const dusk = at(h, home), noon = at(12, home), night = at(22, home);
+    const evening = at(20, station);
+    const team = corms.birds[0].fl, line = at(team.back + .002, station);
+    return { due, dusk: dusk.flying, noonFlying: noon.flying, noonHerons: noon.heron, nightHerons: night.heron, eveningCorms: evening.cormorant, line: line.flying,
+      feed: herons.birds.filter((q) => Math.hypot(q.fl.feed[0] - home[0], q.fl.feed[1] - home[1]) > 100).length };
+  });
+  check("flights", fl.due > 0 && fl.dusk >= fl.due && fl.noonFlying === 0 && fl.nightHerons < fl.noonHerons * .7 && fl.feed > 50 && fl.eveningCorms === 0 && fl.line >= 5,
+    `dusk: ${fl.dusk} in the air (${fl.due} herons due); noon: ${fl.noonFlying} flying, ${fl.noonHerons} herons at Heping Gate; 22:00: ${fl.nightHerons} there, ${fl.feed} feed over 100 m away; `
+    + `20:00: ${fl.eveningCorms} cormorants on the lake; a line coming in: ${fl.line} in the air`);
 
   const cost = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, ms = [];
     m.setClock(8, { sky: "clear", season: "winter" }); const x = 100, z = -4800; w.placeAt({ feet: [x, w.ground(x, z) ?? 8, z], look: [x, 8, z - 10] }); m.step(2, .1);

@@ -32,3 +32,14 @@ test('Xuanwu Lake: the winter flocks at their reported sizes, gone in summer, th
   assert.equal(flockSize(by.coot, 3, 17), 300, 'coots double at dusk');
   assert.equal(flockSize(by.coot, 3, 10), 150);
 });
+
+test('Flights: the Jiajiang where the coordinates of Jiangxin Island put it, and each window within the day', async () => {
+  const {QIANZHOU, FLIGHTS} = await import('../src/world-birds.js');
+  // Jiangxin Island, 32.0310 N, 118.7013 E, in the core's flat frame (origin 32.0418 N, 118.7838 E).
+  const x = (118.7013306 - 118.7838) * 111320 * Math.cos(32.0418 * Math.PI / 180), n = (32.0310444 - 32.0418) * 110574;
+  assert.ok(Math.abs(QIANZHOU[0] - x) < 2 && Math.abs(QIANZHOU[1] - n) < 2, `${x}, ${n}`);
+  for (const [name, [start, span, speed, top]] of Object.entries(FLIGHTS)) {
+    assert.ok(start >= 0 && start + span <= 24 && speed > 0 && top > 0, name);
+  }
+  assert.ok(FLIGHTS.heronOut[0] >= 16.5 && FLIGHTS.heronBack[0] <= 7, 'herons go out at dusk and back at dawn');
+});
