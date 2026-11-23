@@ -573,12 +573,14 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   for (const t of trees) (byKind[t[0]] ||= []).push(t);
   // Trunks in a 10 m hash, so the chase camera can step in front of a tree instead of staring at
   // its bark (an avenue every 9 m puts one behind you constantly).
-  const trunks = new Map();
+  const trunks = new Map(), crowns = new Map();
   for (const t of trees) {
     const spec = TREES[t[0]];
     if (!spec || spec.far || spec.lotus || spec.flower) continue;
     const key = `${Math.floor(t[1] / 10)},${Math.floor(t[3] / 10)}`;
     (trunks.get(key) || trunks.set(key, []).get(key)).push([t[1], t[3], (spec.lamp ? .15 : spec.r * .09 * t[5]) + .45]);
+    // Crowns, for the birds to perch in (src/world-birds.js): centre height and radius as drawn.
+    if (!spec.lamp && !spec.hang) (crowns.get(key) || crowns.set(key, []).get(key)).push([t[1], t[2] + spec.h * (spec.cone ? .55 : .74) * t[5], t[3], spec.r * t[5] * (spec.cone ? .6 : .9), t[0]]);
   }
   // Is a trunk within r of (x, z)? For placing benches (src/world-seats.js): not every tree is stamped
   // out of the walk grid.
@@ -1142,7 +1144,12 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     ground: (x, z) => surface(x, z),
     // For route-finding in tests (tests/mufu-journey-browser.mjs): the walk grid as it is.
     grid: {height: (x, z) => heightAt(x, z), road: (x, z) => roadAt(x, z), stepUp: (x, z) => stepAt(x, z), water: (x, z) => waterAt(x, z),
-      trunk: (x, z, r) => nearTrunk(x, z, r)},
+      trunk: (x, z, r) => nearTrunk(x, z, r),
+      // Tree crowns within r of (x, z): [x, centre y, z, radius, kind].
+      crowns: (x, z, r) => { const out = [];
+        for (let i = Math.floor((x - r) / 10); i <= Math.floor((x + r) / 10); i++) for (let j = Math.floor((z - r) / 10); j <= Math.floor((z + r) / 10); j++)
+          for (const c of crowns.get(`${i},${j}`) || []) if (Math.hypot(c[0] - x, c[2] - z) < r) out.push(c);
+        return out; }},
     get body() { return body; },
     get heading() { return heading; },
     get view() { return view; },

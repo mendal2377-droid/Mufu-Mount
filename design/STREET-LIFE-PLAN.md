@@ -167,8 +167,95 @@ boats with passengers, kayaks and paddleboards. Checked in the browser (tests/pe
 of the shore; 2.4 ms a frame for walkers and boats. Unit tests: tests/world-people.test.js.
 
 Not modelled: people stopping, sitting, queuing or crossing streets; walkers passing through each
-other and through the traffic; boats keeping to piers, docking or avoiding each other; birds.
+other and through the traffic; boats keeping to piers, docking or avoiding each other.
+
+## Slice 3: birds (searched 23 November 2026)
+
+**What the counts say.**
+- **Land birds a hectare.** No per-area count was found for Nanjing's parks. The nearest is a winter
+  survey of 40 green spaces in Beijing, December 2013 to February 2014, at the birds' busy hours
+  (sunrise to 10:00, 16:00 to sunset). Surveyors walked 1 to 1.5 km an hour and counted every bird
+  within 25 m either side, so a strip of 5 to 7.5 ha an hour. They met 164 birds an hour, 137 of
+  them land birds; tree sparrows were 56 of those
+  ([Sun et al. 2016, Scientia Silvae Sinicae 52(5)](https://html.rhhz.net/linyekexue/html/2016-5-134.htm)).
+  137 over 6.25 ha is **about 22 land birds a hectare of green**. A strip count misses birds hidden
+  in leaves, so this is if anything low.
+- **Nanjing's species.** The tree sparrow (麻雀), light-vented bulbul (白头鹎), Chinese blackbird
+  (乌鸫) and spotted dove (珠颈斑鸠) are the city's "four guardians", by far the most numerous
+  ([Xinhua Daily](https://jnews.xhby.net/v3/interfacearticles/f651b9bf19c641a4a0956797f00b57c9/qGJ7n5f3mqvoXwuA/1)).
+  The Jiangsu Bird Watching Society names magpies and red-billed blue magpies as common too
+  (a press interview seen only in a search summary; the page was not read). Azure-winged magpies,
+  the Beijing survey's second commonest, are **our** addition here. A 2022–24 transect survey of Purple Mountain counted 89 species and 3,846 birds
+  ([Chinese Journal of Ecology 2025](https://www.cje.net.cn/CN/10.13292/j.1000-4890.202512.001));
+  only its abstract could be read, so it gives no density.
+- **Xuanwu Lake in winter.**
+  - Over 200 mandarin ducks (鸳鸯) over Heping Gate (和平门, the old Shence Gate 神策门) on
+    27 November, the most recorded; about 100 at Heping Gate's wetland one February. Migrants arrive
+    from late October, mass in late November to early December, and leave in mid to late March
+    ([xuanwuhu.net](https://xuanwuhu.net/yshd/detail.aspx?id=387)).
+  - 30 to 40 cormorants (鸬鹚) resting and feeding by the music fountain at Nanjing Station. Mallards,
+    spot-billed ducks, Baikal teal, pochards, tundra swans and coots are also named, without counts
+    ([xuanwuhu.net](https://www.xuanwuhu.net/yshd/detail.aspx?id=380)).
+  - Coots (白骨顶) off the north shore: over a hundred, several hundred at dusk
+    ([Yangtse Evening Post, December 2025](https://www.yzwb.net/news/jiangsu/nanjing/202512/t20251223_303506.html);
+    read from a search summary, as the page would not load). They first wintered here in 2020
+    ([Modern Express](https://yrd.huanqiu.com/article/4EzJZMQ89xd)).
+  - A hundred and more night herons (夜鹭) in Heping Gate's reeds in January. They are resident and
+    gather into flocks in winter (Yangtse Evening Post).
+  - The lake's history: nearly 100 water bird species and over 10,000 birds in the early 1980s, then
+    800 in 1994–95 and 100 in 2000–01. Since then it gets 20 to 30 winter species a year.
+
+**The rules.**
+- **Land birds** are about 22 a hectare of green, in the 20 m cells round the camera (out to 120 m)
+  that have two tree crowns within 14 m. The day comes from the survey's own hours: all of them
+  from 7 to 10 and 16 to 17, 60 % at midday (**ours**), none from 19:00 to 5:00, when they roost
+  unseen. The same all year (**ours**: the survey is a winter one).
+- **Species shares (ours):** sparrow 35 %, bulbul 25 %, blackbird 15 %, spotted dove 10 %, magpie
+  8 %, azure-winged magpie 7 %.
+- **Group sizes (ours):** sparrows 6, bulbuls 3, blackbirds alone, doves and magpies in pairs,
+  azure-winged magpies 6.
+- **Time on the ground (ours):** sparrow 70 %, bulbul 10 %, blackbird 80 %, dove 70 %, magpie 50 %,
+  azure-winged magpie 30 %.
+- **Flight distance (ours):** 4 to 9 m. A group feeds hopping and pecking about its spot, or sits on
+  the outside of a crown. It flies up into the trees when the walker comes inside that distance,
+  and comes down again once the walker is twice that far away.
+- **Xuanwu Lake's flocks**, each on the open water of the lake (inside OSM's outline of 玄武湖)
+  nearest where it was seen:
+  - 150 mandarin ducks within 70 m of Heping Gate (the middle of the 100 and 200 counts).
+  - 150 coots within 160 m of the north shore below Nanjing Station, 300 from 16:00 to 18:30
+    (**ours** for "several hundred").
+  - 35 cormorants by the station.
+  - 100 night herons on Heping Gate's bank, 3 to 6 m from the water. By day most roost in the trees
+    beside it; from dusk they stand at the water's edge.
+  - 40 mallards spread over the lake (**ours**: no count).
+  - Half the ducks are females (**ours**).
+- **Seasons:** all of each winter flock in winter, none in summer, 40 % in autumn and 30 % in
+  spring, for the late-October arrivals and the March departures (**ours**). The night herons are
+  there all year, 30 outside winter (**ours**).
+- **On the water:** each swimmer paddles slowly about its spot. Coots and cormorants dive for about
+  8 s every minute or so (**ours**), and all move off from a walker or boat within 15 m (**ours**).
+
+**Built and checked (23 Nov).** src/world-birds.js. Low-poly toon birds, each species in its own
+colours (the sparrow's white cheeks, the bulbul's white nape, the magpie's white shoulders and long
+tail, the mandarin drake's orange sails), with wings that beat in flight. The world's tree crowns
+are exposed for perching (`grid.crowns`). Checked in the browser (tests/birds-browser.mjs):
+- 148 land birds over 6.3 ha of green at four places at 8:00, 23 a hectare; none at 22:00.
+- Every ground bird on walkable ground and none on water; every perched bird in a crown.
+- A feeding group of sparrows all took to the trees when the walker came up, and all came down
+  within 2 minutes of it leaving.
+- Each lake flock at its size in winter, the coots doubled at 17:00, only the 30 herons in summer.
+  Every swimmer on the lake's water and every heron on the bank.
+- 0.7 ms a frame for 375 birds.
+
+Unit tests: tests/world-birds.test.js.
+
+Not modelled:
+- birds in flight overhead, crossing the city or the lake
+- gulls, egrets, swallows and the summer birds
+- birdsong tied to where the birds are (the sound bed has its own)
+- the other worlds' birds (Zhongshan keeps its pigeons over the Music Stage)
+- the herons' reeds, which the model does not draw (they stand on the bank as it is)
 
 ## Later slices
 
-Birds; cyclists in the parks; the traffic lights drawn; each with its own audit.
+Cyclists in the parks; birds in flight overhead; each with its own audit.
