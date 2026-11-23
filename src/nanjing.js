@@ -15,6 +15,7 @@ import {createWorldTraffic} from './world-traffic.js';
 import {createWorldPeople} from './world-people.js';
 import {createXuanwuBoats} from './xuanwu-boats.js';
 import {createWorldBirds} from './world-birds.js';
+import {createWorldCyclists} from './world-cyclists.js';
 import {createJourneys} from './world-journeys.js';
 import {createMusic} from './generative-music.js';
 
@@ -151,6 +152,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // Boats out on Xuanwu Lake (src/xuanwu-boats.js); null in a world without it.
     if(w.boats===undefined)w.boats=w.id==='core'?createXuanwuBoats({world:w}):null;
     // Birds: in the trees and on the ground round the walker, and Xuanwu Lake's winter flocks (src/world-birds.js).
+    // Cyclists on the leisure cycleways (src/world-cyclists.js): the riverside, Purple Mountain's greenway.
+    if(w.cyclists===undefined){w.cyclists=null;createWorldCyclists({world:w}).then(c=>{w.cyclists=c;});}
     if(w.birds===undefined)w.birds=w.id==='core'?createWorldBirds({world:w,season:shared.season}):null;
     if(w.keepsakes===undefined)w.keepsakes=createWorldLanterns({world:w,game,camera,onPick:(id,index,r)=>gameView.present(id,index,r)});
     // Journeys (src/world-journeys.js): real trips to make here, ticked off in the menu.
@@ -390,6 +393,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     world.people?.update(t,weather.hour??12,camera.position);
     world.boats?.update(t,weather.hour??12);
     world.birds?.update(t,weather.hour??12,camera.position);
+    world.cyclists?.update(t,weather.hour??12,camera.position);
     if(wasGliding&&!world.gliding){
       // Touchdown: level the chase camera behind the traveller, looking where they ran out.
       camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');

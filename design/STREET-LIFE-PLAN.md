@@ -256,6 +256,63 @@ Not modelled:
 - the other worlds' birds (Zhongshan keeps its pigeons over the Music Stage)
 - the herons' reeds, which the model does not draw (they stand on the bank as it is)
 
+## Slice 4: cyclists (searched 23 November 2026)
+
+**What the rules and counts say.**
+- **Not in Xuanwu Lake's park.** The Xuanwu Lake Scenic Area Protection Regulations, in force since
+  1 October 2010, ban every vehicle from the scenic area and its lakeside road, bicycles included.
+  Only sightseeing and maintenance vehicles, official vehicles and disabled people's carriages are
+  allowed ([Sina, 2010](http://travel.sina.com.cn/china/2010-10-12/0931144675.shtml)). Nanjing's
+  urban park rules keep bikes out of any park that has not allowed them
+  ([Nanjing government reply, 2023](https://www.nanjing.gov.cn/xxgkn/jytabljggk/2023njytabl/shizxta/202311/t20231127_4107329.html)).
+  So the "cyclists in the parks" of the plan become cyclists on the greenways.
+- **Where Nanjing rides.** Purple Mountain's ring greenway is 29.9 km, past Pipa Lake, the Botanical
+  Garden, Qianhu and Linggu. The city's greenways total 863 km (2019) or over 1,800 km (2024),
+  counted differently ([gmw.cn](https://news.gmw.cn/2019-03/29/content_32693887.htm);
+  [xhby.net](https://www.xhby.net/content/s6714ad46e4b0458dc38cd88d.html)). Over 500,000 people in
+  Nanjing ride for sport, by an incomplete count.
+- **How many.** No count was found for any Nanjing greenway. On Nanchang's riverside greenway, a
+  reporter stood at one point for half an hour at 16:00 on a Saturday. They counted 117 riders and
+  fewer than 40 walkers, with riders arriving in teams
+  ([The Paper, 3 Nov 2026](https://www.thepaper.cn/newsDetail_forward_34395217)).
+
+**The rules.**
+- **The ways.** OSM's cycleways that keep away from roads (most of a way more than 25 m from any
+  drivable road), and any way named a greenway (绿道). **Our rule.** A cycle track beside a street
+  is the e-bikes' and stays with the traffic. paths.json `rides`, from tools/street-ways.py: 14 ways,
+  13.4 km.
+  - The Yangtze dyke road (5.5 km) and the west riverside lie outside the core world's walkable
+    ground, so no riders are drawn there.
+  - What has riders: Purple Mountain's greenway (2 km mapped), an 825 m cycleway west of it, two short ones north of the lake
+    and one in the city's south-west, about 3.9 km in all.
+- **How many:** 234 riders an hour past a point at the busiest hour (the Nanchang count, both ways).
+- **The mix (ours).** 60 % sport riders on road bikes, in teams of three to seven in their club's
+  jerseys, at 22 km/h. 40 % on shared bikes (Hellobike blue, Meituan yellow, Qingju green), alone,
+  at 12 km/h.
+- **Density.** Flow over speed gives about 14 riders a kilometre at 16:00. At the calmer setting
+  (35 %) that is 5.
+- **The day (ours):** busiest at 16:00, still out in the evening (night rides are popular), none
+  from midnight to 5:00.
+- **Riding:** right of the way's middle, 2.6 m apart in a team, pedalling: a crank turn for every
+  2.5 (road) or 1.8 (shared) wheel turns.
+
+**Built and checked (23 Nov).** src/world-cyclists.js: road bikes and shared bikes (with a basket),
+riders leaning to the bars or sitting upright, knees bending as they pedal. Checked in the browser
+(tests/cyclists-browser.mjs), by Purple Mountain's greenway at 16:00:
+- 5 riders on the 0.59 km of ride in range, against about 3 expected; none at 3:00.
+- All on the ground, none on water.
+- Moving 3.2 m a second, two pedalling legs each.
+- 0.1 ms a frame.
+
+Unit tests (tests/world-cyclists.test.js): the density arithmetic, and no ride inside Xuanwu Lake's
+park.
+
+Not modelled:
+- riders on the dyke road and the riverside, which lie outside the walkable world
+- the rest of Purple Mountain's 29.9 km ring, which OSM does not map as a greenway here
+- overtaking, teams bunching or stopping, riders meeting walkers on a shared path
+
 ## Later slices
 
-Cyclists in the parks; birds in flight overhead; each with its own audit.
+Birds in flight overhead; riders on the riverside once the walkable world reaches it; each with its
+own audit.

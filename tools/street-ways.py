@@ -1,4 +1,4 @@
-"""Street ways for the city's traffic (and walkers' ways for its people, paths.json) (design/STREET-LIFE-PLAN.md): the drivable surface roads of
+"""Street ways for the city's traffic (and walkers' and riders' ways for its people, paths.json) (design/STREET-LIFE-PLAN.md): the drivable surface roads of
 research/core/data/features.json, written to public/scenes/core/streets.json for src/world-traffic.js.
 
 Kept: motorway to living street and their links (OSM `highway`). Left out: service roads, footways and
@@ -140,8 +140,44 @@ def main():
         for x, n in w['pts']:
             flat += [round(x, 1), round(-n, 1)]
         walks.append([WALKS.index(kind), park, flat])
-    PATHS.write_text(json.dumps({'kinds': WALKS, 'ways': walks}, separators=(',', ':')), encoding='utf-8')
-    print(f'{len(walks)} ways for walkers ({sum(w[1] for w in walks)} in Xuanwu park), {PATHS.stat().st_size // 1024} KB')
+    # Riders' ways (src/world-cyclists.js): the leisure cycleways, [x0, z0, ...]. A cycleway counts when
+    # most of it lies more than 25 m from any drivable road (a track beside a street is the e-bikes' and
+    # is left to the traffic), and so does a way named a greenway (绿道). Our rule.
+    cells = defaultdict(list)
+    for w in ways:
+        f = w[3]
+        for i in range(0, len(f) - 2, 2):
+            cells[(int(f[i] // 50), int(f[i + 1] // 50))].append((f[i], f[i + 1], f[i + 2], f[i + 3]))
+    def near_road(x, z, r=25):
+        for i in range(int((x - r) // 50), int((x + r) // 50) + 1):
+            for j in range(int((z - r) // 50), int((z + r) // 50) + 1):
+                for ax, az, bx, bz in cells.get((i, j), ()):
+                    dx, dz = bx - ax, bz - az
+                    t = max(0, min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz or 1)))
+                    if math.hypot(ax + dx * t - x, az + dz * t - z) < r:
+                        return True
+        return False
+    rides, ride_m = [], 0
+    for w in feats['ways']:
+        kind, tags, name = w.get('kind'), w.get('tags') or {}, w.get('name') or ''
+        if len(w['pts']) < 2 or tags.get('tunnel') not in (None, 'no') or not (kind == 'cycleway' or '绿道' in name):
+            continue
+        # Points every 10 m along the way, each near a road or not.
+        samples = []
+        for (x0, n0), (x1, n1) in zip(w['pts'], w['pts'][1:]):
+            k = max(1, int(math.hypot(x1 - x0, n1 - n0) // 10))
+            samples += [(x0 + (x1 - x0) * i / k, -(n0 + (n1 - n0) * i / k)) for i in range(k)]
+        if '绿道' not in name and sum(near_road(x, z) for x, z in samples) > len(samples) / 2:
+            continue
+        flat = []
+        for x, n in w['pts']:
+            flat += [round(x, 1), round(-n, 1)]
+        rides.append(flat)
+        p = w['pts']
+        ride_m += sum(math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]) for i in range(1, len(p)))
+    PATHS.write_text(json.dumps({'kinds': WALKS, 'ways': walks, 'rides': rides}, separators=(',', ':')), encoding='utf-8')
+    print(f'{len(walks)} ways for walkers ({sum(w[1] for w in walks)} in Xuanwu park), {len(rides)} leisure cycleways '
+          f'({ride_m / 1000:.1f} km), {PATHS.stat().st_size // 1024} KB')
     lights = junctions(ways)
     OUT.write_text(json.dumps({'classes': CLASSES, 'ways': ways, 'junctions': lights}, separators=(',', ':')), encoding='utf-8')
     print(f'{len(ways)} ways, {len(lights)} signal junctions ({sum(j[2] for j in lights)} with a mapped signal), '
