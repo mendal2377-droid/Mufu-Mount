@@ -55,7 +55,7 @@ the six cores, **placed from descriptions** and labelled approximate.
   - Xuanwu Gate has one square passage; the real gate has three arches.
   - The lotus beds read as khaki flats in autumn.
   - **Water audit not met:** the lake stands at 6.45 m in the city's frame, not the plan's 9.8 m.
-    Which datum each number uses is not yet known.
+    Which datum each number uses is not yet known. *Settled 25 Nov, below.*
   - The island landmarks have not started.
 - **How build 10 was made:** its last two fixes were patched into the saved scene, not built from
   scratch, and the next full build makes them from the code:
@@ -63,6 +63,31 @@ the six cores, **placed from descriptions** and labelled approximate.
   - water bands overlapping 0.6 m.
 - **The grey lines across the lake** seen from high above were the lake bed fighting the water in
   the depth buffer. The near plane now follows the camera's height (`src/landmark-world.js`).
+
+## Phase 2: the water's height and the lotus (25 November 2026)
+
+**The water's height, settled without a rebuild.** Most likely the park's 9.8 to 10.3 m are
+Wusong heights. The elevation model flattens the lake at 8.5 m above the geoid, and that matches a
+managed 10.2 m if Nanjing's offset is near Shanghai's 1.68 m (research/xuanwu/FACTS.md).
+- **Why we built 6.45 m.** The build took the lake's level as its lowest bank minus 0.4 m
+  (`blender/build_core.py`, LAKE_LEVELS). One cell on the east bank, at (1370, 3940), reads 6.85 m;
+  the bank's median is 8.5 m.
+- **What a visitor sees is right.** The banks stand a median 0.6 m above the water (from 64 bank
+  samples, 10th to 90th percentile −0.2 to 2.5 m; tests/_bank-probe.mjs). The model's own banks
+  read about 1.2 m, rails and plants included.
+- **Not raised.** Raising the lake 2 m would need every bank and island edge raised with it in a
+  full core rebuild, and would change nothing anyone can see. The audit now reads: the lake sits
+  0.4 m under its lowest bank and about 0.6 m under the median one. Its absolute height, 2 m under
+  the model's, is a known offset of the city frame here.
+
+**Lotus beds (src/landmark-world.js).** The beds were one flat sheet, a lawn in summer and khaki
+flats in autumn. Now:
+- Round leaves on a 0.9 m lattice, jittered and sized, over the lake's water.
+- How much of the water they cover follows the plant's year (**ours**): about 35 % in spring as the
+  leaves come up, 95 % in summer, 70 % in autumn as they rust and break, 22 % in winter as dark
+  stubble.
+- Where they part, the water shows. Far off, the leaves blend to their average colour.
+- The raised lotus plants take the same colours: rust in autumn, dark brown in winter.
 
 ## Phase 2, first: Xuanwu Gate as it really looks (the owner, 9 November 2026: "far too different from the real gate")
 

@@ -54,6 +54,17 @@ its edge.
 - **Water level:** the managed summer level is **9.8 m**, with an ecological minimum of 9.6 m and
   9.9 m at germination time. This is the height the built lake surface should match
   ([Hohai University, 2023](https://jour.hhu.edu.cn/slsdkjjz/article/abstract/20230308)).
+- **Which datum (checked 25 Nov 2026).** None of the sources names one. Other reported "normal"
+  levels are 9.8 to 10.2 m ([Baidu Baike](https://baike.baidu.com/item/%E7%8E%84%E6%AD%A6%E6%B9%96%E5%85%AC%E5%9B%AD/217739))
+  and 10.2 to 10.3 m ([Nanjing Daily, 2016](https://news.sina.cn/2016-10-10/detail-ifxwrapv1167068.d.html)).
+  - The Copernicus GLO-30 elevation model, which the city is built from, flattens the lake at
+    **8.5 m above the EGM2008 geoid**. China's 1985 national datum is close to that geoid.
+  - Water levels in the lower Yangtze are often given in the Wusong datum. In Shanghai,
+    Wusong = 1985 + 1.68 m ([Shanghai Planning and Natural Resources Bureau](https://ghzyj.sh.gov.cn/cmsres/e6/e6d80f66205b45c8adb7a61dbca37905/636d66c646db3f56caa61dc4f1c87301.pdf));
+    Nanjing's own offset was not found. A managed 10.2 m in Wusong would be about 8.5 m on the
+    1985 datum, just what the elevation model shows.
+  - So the park's figures are most likely Wusong heights. This is **our reading**, not stated
+    anywhere.
 - **Water plants:** they cover **13.2%** of the lake, submerged plants only 2.1%, against a target of
   30%. Lotus 荷花 is the emergent plant that has to be *held back* in summer (same source). So the
   lotus goes in beds along sheltered shores and between the islands, not over open water.

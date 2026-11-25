@@ -90,7 +90,7 @@ const SEASONS = {
   cedar: {year: [null, null, null, '#36513A']}, cypress: {year: [null, null, null, '#36513A']},
   // Lotus (research/xuanwu/FACTS.md): new leaves in spring, flowers June to August, seed heads in
   // autumn, brown stalks in winter.
-  lotus: {year: ['#8DBE5A', null, '#9A9048', '#7A6448']}, lotus_flower: {year: ['#C9D98A', null, '#8E7A4E', '#6E5A44']},
+  lotus: {year: ['#8DBE5A', null, '#8A6A36', '#5A4632']}, lotus_flower: {year: ['#C9D98A', null, '#6E5A3A', '#4E4034']},
   // From research/plants/FACTS.md: ginkgo gold in late November, metasequoia fiery red in early
   // December, plane yellowing late; camphor, privet and cedar evergreen (camphor's lighter spring
   // flush is an assumption); plum flowers in late February, so its "winter" is the blossom.
@@ -359,10 +359,31 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             diffuseColor.rgb=mix(diffuseColor.rgb*(.9+rip*.22),vec3(.78,.88,.96),fres*.35);
             diffuseColor.rgb+=smoothstep(.78,.86,rip)*.08;
           }
-          // Lotus beds: green through the summer, yellowing in autumn, brown in winter.
-          if(worldLotus>.5){float s4=mod(citySeason,4.);
-            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.6,.56,.3),smoothstep(1.4,2.4,s4)*(1.-smoothstep(3.,3.6,s4))*.6);
-            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.45,.38,.28),smoothstep(2.5,3.,s4)*(1.-smoothstep(3.7,4.,s4)));}
+          // Lotus beds: a crowd of round leaves over the water, not a lawn. How much of the water they
+          // cover follows the season (ours, from the plant's year: leaves come up in spring, close over
+          // the bed in summer, rust and break in autumn, stand as brown stubble in winter), and the
+          // water shows wherever they do not.
+          if(worldLotus>.5){float s4=mod(citySeason,4.),si=floor(s4),sf=fract(s4);
+            vec4 covs=vec4(.35,.95,.7,.22);
+            float c0=si<.5?covs.x:si<1.5?covs.y:si<2.5?covs.z:covs.w, c1=si<.5?covs.y:si<1.5?covs.z:si<2.5?covs.w:covs.x, cov=mix(c0,c1,sf);
+            float autumn=smoothstep(1.3,2.,s4)*(1.-smoothstep(3.,3.5,s4)), winter=smoothstep(2.5,3.,s4)*(1.-smoothstep(3.7,4.,s4)), spring=1.-smoothstep(.3,1.,s4)+smoothstep(3.7,4.,s4);
+            // Leaves on a 0.9 m lattice, each jittered, sized and present by the coverage.
+            vec2 lp=vWorldPos.xz/.9,lc=floor(lp);float leaf=0.,lh=0.,rim=0.;
+            for(int i=-1;i<=1;i++)for(int j=-1;j<=1;j++){vec2 c=lc+vec2(i,j);float h=lwHash(c);
+              if(h>cov*1.05)continue;
+              vec2 o=c+.5+(vec2(lwHash(c+7.1),lwHash(c+3.3))-.5)*.6;float r=(.32+.3*lwHash(c+1.7))*(.75+.35*cov);
+              float d=length(lp-o)/r;if(d<1.&&(leaf<.5||h<lh)){leaf=1.;lh=h;rim=d;}}
+            // Leaf colours: fresh green in spring and summer, ochre and rust in autumn, dark in winter.
+            vec3 green=mix(vec3(.22,.5,.12),vec3(.14,.36,.08),lwHash(lc+9.));
+            vec3 rust=mix(vec3(.6,.36,.1),vec3(.44,.2,.06),lwHash(lc+5.));
+            vec3 col=mix(green,rust,autumn);col=mix(col,vec3(.2,.13,.08),winter);col=mix(col,vec3(.45,.66,.28),spring*.6);
+            col*=1.08-.25*rim*rim;
+            // Between the leaves: shadowed leaves where the bed is closed, the lake's water where it is not.
+            vec3 water=vec3(.28,.48,.66),under=vec3(.1,.22,.08)*(1.-autumn*.4-winter*.6);
+            vec3 gap=mix(water,under,smoothstep(.75,.95,cov));
+            // Far away the leaves are smaller than a pixel: their average instead.
+            float far=smoothstep(.25,.7,fwidth(lp.x)),area=min(1.,cov*cov*1.1);
+            diffuseColor.rgb=mix(mix(gap,col,leaf),mix(gap,col,area),far);}
           // Towers: 3.8 m floor bands and 2.4 m mullions on the walls.
           float winLit=0.;
           if(worldWindows>0.){
