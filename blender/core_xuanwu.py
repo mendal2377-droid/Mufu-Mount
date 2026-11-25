@@ -477,6 +477,186 @@ def park_halls(F, coll, ground, skip_ids):
     return done
 
 
+# --- The island landmarks (phase 2; research/xuanwu/FACTS.md, design/XUANWU-PLAN.md) ----------------
+# OSM names none of them. Placed from the park's own map of its eight scenes (xuanwuhu.net guide,
+# 2025) against OSM's island outlines; their look from descriptions and photographs (zh.wikipedia,
+# Wikimedia Commons, Baidu Baike). Sizes we could not find are ours, and say so.
+#
+# - Lama Temple 喇嘛庙 (1937), on Huanzhou's north-east lobe: a three-bay hall with a single-eave
+#   hip-and-gable roof and ochre walls, up a broad stair on a terrace, and a three-bay side hall.
+#   The hall is OSM's unnamed 20.7 x 13.9 m building there, the side hall the 8 x 10 m one beside it.
+# - Nuona Pagoda 诺那塔, beside the temple on the terrace: nine storeys, six-sided, white concrete,
+#   green glazed eaves, small arched windows on every face, round doors on two faces of the base. Its
+#   height is not published; about 18 m is ours, from the photograph against the temple.
+# - Lansheng Building 览胜楼 (rebuilt 1909), at Liangzhou's north-east: two storeys, square, a double
+#   eave pyramid roof of green glazed tiles, 175 m2 of floor. OSM's unnamed 83 m2 building there.
+# - Guo Pu Mound 郭璞墩, on Huanzhou's west arm by the rockery waterfall: the poet's cenotaph, a raised
+#   mound with a stone pavilion and a stone on it; the 182 m2 memorial hall stands north of it (OSM's
+#   142 m2 building, left as a park hall). The mound's size is ours.
+LANDMARKS = {
+    'temple': (591, 3712), 'side_hall': (576, 3728), 'pagoda': (617, 3703), 'lansheng': (524, 4239),
+    'guopu': (214, 3573),
+}
+TEMPLE_TERRACE = 1.6            # twelve steps up (ours: the photograph shows a broad stair)
+TEMPLE_STEPS, TEMPLE_TREAD = 12, 0.4   # 4.8 m deep: the park's walk grid has 2 m cells, and ten
+                                       # steps in 3.2 m rose 1.1 m in one of them (build 15), over the walker's 1 m
+PAGODA_H = 18.0                 # ours
+MOUND_R, MOUND_H = 11.0, 2.8    # ours
+
+
+def _footprint(F, at, near=6.0):
+    """OSM's building whose centre is within `near` m of `at`: (id, points)."""
+    for b in F['buildings']:
+        pts = b['pts'][:-1] if b['pts'][0] == b['pts'][-1] else list(b['pts'])
+        if len(pts) >= 3 and math.dist((sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)), at) < near:
+            return b['id'], pts
+    return None, None
+
+
+def in_landmark(x, y):
+    """Keeps trees off the landmarks: within their radius (the temple's terrace and stair, the pagoda, the
+    mound, Lansheng Building)."""
+    return any(math.dist((x, y), LANDMARKS[k]) < r for k, r in (('temple', 19), ('pagoda', 6), ('guopu', MOUND_R + 2), ('lansheng', 9)))
+
+
+def _nuona_pagoda(coll, x, y, z):
+    bm = bmesh.new()
+    oc.prism(bm, (x, y, z), 2.8, 0.8, 6, mi=4)                       # stone podium
+    zc, levels = z + 0.8, 9
+    for k in range(levels):
+        t = k / (levels - 1)
+        r, h = 2.0 - 0.6 * t, 1.95 - 0.35 * t
+        oc.prism(bm, (x, y, zc), r, h, 6, mi=0)
+        apothem = r * math.cos(math.pi / 6)
+        for i in range(6):
+            a = 2 * math.pi * (i + 0.5) / 6
+            M = Matrix.Translation((x + math.cos(a) * (apothem + 0.03), y + math.sin(a) * (apothem + 0.03), 0)) @ Matrix.Rotation(a + math.pi / 2, 4, 'Z')
+            if k == 0 and i in (1, 4):
+                oc.add_box(bm, (0, 0, zc + 0.85), (0.9, 0.1, 1.5), mi=3, matrix=M)      # round-headed door
+            elif k > 0:
+                oc.add_box(bm, (0, 0, zc + h * 0.5), (0.42, 0.1, 0.55), mi=2, matrix=M)   # small window
+        zc += h
+        oc.poly_roof(bm, (x, y, zc - 0.35), r + 0.75, r * 0.92, 0.45, 6, lift=0.35, mi=1, rings=4, per_side=3)
+    oc.poly_roof(bm, (x, y, zc - 0.1), 1.9, 0.15, 1.3, 6, lift=0.3, mi=1, rings=6, per_side=3)
+    zc += 1.2
+    s = bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=0.18, radius2=0.04, depth=PAGODA_H - (zc - z))
+    bmesh.ops.translate(bm, vec=(x, y, zc + (PAGODA_H - (zc - z)) / 2), verts=s['verts'])
+    for f in {f for v in s['verts'] for f in v.link_faces}:
+        f.material_index = 5
+    return oc.mesh_object('Nuona Pagoda', bm, coll, ['whitewash', 'roof_green', 'ochre', 'opening', 'granite', 'gold'])
+
+
+def _lansheng(coll, x, y, z, yaw):
+    """Two square storeys with red corner posts; a green glazed eave between them and a green
+    pyramid roof above (the double eave of 四角攒尖)."""
+    bm = bmesh.new()
+    M = Matrix.Translation((x, y, 0)) @ Matrix.Rotation(yaw, 4, 'Z')
+    oc.add_box(bm, (0, 0, z + 0.3), (10.4, 10.4, 0.6), mi=3, matrix=M)
+    zc = z + 0.6
+    for side, h in ((8.4, 4.0), (6.6, 3.4)):
+        oc.add_box(bm, (0, 0, zc + h / 2), (side - 0.6, side - 0.6, h), mi=0, matrix=M)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                oc.add_box(bm, (sx * side / 2, sy * side / 2, zc + h / 2), (0.4, 0.4, h), mi=2, matrix=M)
+        for k in range(3):                                               # lattice doors on each face
+            for a in range(4):
+                R = M @ Matrix.Rotation(a * math.pi / 2, 4, 'Z')
+                oc.add_box(bm, ((k - 1) * side * 0.26, -(side - 0.6) / 2 - 0.06, zc + h * 0.42), (side * 0.2, 0.1, h * 0.7), mi=4, matrix=R)
+        zc += h
+        top = side == 6.6
+        r = side / math.sqrt(2)
+        oc.poly_roof(bm, (x, y, zc - 0.3), r + (1.6 if top else 2.2), 0.2 if top else r * 0.72, 3.0 if top else 0.9, 4,
+                     lift=0.7, mi=1, rings=8 if top else 4, per_side=4, rot=yaw + math.pi / 4)
+    s = bmesh.ops.create_cone(bm, cap_ends=True, segments=8, radius1=0.25, radius2=0.05, depth=1.6)
+    bmesh.ops.translate(bm, vec=(x, y, zc + 3.4), verts=s['verts'])
+    for f in {f for v in s['verts'] for f in v.link_faces}:
+        f.material_index = 5
+    return oc.mesh_object('Lansheng Building', bm, coll, ['whitewash', 'roof_green', 'vermilion', 'granite_shade', 'timber_dark', 'gold'])
+
+
+def _guopu_mound(coll, x, y, ground):
+    """A grassed mound, a small open stone pavilion on its top, and a stone beside it."""
+    bm = bmesh.new()
+    rings, seg = 10, 24
+    top = None
+    verts = []
+    for k in range(rings + 1):
+        u = k / rings
+        rr = MOUND_R * u
+        row = []
+        for i in range(seg if k else 1):
+            a = 2 * math.pi * i / seg
+            px, py = x + math.cos(a) * rr, y + math.sin(a) * rr
+            g = ground(px, py)
+            row.append(bm.verts.new((px, py, g + MOUND_H * max(0.0, 1 - u * u) ** 1.2 - (0.3 if k == rings else 0))))
+        verts.append(row)
+    for i in range(seg):
+        bm.faces.new((verts[0][0], verts[1][i], verts[1][(i + 1) % seg]))
+    for k in range(1, rings):
+        for i in range(seg):
+            bm.faces.new((verts[k][i], verts[k + 1][i], verts[k + 1][(i + 1) % seg], verts[k][(i + 1) % seg]))
+    top = verts[0][0].co.z
+    # The stone pavilion: a plinth, four posts, a stone pyramid roof.
+    oc.add_box(bm, (x, y, top + 0.15), (3.6, 3.6, 0.3), mi=1)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            oc.add_box(bm, (x + sx * 1.3, y + sy * 1.3, top + 0.3 + 1.3), (0.3, 0.3, 2.6), mi=1)
+    oc.poly_roof(bm, (x, y, top + 2.9), 2.7, 0.15, 1.5, 4, lift=0.35, mi=2, rings=6, per_side=3, rot=math.pi / 4)
+    st = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.55)
+    bmesh.ops.scale(bm, vec=(1.3, 0.8, 1.0), verts=st['verts'])
+    bmesh.ops.translate(bm, vec=(x + 2.6, y - 1.2, top - 0.15), verts=st['verts'])
+    for f in {f for v in st['verts'] for f in v.link_faces}:
+        f.material_index = 2
+    return oc.mesh_object('Guo Pu Mound', bm, coll, ['lawn', 'granite', 'granite_shade'])
+
+
+def island_landmarks(F, coll, ground):
+    """The four landmarks. Returns (OSM building ids they replace, {name: (x, y, z)} for the log)."""
+    done, where = set(), {}
+    # Lama Temple: its terrace and stair, the hall on top facing south (OSM's footprint lies east-west).
+    bid, pts = _footprint(F, LANDMARKS['temple'])
+    if pts:
+        (bx, by), w, d, ang = ac.oriented_box(pts)
+        if d > w:
+            w, d, ang = d, w, ang + math.pi / 2
+        yaw = (ang + math.pi / 2) % math.pi - math.pi / 2            # front (local -Y) to the south
+        g = min(ground(px, py) for px, py in pts)
+        M = Matrix.Translation((bx, by, 0)) @ Matrix.Rotation(yaw, 4, 'Z')
+        bm = bmesh.new()
+        TW, TD = w + 5.0, d + 7.0                                      # the terrace: 3.5 m more in front
+        oc.add_box(bm, (0, -1.75, g + TEMPLE_TERRACE / 2), (TW, TD, TEMPLE_TERRACE), mi=0, matrix=M)
+        kit.stair_flight(bm, (0, -1.75 - TD / 2 - TEMPLE_STEPS * TEMPLE_TREAD, g), 7.0, TEMPLE_STEPS, TEMPLE_TERRACE / TEMPLE_STEPS,
+                         TEMPLE_TREAD, mi=0, matrix=M, riser_mi=1)
+        oc.mesh_object('Lama Temple terrace', bm, coll, ['granite', 'granite_shade'])
+        oc.hall('Lama Temple', coll, (bx, by, g + TEMPLE_TERRACE), w - 2.4, d - 2.4, 4.2, walls='ochre', roof='tile_dark',
+                yaw=yaw, plinth=0.5, columns=True, gable=0.45)
+        done.add(bid)
+        where['temple'] = (bx, by, g + TEMPLE_TERRACE)
+        # The pagoda on the same terrace's level, to the temple's right as one faces it.
+        px, py = LANDMARKS['pagoda']
+        pb = bmesh.new()
+        oc.add_box(pb, (px, py, g + TEMPLE_TERRACE / 2), (6.5, 6.5, TEMPLE_TERRACE), mi=0)
+        oc.mesh_object('Nuona Pagoda terrace', pb, coll, ['granite'])
+        _nuona_pagoda(coll, px, py, g + TEMPLE_TERRACE)
+        where['pagoda'] = (px, py, g + TEMPLE_TERRACE)
+    bid, pts = _footprint(F, LANDMARKS['side_hall'])
+    if pts:
+        (bx, by), w, d, ang = ac.oriented_box(pts)
+        oc.hall('Lama Temple side hall', coll, (bx, by, ground(bx, by)), max(3.0, w - 2.0), max(3.0, d - 2.0), 3.4,
+                walls='ochre', roof='tile_dark', yaw=ang, plinth=0.5, columns=False, gable=0.45)
+        done.add(bid)
+    bid, pts = _footprint(F, LANDMARKS['lansheng'])
+    if pts:
+        (bx, by), w, d, ang = ac.oriented_box(pts)
+        _lansheng(coll, bx, by, ground(bx, by), ang)
+        done.add(bid)
+        where['lansheng'] = (bx, by, ground(bx, by))
+    gx, gy = LANDMARKS['guopu']
+    _guopu_mound(coll, gx, gy, ground)
+    where['guopu'] = (gx, gy, ground(gx, gy) + MOUND_H)
+    return done, where
+
+
 def islands(F):
     """The five named islands' outlines, by their OSM centres."""
     out = {}

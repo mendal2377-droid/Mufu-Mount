@@ -3,7 +3,8 @@
 //             (Cuizhou's entrance), and a walk through Xuanwu Gate's arch from the street gets there
 //   bridges   every park bridge over the lake is walkable end to end (no gap over 4 m)
 //   entrances each OSM entrance point stands on walkable ground (within 8 m)
-//   life      the name boards stand, and the carp swim (not in winter)
+//   life      the name boards stand (gates, islands, island landmarks), and the carp swim (not in winter)
+//   landmarks the island landmarks stand at their heights, the mound rises, the temple's stair is walkable
 // Shots to test-results/shots/xuanwu-*.png. Time is driven with __mufu.step.
 //
 //   MUFU_TEST_URL=http://localhost:4191/ node tests/xuanwu-browser.mjs
@@ -110,7 +111,36 @@ try {
     w.scene.traverse((o) => { if (o.isInstancedMesh && o.parent?.name === "Xuanwu life") fish = o.visible; });
     return { boards: xw.boards.map((b) => b.en), fish };
   });
-  check("life", life && life.boards.length === 7 && life.fish, JSON.stringify(life));
+  check("life", life && life.boards.length === 10 && life.fish, JSON.stringify(life));
+
+  // The island landmarks (blender/core_xuanwu.py). The export joins each collection into one mesh,
+  // so they are found by their geometry among the meshes under Buildings: how high it stands over its own foot at each
+  // site. The temple's hall on its terrace, the pagoda about its 18 m, Lansheng's two storeys; the
+  // mound rises over its ground and can be walked to its top; the temple's stair climbs from the
+  // path (0.3 m up) to the terrace in steps the walker can take (build 15's shorter stair rose 1.1 m in one cell).
+  const marks = await page.evaluate(() => { const w = window.__mufu.city.world, g = w.grid;
+    const SITES = { temple: [593, 3712, 7], pagoda: [617, 3703, 3], lansheng: [525, 4238, 5] }, out = {};
+    for (const k in SITES) out[k] = [Infinity, -Infinity];
+    const v = new (w.scene.position.constructor)();
+    w.scene.traverse((o) => { if (!o.isMesh || o.isInstancedMesh || o.parent?.name !== "Buildings") return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        for (const k in SITES) { const [x, n, r] = SITES[k]; if (Math.hypot(v.x - x, v.z + n) < r) { out[k][0] = Math.min(out[k][0], v.y); out[k][1] = Math.max(out[k][1], v.y); } } } });
+    for (const k in SITES) out[k] = out[k][1] - out[k][0];
+    // The mound's top beside its pavilion (the pavilion's roof fills the centre cell, and the walker
+    // goes round it), and the ground in a ring 13 m out (just past its 11 m radius).
+    out.mound = [Math.max(...[[3, 0], [-3, 0], [0, 3], [0, -3]].map(([dx, dn]) => g.height(214 + dx, -3573 - dn) ?? -Infinity)), ...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => g.height(214 + 13 * Math.cos(k * Math.PI / 4), -3573 - 13 * Math.sin(k * Math.PI / 4)))];
+    // Up the path north to the stair and onto the terrace, a metre at a time.
+    const steps = []; for (let n = 3686; n <= 3702; n++) steps.push(g.height(591, -n));
+    out.stair = steps;
+    out.stepUp = g.stepUp(591, -3696);
+    return out; });
+  const ringed = marks.mound.slice(1).filter((v) => v != null), rise = marks.mound[0] != null && ringed.length ? marks.mound[0] - Math.max(...ringed) : null;
+  const st = marks.stair.filter((v) => v != null), climb = st.length ? st.at(-1) - st[0] : 0, worst = Math.max(...st.slice(1).map((v, i) => Math.abs(v - st[i])));
+  check("landmarks", marks.temple > 6 && marks.temple < 14 && marks.pagoda > 15 && marks.pagoda < 22 && marks.lansheng > 8 && marks.lansheng < 16
+      && rise > 2 && rise < 3.5 && st.length === marks.stair.length && climb > 1.2 && worst <= marks.stepUp + .01,
+    `temple ${marks.temple.toFixed(1)} m, pagoda ${marks.pagoda.toFixed(1)} m, Lansheng ${marks.lansheng.toFixed(1)} m over their feet; mound ${rise?.toFixed(2)} m over the highest ground round it, walkable at its top: ${marks.mound[0] > 0}; `
+    + `the stair climbs ${climb.toFixed(2)} m in ${st.length} of ${marks.stair.length} walkable metres, worst step ${worst.toFixed(2)} m (limit ${marks.stepUp})`);
 
   // --- shots ---------------------------------------------------------------------------------------
   // [name, eye, target]: x, height above the ground, y (metres north).

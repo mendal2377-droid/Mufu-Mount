@@ -89,6 +89,23 @@ flats in autumn. Now:
 - Where they part, the water shows. Far off, the leaves blend to their average colour.
 - The raised lotus plants take the same colours: rust in autumn, dark brown in winter.
 
+## Phase 2: the island landmarks (25–26 November 2026; build 16)
+
+OSM names none of them, so each is placed from the park's own map against OSM's island outlines,
+and its board says so (research/xuanwu/FACTS.md has the table and sources). Built in
+`blender/core_xuanwu.py` (`island_landmarks`):
+- **Lama Temple** on Huanzhou's north-east lobe. The hall stands on OSM's footprint, facing south,
+  on a 1.6 m granite terrace (twelve steps up a 7 m stair, 4.8 m deep, **ours**, from the photograph). Ochre walls,
+  grey tiles, a hip-and-gable roof; its side hall beside it.
+- **Nuona Pagoda** beside it on its own terrace: nine white six-sided storeys under green glazed
+  eaves, small windows on every face, two doors at the base, a gold finial. 18 m, **ours**.
+- **Lansheng Building** at Liangzhou's north-east, on OSM's footprint: two square storeys with red
+  corner posts and lattice doors, a green glazed eave between them, and a green pyramid roof.
+- **Guo Pu Mound** on Huanzhou's west arm: a grassed mound, 11 m across and 2.8 m high (**ours**),
+  walkable to its top, with an open stone pavilion (the walker goes round it: its roof fills a 2 m
+  walk cell) and a stone.
+- Trees keep off all four. A name board stands at each: "placed from the park map".
+
 ## Phase 2, first: Xuanwu Gate as it really looks (the owner, 9 November 2026: "far too different from the real gate")
 
 **The real gate:**

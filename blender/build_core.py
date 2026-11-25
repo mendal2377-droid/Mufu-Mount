@@ -1273,7 +1273,12 @@ def main():
     wall = xw.Wall(F, WIDTH, FOOT)
     THROUGH.update(wall.tunnels_through)
     SKIP_BUILDINGS.update(wall.not_buildings)
-    halls = xw.park_halls(F, c['Buildings'], zground, wall.not_buildings)
+    # The island landmarks (Lama Temple, Nuona Pagoda, Lansheng Building, Guo Pu Mound) take their
+    # OSM footprints first; the rest of the park's buildings are halls.
+    landmarks, landmark_at = xw.island_landmarks(F, c['Buildings'], zground)
+    SKIP_BUILDINGS.update(landmarks)
+    print('ISLAND LANDMARKS', {k: tuple(round(v, 1) for v in p) for k, p in landmark_at.items()}, 'replacing', sorted(landmarks), flush=True)
+    halls = xw.park_halls(F, c['Buildings'], zground, wall.not_buildings | landmarks)
     SKIP_BUILDINGS.update(halls)
     xk = xw.lake_ring(F, lakes)
     xw_level = LAKE_LEVELS[xk] if xk is not None else 0.0
@@ -1406,7 +1411,8 @@ def main():
             foot_polys.append([(v.x, v.y) for v in l] + [(v.x, v.y) for v in reversed(r)])
     foot_mask = ac.Mask(foot_polys, A.extent, 2.0)
     island_trees = xw.plant_islands(F, protos, c['Trees'], rnd, zground,
-                                    lambda x, y: not blocked(x, y) and not foot_mask.at(x, y) and crown_clear(x, y, 3.0) and dry(x, y), A.extent)
+                                    lambda x, y: not blocked(x, y) and not foot_mask.at(x, y) and crown_clear(x, y, 3.0) and dry(x, y)
+                                    and not xw.in_landmark(x, y), A.extent)
     trees += sum(island_trees.values())
     print('ISLAND TREES', island_trees, flush=True)
     # Other green spaces: the census mix of the city's own trees, where Meta and WRI's canopy map has

@@ -89,8 +89,17 @@ islands' published character.
 ## Not in OSM
 
 OSM maps none of the island landmarks above (Lama Temple, Nuona Pagoda, Lansheng Building, Guo Pu
-Pier). Their positions will come from the official park map, placed against the OSM island
-outlines, and are to be labelled as *placed from the park map*, not surveyed.
+Pier), still true on live OSM on 25 Nov 2026. Their positions come from the park's own map of its
+eight scenes (玄武湖八景分布图, in the park's 2025 guide, xuanwuhu.net/UploadFile/20250417122718.pdf,
+kept on drive E), placed against OSM's island outlines. Each is labelled *placed from the park map*,
+not surveyed.
+
+| Landmark | Where (the map and the texts) | Placed at (x east, north) | What it looks like |
+| --- | --- | --- | --- |
+| Lama Temple 喇嘛庙 | Huanzhou's north-east lobe, joined to Yingzhou by White Bridge ([zh.wikipedia](https://zh.wikipedia.org/zh-hans/%E8%AF%BA%E9%82%A3%E5%B8%88%E4%BD%9B%E7%BA%AA%E5%BF%B5%E5%A1%94%E5%BA%99)) | OSM's unnamed 20.7 x 13.9 m building at (591, 3712); its side hall the 8 x 10 m one at (576, 3728) | Built 1936–37 for the lama Nuona Hutuktu, restored 1993. A three-bay hall, single-eave hip-and-gable roof; a three-bay side hall. In the photographs: ochre walls, grey tiles, a round-arched door, a broad stone stair up to its terrace ([Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Lamasery_and_Nuona_Tower_in_Xuanwu_Lake_2012-11.JPG)) |
+| Nuona Pagoda 诺那塔 | Beside the temple, to its right as one faces it (the photograph) | (617, 3703), **ours** | Nine storeys, six-sided, reinforced concrete in Tang–Song pavilion style, white; round doors on two faces of the base, inscriptions on the other four, small windows on every face above, eaves of green glazed tile; not open to climb. Height not published: about 18 m, **ours**, from the photograph |
+| Lansheng Building 览胜楼 | Liangzhou's north end, or its north-east ([Baidu Baike](https://baike.baidu.com/item/%E8%A7%88%E8%83%9C%E6%A5%BC/13026265)); the park map draws it at the north edge, east of the Huangce archive | OSM's unnamed 83 m2 building at (524, 4239) | Rebuilt 1909; two storeys, square, a double-eave pyramid roof of green glazed tile; 175 m2 of floor |
+| Guo Pu Mound 郭璞墩 | Huanzhou's west section, by the rockery waterfall (the park guide's own text); between the waterfall and Fang Bridge (other guides) | (214, 3573), south of OSM's 142 m2 building at (250, 3601), taken as the 182 m2 memorial hall north of the mound | The cenotaph of the poet Guo Pu (276–324): a raised mound, the lake area's highest point, with a stone pavilion and a stone on it. Its size is **ours**: 11 m across, 2.8 m high |
 
 ## Sources
 

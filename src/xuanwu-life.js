@@ -1,6 +1,6 @@
 // Xuanwu Lake's life in the city (item 38; design/XUANWU-PLAN.md, research/xuanwu/FACTS.md):
-// carp under the surface, a culter that jumps now and then, name boards at the gates and on the
-// five islands, and how far each patch of water lies from a shore (the water shader is paler and
+// carp under the surface, a culter that jumps now and then, name boards at the gates, on the
+// five islands and at their landmarks, and how far each patch of water lies from a shore (the water shader is paler and
 // greener in the shallows, deeper blue in open water).
 //
 // Fish: a 1997 survey sampled silver carp, bighead carp and topmouth culter, and the park releases
@@ -19,6 +19,11 @@ const BOARDS = [
   ['Liangzhou', '梁洲', 'Autumn Chrysanthemums', 544, 4086, 544, 4086],
   ['Cuizhou', '翠洲', 'Pine, Cypress and Bamboo', 1003, 4007, 1003, 4007],
   ['Lingzhou', '菱洲', 'Mountain Mists: the view to Purple Mountain', 916, 3132, 916, 3132],
+  // The island landmarks (blender/core_xuanwu.py): OSM names none of them, so each board says where
+  // its place came from. [.., the landmark, the board's spot in front of it]
+  ['Lama Temple', '喇嘛庙', 'Built 1937 · placed from the park map', 591, 3712, 582, 3693],   // beside the stair, off its path
+  ['Guo Pu Mound', '郭璞墩', 'The poet Guo Pu’s cenotaph · placed from the park map', 214, 3573, 214, 3557],
+  ['Lansheng Building', '览胜楼', 'Rebuilt 1909 · placed from the park map', 524, 4239, 524, 4228],
 ];
 
 function boardTexture(en, zh, line) {
