@@ -4,6 +4,18 @@ Every request from the day, in the order given, with where it stands. "Verified"
 the browser or by an audit; "built" means in the code but not yet checked; "pending rebuild" means it
 takes effect with the next city build (`./tools/export-scene.sh core`).
 
+## The owner's notes on the live site (27 November 2026), in the order we take them
+
+The owner tried the taxi, map and radio on the live site ("great progress, some problems"):
+- **N6. The minimap's direction seems reversed.** The traveller's arrow points backwards when walking. **Fixed (27 Nov):** on foot the arrow compared the heading with the camera's yaw, half a turn apart; tests/taxi-browser.mjs now checks that what lies ahead is drawn straight up, arrow up.
+- **N4. Cars, bikes and the like on the mountains:** traffic drawn on Purple Mountain's slopes, not on a road. **Fixed (27 Nov):** a mapped road carries traffic only where the world built it as carriageway (2,157 of 3,025 roads); a vehicle over an unbuilt stretch is not drawn; at a kerb with no road under it, it stands on the pavement. tests/traffic-browser.mjs checks round the Mausoleum's stair.
+- **N5. Chinese characters on Zhongshan Ling's gate:** the Bo'ai arch's plaque is blank. **Done (27 Nov):** 博愛 on the arch, 天下為公 on the Mausoleum Gate, 民族 民權 民生 over the hall's doors and 天地正氣 between its eaves, gilt on stone, from the Chinese Wikipedia (src/inscriptions.js says which details are ours).
+- **N1. Redesign the way to each place:** (planned with N2 and N7 in design/NAVIGATOR-PLAN.md, awaiting the owner) there are many entrances to each place (pins, the places panel, G, moon gates), and it is confusing.
+- **N2. A 2D map option.**
+- **N7. Buses and the metro easier and more obvious to take.**
+- **N3. Performance:** the city walk runs badly on an old PC.
+- **N8. Landmarks still weak** in model detail, seasons and weather.
+
 ## Open work, in order (updated 22 November 2026)
 
 1. **Item 40, real buildings and park trees** (CMAB, canopy map): built (build 11) and every test passes; committed locally. The screenshots show a gap: CMAB finds only about half the buildings OSM maps (66 % of their area), so blocks near Mochou Lake that the made-up slabs filled are now partly empty. **The owner chose real outlines only (9 Nov):** the outlines are now grown by the measured 0.3–1.4 m (median size now 1.00 of OSM's), and the gaps stay. In the city since build 12 (11 Nov), with the gate (design/CMAB-CANOPY-PLAN.md, "Results").

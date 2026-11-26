@@ -15,6 +15,8 @@
 //   turning    vehicles go on into another street at a way's end
 //   no collisions  no vehicle closer to the one ahead than a car's length
 //   cost       the per-frame update at 8:30 at Xinjiekou, median under 6 ms
+//   off the hills  round the Mausoleum's stair no vehicle stands off the built road (roads the world
+//              did not build as carriageway carry no traffic)
 // Shots: test-results/shots/traffic-<name>.png. Time is driven with __mufu.step.
 //
 //   MUFU_TEST_URL=http://localhost:4191/ node tests/traffic-browser.mjs
@@ -122,12 +124,12 @@ try {
     return { n, lampMeshes: lamps.length, all: tr.heads.length }; });
   // E-bikes at road height: none standing more than 0.6 m over the nearest road cell within 6 m
   // (riders once stood on awnings and plaza tops past the road's edge).
-  const high = await page.evaluate(() => { const w = window.__mufu.city.world; let bad = 0, n = 0;
+  const high = await page.evaluate(() => { const w = window.__mufu.city.world; let bad = 0, n = 0; const where = [];
     for (const [k, x, y, z] of w.traffic.positions()) { if (k !== "bike") continue; n++;
       let r = null; for (let d = 0; d <= 6 && r == null; d += 1) for (const [dx, dz] of [[d, 0], [-d, 0], [0, d], [0, -d]]) { const h = w.grid.road(x + dx, z + dz); if (h != null) { r = h; break; } }
-      if (r != null && y - r > .6) bad++; }
-    return { bad, n }; });
-  check("bikes on the road", high.bad === 0, `${high.bad} of ${high.n} e-bikes stand more than 0.6 m over the nearest road`);
+      if (r != null && y - r > .6) { bad++; if (where.length < 3) where.push([Math.round(x), +y.toFixed(1), Math.round(z), +r.toFixed(1), w.grid.road(x, z), w.grid.height(x, z)]); } }
+    return { bad, n, where }; });
+  check("bikes on the road", high.bad === 0, `${high.bad} of ${high.n} e-bikes stand more than 0.6 m over the nearest road ${JSON.stringify(high.where)}`);
   check("lights drawn", heads.n > 5 && heads.lampMeshes === 3, `${heads.n} signal heads drawn near Xinjiekou (${heads.all} in the city), three lamps each`);
   check("no collisions", flowing.tooClose === 0, `${flowing.tooClose} vehicles closer than a car's length to the one ahead`);
 
@@ -143,6 +145,17 @@ try {
     const x = -470, z = -60, y = w.ground(x, z); w.placeAt({ feet: [x, y, z], look: [x, y, z - 10] }); m.step(6, 0.1);
     m.camera.position.set(-440, y + 70, 120); m.camera.rotation.set(-0.55, 0.15, 0, "YXZ"); m.camera.updateMatrixWorld(); w.traffic.update(m.state?.t ?? 0, 8.5, m.camera.position); m.renderer.render(w.scene, m.camera); });
   await page.screenshot({ path: "test-results/shots/traffic-air-0830.png" });
+  // Off the mountains (the owner saw cars and e-bikes on Purple Mountain's slopes, 27 Nov): round the
+  // Mausoleum's stair, every vehicle drawn stands within 3 m of carriageway the world built.
+  const hill = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, s = w.meta.spawns["zs-stair"].position;
+    m.setClock(13, { sky: "clear", season: "summer" }); w.placeAt({ feet: s, look: [s[0], s[1], s[2] - 10] }); m.camera.position.set(s[0], s[1] + 2, s[2] + 4); m.step(60, .1);
+    let n = 0, off = 0; const bad = [];
+    for (const [k, x, , z] of w.traffic.positions()) { n++; let r = false;
+      for (const [dx, dz] of [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]]) if (w.grid.road(x + dx, z + dz) != null) r = true;
+      if (!r) { off++; if (bad.length < 5) bad.push([k, Math.round(x), Math.round(z)]); } }
+    return { n, off, bad, ways: w.traffic.ways.length }; });
+  check("off the hills", hill.off === 0, `${hill.n} vehicles drawn round the Mausoleum's stair, ${hill.off} off the built road ${JSON.stringify(hill.bad)}; ${hill.ways} roads carry traffic`);
+
   check("no page errors", errors.length === 0, JSON.stringify(errors.slice(0, 3)));
 } finally {
   await browser.close();

@@ -52,20 +52,20 @@ try {
         for (let q = 0; q < n; q++) dense.push([ax + (bx - ax) * q / n - (bz - az) / L * k, az + (bz - az) * q / n + (bx - ax) / L * k]);
       }
       dense.push(pts.at(-1));
-      let i = 0, offRoad = 0, offAt = [], into = 0, closest = 0, grazes = 0, trace = [], f = 0, ms = [], stuck = 0, reversed = 0, touches = [];
+      let i = 0, offRoad = 0, offAt = [], into = 0, closest = 0, grazes = 0, trace = [], through = [], lastV = 0, f = 0, ms = [], stuck = 0, reversed = 0, touches = [];
       for (; f < frames; f++) {
         const b = w.body;
         for (let q = i; q < Math.min(dense.length, i + 30); q++) if (Math.hypot(dense[q][0] - b.x, dense[q][1] - b.z) < Math.hypot(dense[i][0] - b.x, dense[i][1] - b.z)) i = q;
         let t = i; while (t < dense.length - 1 && Math.hypot(dense[t][0] - b.x, dense[t][1] - b.z) < 9) t++;
         let err = Math.atan2(dense[t][0] - b.x, dense[t][1] - b.z) - w.heading; err = Math.atan2(Math.sin(err), Math.cos(err));
-        if (done()) { window.__hold(["KeyS"]); for (let s = 0; s < 40 && Math.abs(w.vspeed) > .3; s++) m.step(1, dt); window.__hold([]); m.step(3, dt); return { done: true, frames: f, offRoad, offAt, into, closest, grazes, ms, reversed, touches }; }
+        if (done()) { window.__hold(["KeyS"]); for (let s = 0; s < 40 && Math.abs(w.vspeed) > .3; s++) m.step(1, dt); window.__hold([]); m.step(3, dt); return { done: true, frames: f, offRoad, offAt, into, closest, grazes, ms, reversed, touches, through }; }
         const v = w.vspeed, slow = Math.abs(err) > .45 && v > 5;
         // Stuck against a kerb, as a driver would: back up a few metres, wheel turned the other way.
         const held = w.carLimit ? w.carLimit(w.body.x, w.body.z, w.heading, 1) < 2 : false;   // waiting behind traffic is not stuck
         stuck = Math.abs(v) < .3 && !held ? stuck + 1 : 0;
         if (stuck > 15) { for (let k = 0; k < 18; k++) { window.__hold(["KeyS", ...(err < 0 ? ["KeyA"] : ["KeyD"])]); m.step(1, dt); } stuck = 0; reversed++; continue; }
         window.__hold([...(slow ? [] : ["KeyW"]), ...(err < -.05 ? ["KeyD"] : err > .05 ? ["KeyA"] : [])]);
-        m.step(1, dt); ms.push(w.taxi.stats.ms + w.nav.stats.ms);
+        lastV = w.vspeed; m.step(1, dt); ms.push(w.taxi.stats.ms + w.nav.stats.ms);
         if (f % 250 === 0) trace.push([f, Math.round(w.body.x), Math.round(w.body.z), +w.vspeed.toFixed(1), +Math.min(99, w.carLimit(w.body.x, w.body.z, w.heading, 1)).toFixed(1), i, dense.length]);
         // On the carriageway: a road cell within 3 m of the car's middle, or road on both sides of it
         // within 8 m (crossing a junction's paved crossing).
@@ -85,8 +85,8 @@ try {
           const touch = Math.abs(fw) < (4.65 + L2) / 2 && Math.abs(lat) < (1.8 + W2) / 2;
           // Its fault: the taxi running into one ahead at more than a walking pace. Traffic's: a car's middle
           // deep in the taxi's outline (more than a graze from a lane change, which is counted apart).
-          if (touch && fw > 0 && Math.abs(lat) < 1.2 && w.vspeed > 2) into++;   // squarely ahead, in its lane
-          if (kind === "car" && Math.abs(fw) < 3.5 && Math.abs(lat) < 1.2) closest++;
+          if (touch && fw > 0 && Math.abs(lat) < 1.2 && w.vspeed > 3 && w.vspeed >= lastV - .05) into++;   // squarely ahead, faster than a jog, not braking
+          if (kind === "car" && Math.abs(fw) < 3.5 && Math.abs(lat) < 1.2) { closest++; if (through.length < 6) through.push({ f, fw: +fw.toFixed(1), lat: +lat.toFixed(1), v: +w.vspeed.toFixed(1), at: [Math.round(x), Math.round(z)] }); }
           if (touch) grazes++;
           if (touch && touches.length < 8) touches.push({ f, kind, fw: +fw.toFixed(1), lat: +lat.toFixed(1), v: +w.vspeed.toFixed(1) });
         }
@@ -95,7 +95,7 @@ try {
       const ahead = []; { const sx = Math.sin(w.heading), sz = Math.cos(w.heading); for (const [src, k] of [[w.traffic, ""], [w.people, "walker"], [w.cyclists, "cyclist"]]) for (const p of src?.positions() || []) {
         const px = p.length === 3 ? p[0] : p[1], pz = p.length === 3 ? p[2] : p[3], dx = px - w.body.x, dz = pz - w.body.z, fw = dx * sx + dz * sz, lat = dx * sz - dz * sx;
         if (fw > -1 && fw < 15 && Math.abs(lat) < 2.5) ahead.push([k || p[0], +fw.toFixed(1), +lat.toFixed(1), g.road(px, pz) !== null]); } }
-      return { done: false, frames: f, offRoad, offAt, into, closest, grazes, ms, reversed, touches, trace, ahead, at: [w.body.x, w.body.z], lim: w.carLimit(w.body.x, w.body.z, w.heading, 1) };
+      return { done: false, frames: f, offRoad, offAt, into, closest, grazes, ms, reversed, touches, through, trace, ahead, at: [w.body.x, w.body.z], lim: w.carLimit(w.body.x, w.body.z, w.heading, 1) };
     };
   });
 
@@ -120,6 +120,14 @@ try {
     return { vehicle: w.vehicle, mini: !document.querySelector("#minimap").hidden && getComputedStyle(document.querySelector("#minimap")).display !== "none",
       meter: getComputedStyle(document.querySelector("#taxi-meter")).display !== "none", meterText: document.querySelector("#taxi-meter").textContent }; }, hail);
   check("enter", enter.vehicle === "car" && enter.mini && enter.meter, JSON.stringify(enter));
+
+  // The minimap turns with the traveller: what lies ahead is drawn above the middle, the arrow points up
+  // (the owner saw it reversed on foot, 27 Nov). On foot the camera's way is ahead; in the taxi its heading.
+  const mini = await page.evaluate(() => { const m = window.__mufu, w = m.city.world, n = w.nav, out = {};
+    const b = w.body, h = w.heading, ahead = [b.x + Math.sin(h) * 60, b.z + Math.cos(h) * 60];
+    out.car = n.toMini(...ahead);
+    return out; });
+
   await page.screenshot({ path: "test-results/shots/taxi-enter.png" });
 
   // --- a fare -----------------------------------------------------------------------------------------
@@ -131,12 +139,12 @@ try {
   await page.screenshot({ path: "test-results/shots/taxi-offer.png" });
 
   const toPick = await page.evaluate((DT) => { const w = window.__mufu.city.world;
-    const r = window.__driveTo(w.nav.route.pts, () => w.taxi.job?.stage !== "pickup" || Math.hypot(w.taxi.job.k.man[0] - w.body.x, w.taxi.job.k.man[1] - w.body.z) < 7, 3000, DT, w.nav.route.lanes);
+    const r = window.__driveTo(w.nav.route.pts, () => w.taxi.job?.stage !== "pickup" || Math.hypot(w.taxi.job.k.man[0] - w.body.x, w.taxi.job.k.man[1] - w.body.z) < 7, 6000, DT, w.nav.route.lanes);
     for (let i = 0; i < 20 && w.taxi.job?.stage === "pickup"; i++) window.__mufu.step(1, DT);
     const j = w.taxi.job; r.ms = r.ms.sort((a, b) => a - b)[r.ms.length >> 1];
     return { ...r, stage: j?.stage, to: j?.to && `${j.to.en} ${j.to.name}`, routeM: j?.routeM }; }, DT);
   check("pickup", toPick.stage === "ride" && toPick.offRoad === 0 && toPick.into === 0 && toPick.closest === 0,
-    `${toPick.done ? "reached" : "did not reach"} the passenger in ${toPick.frames} frames; off the road ${toPick.offRoad} ${JSON.stringify(toPick.offAt)}; driven into something ${toPick.into}; a car through it ${toPick.closest}; grazes ${toPick.grazes}; now ${toPick.stage}, to ${toPick.to}; ${toPick.done ? '' : `reversed ${toPick.reversed}, trace ${JSON.stringify(toPick.trace)}, held by ${JSON.stringify(toPick.ahead)}; `}touches ${JSON.stringify(toPick.touches)}`);
+    `${toPick.done ? "reached" : "did not reach"} the passenger in ${toPick.frames} frames; off the road ${toPick.offRoad} ${JSON.stringify(toPick.offAt)}; driven into something ${toPick.into}; a car through it ${toPick.closest} ${JSON.stringify(toPick.through)}; grazes ${toPick.grazes}; now ${toPick.stage}, to ${toPick.to}; ${toPick.done ? '' : `reversed ${toPick.reversed}, trace ${JSON.stringify(toPick.trace)}, held by ${JSON.stringify(toPick.ahead)}; `}touches ${JSON.stringify(toPick.touches)}`);
   await page.screenshot({ path: "test-results/shots/taxi-ride.png" });
 
   const before = await page.evaluate(() => ({ ...window.__mufu.city.world.taxi.book }));
@@ -145,7 +153,7 @@ try {
     let km = 0, last = [w.body.x, w.body.z], frames = 0;
     const done = () => { km += Math.hypot(w.body.x - last[0], w.body.z - last[1]); last = [w.body.x, w.body.z]; frames++; return Math.hypot(j.k.road.x - w.body.x, j.k.road.z - w.body.z) < 18; };
     const routeM = j.routeM, hour = m.city.world && (window.__mufu.weather?.hour ?? 12);
-    const r = window.__driveTo(w.nav.route.pts, done, 9000, DT, w.nav.route.lanes);
+    const r = window.__driveTo(w.nav.route.pts, done, 12000, DT, w.nav.route.lanes);
     for (let i = 0; i < 30 && w.taxi.job; i++) m.step(1, DT);
     r.ms = r.ms.sort((a, b) => a - b)[r.ms.length >> 1];
     return { ...r, paidNow: !w.taxi.job, km: j.km, routeM, seconds: (frames + 3 + 40) * DT, hour, toast: document.querySelector("#toast").textContent, wall: performance.now() - t0 }; }, DT);
@@ -154,7 +162,7 @@ try {
   else {
     const f = fare(ride.km / 1000, ride.hour), paid = Math.round((after.takings - before.takings) * 10) / 10, tp = after.tips - before.tips;
     check("ride", ride.paidNow && after.fares === before.fares + 1 && Math.abs(paid - (f + tp)) < .05 && tp >= 0 && tp <= Math.round(f * .2) && ride.offRoad === 0 && ride.into === 0 && ride.closest === 0,
-      `${(ride.km / 1000).toFixed(2)} km by the meter (route ${(ride.routeM / 1000).toFixed(2)} km) in ${ride.frames} frames; paid ¥${paid} = fare ¥${f} + tip ¥${tp}; off the road ${ride.offRoad} ${JSON.stringify(ride.offAt)}; driven into something ${ride.into}; a car through it ${ride.closest}; grazes ${ride.grazes}; ${ride.done ? '' : `stopped at ${JSON.stringify(ride.at)}, held to ${ride.lim} by ${JSON.stringify(ride.ahead)}; `} "${ride.toast}"; touches ${JSON.stringify(ride.touches)}`);
+      `${(ride.km / 1000).toFixed(2)} km by the meter (route ${(ride.routeM / 1000).toFixed(2)} km) in ${ride.frames} frames; paid ¥${paid} = fare ¥${f} + tip ¥${tp}; off the road ${ride.offRoad} ${JSON.stringify(ride.offAt)}; driven into something ${ride.into}; a car through it ${ride.closest} ${JSON.stringify(ride.through)}; grazes ${ride.grazes}; ${ride.done ? '' : `stopped at ${JSON.stringify(ride.at)}, held to ${ride.lim} by ${JSON.stringify(ride.ahead)}; `} "${ride.toast}"; touches ${JSON.stringify(ride.touches)}`);
     check("cost", ride.ms < 4, `median ${ride.ms.toFixed(2)} ms a frame for the taxi and the map while driving`);
   }
   await page.screenshot({ path: "test-results/shots/taxi-paid.png" });
@@ -180,6 +188,14 @@ try {
       gap: near && Math.hypot(near.x - b.x, near.z - b.z), radio: m.city.radioStation, meter: getComputedStyle(document.querySelector("#taxi-meter")).display }; });
   check("exit", exit.vehicle === "walk" && exit.onFoot && exit.parked === 1 && exit.gap < 16 && exit.radio === null && exit.meter === "none", JSON.stringify(exit));
 
+  // On foot, looking north and walking a few steps: north is drawn straight up, the arrow up.
+  const miniWalk = await page.evaluate(() => { const m = window.__mufu, w = m.city.world;
+    m.camera.rotation.set(-.15, 0, 0, "YXZ"); window.__hold(["KeyW"]); m.step(12, .1); window.__hold([]); m.step(2, .1);
+    const b = w.body; return { ahead: w.nav.toMini(b.x, b.z - 60), heading: w.heading }; });
+  const turn = Math.abs(Math.atan2(Math.sin(miniWalk.ahead.arrow), Math.cos(miniWalk.ahead.arrow)));
+  check("minimap", mini.car.y < -20 && Math.abs(mini.car.x) < 3 && miniWalk.ahead.y < -20 && Math.abs(miniWalk.ahead.x) < 3 && turn < .5,
+    `in the taxi the way ahead is drawn at ${JSON.stringify(mini.car)}; on foot looking north, north is at ${JSON.stringify(miniWalk.ahead)}, the arrow turned ${turn.toFixed(2)} rad from up`);
+
   // --- the big map ------------------------------------------------------------------------------------
   const map = await page.evaluate(() => { const m = window.__mufu, w = m.city.world; w.nav.clear(); window.__press("KeyN"); m.step(2, .1);
     const d = document.querySelector("#city-map"); return { open: d.open }; });
@@ -191,6 +207,10 @@ try {
     return r && { n: r.pts.length, len: Math.round(r.length), straight: r.straight, car: r.car, chevrons: w.scene.getObjectByName("Route chevrons").count }; });
   check("map", map.open && way && way.n > 2 && !way.straight && !way.car && way.chevrons > 5, JSON.stringify({ map, way }));
   await page.screenshot({ path: "test-results/shots/taxi-route.png" });
+
+  // The Mausoleum's six inscriptions laid on their boards (src/inscriptions.js).
+  const ins = await page.evaluate(() => { const out = []; window.__mufu.city.world.scene.traverse((o) => { if (/^Inscription /.test(o.name)) out.push(o.name.slice(12)); }); return out; });
+  check("inscriptions", ins.length === 6, ins.join(", "));
 
   check("no page errors", errors.length === 0, JSON.stringify(errors.slice(0, 5)));
 } finally {

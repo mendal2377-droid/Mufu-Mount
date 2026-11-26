@@ -195,21 +195,24 @@ export async function createWorldTaxi({world, nav, toast = () => {}, storage = n
     if (t - obsT < .09) return;   // every frame at 10 frames a second and up
     obsT = t;
     const b = world.body, out = [];
+    // [x, z, half its width]: a car 0.9 m, an e-bike or a cyclist 0.35 m, a walker 0.25 m.
     for (const src of [world.traffic, world.people, world.cyclists]) {
       if (!src?.positions) continue;
       const walkers = src === world.people;
       for (const p of src.positions()) {
         const x = p.length === 4 ? p[1] : p.length === 3 ? p[0] : p[1], z = p.length === 4 ? p[3] : p.length === 3 ? p[2] : p[3];
+        const half = walkers ? .25 : p.length === 4 && p[0] === 'car' ? .9 : .35;
         // Walkers only on the carriageway (crossing it): the taxi waited for good for people standing
         // on a pavement that came within 2 m of its line by a stop.
-        if (Math.abs(x - b.x) < 45 && Math.abs(z - b.z) < 45 && (!walkers || world.grid.road(x, z) !== null)) out.push([x, z]);
+        if (Math.abs(x - b.x) < 45 && Math.abs(z - b.z) < 45 && (!walkers || world.grid.road(x, z) !== null)) out.push([x, z, half]);
       }
     }
-    if (MAN.visible) out.push([MAN.position.x, MAN.position.z]);
+    if (MAN.visible) out.push([MAN.position.x, MAN.position.z, .25]);
     obstacles = out;
   }
-  // The most the taxi may go: what stops it 5.5 m (middle to middle) behind anything within 2 m of its
-  // line ahead, braking at 6 m/s2.
+  // The most the taxi may go: what stops it 5.5 m (middle to middle) behind anything on its line ahead,
+  // braking at 6 m/s2. On its line: within the taxi's half width (0.9 m), the other's own half width and
+  // 0.3 m to spare (an e-bike 2 m aside in its lane held the taxi for good at a junction, 27 Nov).
   // One that has stood still in front for 4 s (an e-bike that cut in under the taxi's nose, held by
   // the taxi as the taxi is held by it) is let be: the taxi creeps past it, as a driver would.
   let holder = null, heldSince = 0, ignore = [];
@@ -217,14 +220,15 @@ export async function createWorldTaxi({world, nav, toast = () => {}, storage = n
     if (v <= 0) return Infinity;
     const fx = Math.sin(h), fz = Math.cos(h), now = clock;
     let lim = Infinity, by = null;
-    for (const [ox, oz] of obstacles) {
+    for (const [ox, oz, half] of obstacles) {
       if (ignore.some(q => now < q.until && Math.hypot(q.x - ox, q.z - oz) < 1)) continue;
       const dx = ox - x, dz = oz - z, f = dx * fx + dz * fz, side = Math.abs(dx * fz - dz * fx);
-      if (f < 0 || f > 45 || side > 2) continue;
+      if (f < 0 || f > 45 || side > 1.2 + half) continue;
       const l = Math.sqrt(12 * Math.max(0, f - 5.5));
       if (l < lim) { lim = l; by = [ox, oz]; }
     }
-    // (Only one already under the nose, within 3.5 m middle to middle: a car queued ahead is waited for.)
+    // (Only one already under the nose, within 3.5 m middle to middle: a car queued ahead is waited for;
+    // at 4.5 m the taxi crept into a stopped e-bike.)
     if (lim < .5 && by && Math.hypot(by[0] - x, by[1] - z) < 3.5) {
       if (!holder || Math.hypot(holder[0] - by[0], holder[1] - by[1]) > .5) { holder = by; heldSince = now; }
       else if (now - heldSince > 4) { ignore.push({x: by[0], z: by[1], until: now + 10}); holder = null; return 2; }

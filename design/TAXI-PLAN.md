@@ -74,3 +74,7 @@ All four pieces as above. What the browser audit taught, and the rules it led to
   two lanes the route runs between them and a car overtaking may brush the taxi's side (counted by
   the audit, about 7 in a 2 km ride). The audit's ride: no frame off the road, nothing driven into,
   no car through the taxi, the fare and tip as the meter says.
+- **The audit's rule for "driven into":** another's outline overlapping the taxi's, squarely ahead in its
+  lane, while the taxi moves faster than a jog (3 m/s) and is not braking: running into it unslowed. Slower touches, as when an e-bike cuts in as a
+  hailed taxi pulls out of the kerb, are counted as grazes. A route through the city's lights takes as
+  long as the lights make it: the audit allows 10 minutes for the pickup and 20 for the ride.

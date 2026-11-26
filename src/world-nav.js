@@ -190,7 +190,9 @@ export async function createWorldNav({world, toast = () => {}}) {
     ctx.restore();
     // The traveller: an arrow in the middle, pointing up; north marked on the rim.
     ctx.save(); ctx.translate(W / 2, W / 2);
-    const rel = world.vehicle === 'walk' ? world.heading - camYaw() : 0;
+    // The arrow: the traveller's heading against the map's up (the owner saw it point backwards on foot:
+    // the camera's yaw is half a turn from a heading).
+    const rel = world.vehicle === 'walk' ? world.heading - (camYaw() - Math.PI) : 0;
     ctx.save(); ctx.rotate(-rel + Math.PI - Math.PI);
     ctx.fillStyle = C.me; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 * dpr;
     ctx.beginPath(); ctx.moveTo(0, -9 * dpr); ctx.lineTo(7 * dpr, 8 * dpr); ctx.lineTo(0, 4 * dpr); ctx.lineTo(-7 * dpr, 8 * dpr); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -332,6 +334,15 @@ export async function createWorldNav({world, toast = () => {}}) {
       nav.stats.ms = performance.now() - t0;
     },
     fmt,
+    /** Where (x, z) is drawn on the minimap, CSS pixels from its middle (+y down), and the arrow's turn
+     *  from straight up: for the audit (tests/taxi-browser.mjs). */
+    toMini(x, z) {
+      const b = world.body, R = world.vehicle === 'car' ? 230 : 150, scale = MINI / (R * 2);
+      const cam = world.vehicle === 'walk' ? camYaw() - Math.PI : world.heading, a = cam - Math.PI;
+      const dx = (x - b.x) * scale, dz = (z - b.z) * scale;
+      return {x: dx * Math.cos(a) - dz * Math.sin(a), y: dx * Math.sin(a) + dz * Math.cos(a),
+        arrow: world.vehicle === 'walk' ? -(world.heading - (camYaw() - Math.PI)) : 0};
+    },
   };
   return nav;
 }

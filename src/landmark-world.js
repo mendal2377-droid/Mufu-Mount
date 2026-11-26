@@ -7,6 +7,7 @@ import {createTraveller, createMagpie, createGlider} from './traveller.js';
 import {loadTransit} from './transit.js';
 import {paintedTree} from './painted-trees.js';
 import {createXuanwuLife, shoreField} from './xuanwu-life.js';
+import {addInscriptions} from './inscriptions.js';
 
 // A landmark scene modelled in Blender (blender/build_<id>.py, exported by blender/export_web.py)
 // and streamed on arrival. Unlike the atlas it is in true metres: the walker's eye is 1.65 m, the
@@ -954,6 +955,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   traveller.root.add(glider); glider.visible = false;
   // Xuanwu Lake: its carp, a jumping culter and the name boards at its gates and islands.
   const xuanwu = id === 'core' && waterHeights ? createXuanwuLife(scene, {waterAt, heightAt, nearest, shared}) : null;
+  // The Mausoleum's inscriptions on their boards (src/inscriptions.js).
+  const inscriptions = addInscriptions(scene, id);
   scene.add(traveller.root, magpie.root);
   traveller.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
   const body = new THREE.Vector3(), lastBody = new THREE.Vector3();

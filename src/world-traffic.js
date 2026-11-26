@@ -67,6 +67,7 @@ function hash(i, seed) {
 }
 
 /** One way's geometry: points, cumulative lengths, bounding box. */
+const at0 = {x: 0, z: 0, yaw: 0};
 function wayOf([cls, oneway, lanes, flat], index) {
   const pts = [];
   for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i + 1]]);
@@ -94,7 +95,20 @@ function along(w, s, dir, off, out) {
 export async function createWorldTraffic({world}) {
   const data = await fetch(`/scenes/${world.id}/streets.json`).then(r => (r.ok ? r.json() : null)).catch(() => null);
   if (!data) return null;
-  const ways = data.ways.map(wayOf);
+  // Only roads the world built as carriageway: OSM maps roads over Purple Mountain's slopes and the
+  // scenic area's paths that the world has as grass, stairs or paving, and cars and e-bikes were drawn
+  // on the hillside there (the owner, 27 Nov). A way is kept when carriageway lies within 3 m of its
+  // line at 70 % of points 4 m apart.
+  const roadNear = (x, z) => world.grid.road(x, z) != null || world.grid.road(x + 3, z) != null || world.grid.road(x - 3, z) != null
+    || world.grid.road(x, z + 3) != null || world.grid.road(x, z - 3) != null;
+  const allWays = data.ways.map(wayOf);
+  const ways = allWays.filter(w => {
+    let n = 0, ok = 0;
+    for (let s = 0; s <= w.length; s += 4) { along(w, s, 1, 0, at0); n++; if (roadNear(at0.x, at0.z)) ok++; }
+    return ok >= n * .7;
+  });
+  ways.forEach((w, i) => { w.index = i; });
+  console.info(`Traffic: ${ways.length} of ${allWays.length} mapped roads built as carriageway`);
 
   // Toon shading in the city's own bands (as the buildings), so the traffic sits in the painted scene.
   const toon = (c, vertexColors = false) => new THREE.MeshToonMaterial({color: c, gradientMap: world.bands || null, vertexColors});
@@ -334,8 +348,12 @@ export async function createWorldTraffic({world}) {
     for (const o of options) { if ((r -= o.weight) < 0) { chosen = o; break; } }
     const target = chosen.cands[Math.floor(hash(q.id, 41) * chosen.cands.length)];
     if (!target.entryFree()) return false;
-    // Not into a lane whose start lies against the visitor's taxi: it would land on it. It waits.
-    if (traffic.obstacle) { along(target.w, 0, target.dir, target.off, pos2); if (margin(traffic.obstacle, pos2.x, pos2.z, ln.bike) < 1.5) return false; }
+    // Not into a lane whose start lies against the visitor's taxi, closer to it than the vehicle is now: it
+    // would land on it, and waits. One moving away from the taxi goes on (the car in front of a waiting
+    // taxi, held so, held the taxi for good).
+    const ob = traffic.obstacle;
+    if (ob) { along(target.w, 0, target.dir, target.off, pos2);
+      if (margin(ob, pos2.x, pos2.z, ln.bike) < 1.5 && Math.hypot(pos2.x - ob.x, pos2.z - ob.z) < Math.hypot(pos.x - ob.x, pos.z - ob.z)) return false; }
     // Carry the vehicle across, keeping where it was drawn: the difference fades over its first metres.
     along(target.w, 0, target.dir, target.off, pos2);
     q.dx = pos.x - pos2.x; q.dz = pos.z - pos2.z; q.dyaw = Math.atan2(Math.sin(pos.yaw - pos2.yaw), Math.cos(pos.yaw - pos2.yaw)); q.fade = 1;
@@ -385,7 +403,12 @@ export async function createWorldTraffic({world}) {
     // top of a planter or a podium, and an e-bike rode 3.5 m up in the air there (23 Nov).
     const r = world.grid.road(x, z);
     if (p == null) return r ?? height(x, z);
-    return r != null && Math.abs(r - p) < .8 ? r : p;
+    if (r != null) return Math.abs(r - p) < .8 ? r : p;
+    // No road cell under it (an e-bike at the kerb, off the stamped road): the pavement when it lies
+    // within a metre below the line's height, never above it (a planter's top is above). An e-bike stood
+    // 0.7 m over the road on the line's height there (27 Nov).
+    const g = height(x, z);
+    return g != null && g <= p && p - g < 1 ? g : p;
   }
   // A vehicle's matrix (a turn about y and a move) written straight into each of its meshes: composing
   // it through an Object3D for each of an e-bike's four meshes tripled the frame's cost.
@@ -410,8 +433,12 @@ export async function createWorldTraffic({world}) {
     const fw = Math.abs(dx * fx + dz * fz) - (2.33 + (bike ? .9 : 2.33)), lat = Math.abs(dx * fz - dz * fx) - (.9 + (bike ? .35 : .9));
     return Math.max(fw, lat);
   }
+  let blocked = false;
   function blocks() {
     const ob = traffic.obstacle;
+    // Nothing to undo and no taxi: no work (the traffic's frame stays as cheap as before the taxi).
+    if (!ob && !blocked) return;
+    blocked = !!ob;
     for (const ln of lanes.values()) {
       ln.block = null;
       for (const q of ln.vehicles) q.held = false;
@@ -496,6 +523,8 @@ export async function createWorldTraffic({world}) {
         if (dx * dx + dz * dz > r2) continue;
         const y = vehicleHeight(ln.w, Math.min(q.s, ln.length), ln.dir, at.x, at.z);
         if (y == null) continue;
+        // Over a stretch the world did not build as road (a kept way is 70 % carriageway): not drawn there.
+        if (!roadNear(at.x, at.z)) continue;
         if (ln.bike) { if (nb < BIKE_CAP) { drawBike(q.id, y, nb); nb++; } }
         else if (drawCar(q.id, y)) nc++;
       }
