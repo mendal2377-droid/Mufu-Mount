@@ -294,14 +294,14 @@ export async function createWorldTraffic({world}) {
             ln = makeLane(w, dir, lane, from, to, hour);
             if (!ln) continue;
             lanes.set(key, ln);
-            ln.fill(from, to, gap, v, newId);
+            ln.fill(from, to, gap, v, newId, clear(ln));
           } else {
             // The stretch moved with the camera: drop what left it, fill what it gained.
             const oa = ln.from, ob = ln.to;
             ln.from = from; ln.to = to;
             ln.vehicles = ln.vehicles.filter(q => q.s >= from && q.s <= to);
-            if (from < oa) ln.fill(from, Math.min(oa, to), gap, v, newId);
-            if (to > ob) ln.fill(Math.max(ob, from), to, gap, v, newId);
+            if (from < oa) ln.fill(from, Math.min(oa, to), gap, v, newId, clear(ln));
+            if (to > ob) ln.fill(Math.max(ob, from), to, gap, v, newId, clear(ln));
           }
           keep.add(key);
         }
@@ -334,6 +334,8 @@ export async function createWorldTraffic({world}) {
     for (const o of options) { if ((r -= o.weight) < 0) { chosen = o; break; } }
     const target = chosen.cands[Math.floor(hash(q.id, 41) * chosen.cands.length)];
     if (!target.entryFree()) return false;
+    // Not into a lane whose start lies against the visitor's taxi: it would land on it. It waits.
+    if (traffic.obstacle) { along(target.w, 0, target.dir, target.off, pos2); if (margin(traffic.obstacle, pos2.x, pos2.z, ln.bike) < 1.5) return false; }
     // Carry the vehicle across, keeping where it was drawn: the difference fades over its first metres.
     along(target.w, 0, target.dir, target.off, pos2);
     q.dx = pos.x - pos2.x; q.dz = pos.z - pos2.z; q.dyaw = Math.atan2(Math.sin(pos.yaw - pos2.yaw), Math.cos(pos.yaw - pos2.yaw)); q.fade = 1;
@@ -394,7 +396,67 @@ export async function createWorldTraffic({world}) {
     for (const mesh of list) mesh.instanceMatrix.array.set(M, i * 16);
   }
 
+  // The visitor's taxi (src/world-taxi.js sets traffic.obstacle = {x, z, v, heading}, or null): each
+  // lane it stands in follows it like a car. A lane holds it where the lane's own line passes within
+  // 2 m of the taxi's middle, nose or tail; its speed along the lane is the taxi's, never below nought.
+  const near2 = {x: 0, z: 0, yaw: 0}, at3 = {x: 0, z: 0, yaw: 0};
+  // No car is placed within 25 m of the taxi when a stretch of road fills: one appeared on it (build of 26 Nov).
+  const at4 = {x: 0, z: 0, yaw: 0};
+  const clear = (ln) => (s) => { const ob = traffic.obstacle; if (!ob) return true; along(ln.w, Math.min(s, ln.length), ln.dir, ln.off, at4); return Math.hypot(at4.x - ob.x, at4.z - ob.z) > 25; };
+  // And whatever the lanes say, a car or an e-bike that would come within a metre of the taxi's
+  // outline, closing on it, holds still this step (q.held, src/traffic-sim.js); one moving away goes on.
+  function margin(ob, x, z, bike) {
+    const fx = Math.sin(ob.heading), fz = Math.cos(ob.heading), dx = x - ob.x, dz = z - ob.z;
+    const fw = Math.abs(dx * fx + dz * fz) - (2.33 + (bike ? .9 : 2.33)), lat = Math.abs(dx * fz - dz * fx) - (.9 + (bike ? .35 : .9));
+    return Math.max(fw, lat);
+  }
+  function blocks() {
+    const ob = traffic.obstacle;
+    for (const ln of lanes.values()) {
+      ln.block = null;
+      for (const q of ln.vehicles) q.held = false;
+      if (!ob) continue;
+      const [bx0, bz0, bx1, bz1] = ln.w.box;
+      if (ob.x > bx0 - 20 && ob.x < bx1 + 20 && ob.z > bz0 - 20 && ob.z < bz1 + 20) for (const q of ln.vehicles) {
+        along(ln.w, Math.min(q.s, ln.length), ln.dir, ln.off, at3);
+        const x = at3.x + q.dx, z = at3.z + q.dz;
+        if (Math.abs(x - ob.x) > 12 || Math.abs(z - ob.z) > 12) continue;
+        const m = margin(ob, x, z, ln.bike);
+        if (m > 1) continue;
+        const step = Math.max(.3, q.v * .1), m2 = margin(ob, x + Math.sin(at3.yaw) * step, z + Math.cos(at3.yaw) * step, ln.bike);
+        if (m2 < m) q.held = true;
+      }
+      const w = ln.w, [x0, z0, x1, z1] = w.box;
+      if (ob.x < x0 - 8 || ob.x > x1 + 8 || ob.z < z0 - 8 || ob.z > z1 + 8) continue;
+      // The taxi's middle, nose and tail: each point of the way nearest one, in metres along the way.
+      // The lane holds the taxi from the first of them its line passes within 2 m of: a lane
+      // crossing a junction in front of the taxi stops short of its nose.
+      // And where its nose will be in 1.2 s: a car about to turn into the street just ahead of a moving
+      // taxi waits for it to pass (the taxi could not stop for one turning in 4 m in front of it).
+      const fx = Math.sin(ob.heading), fz = Math.cos(ob.heading);
+      for (const k of ob.v > 1 ? [0, 2.3, -2.3, 2.3 + ob.v * 1.2] : [0, 2.3, -2.3]) {
+        const px = ob.x + fx * k, pz = ob.z + fz * k;
+        let best = Infinity, sw = 0;
+        for (let i = 1; i < w.pts.length; i++) {
+          const [ax, az] = w.pts[i - 1], [bx, bz] = w.pts[i], ux = bx - ax, uz = bz - az, L2 = ux * ux + uz * uz || 1;
+          const q = Math.max(0, Math.min(1, ((px - ax) * ux + (pz - az) * uz) / L2));
+          const d = Math.hypot(ax + ux * q - px, az + uz * q - pz);
+          if (d < best) { best = d; sw = w.cum[i - 1] + q * Math.sqrt(L2); }
+        }
+        if (best > 12) continue;
+        const s = ln.dir > 0 ? sw : w.length - sw;
+        along(w, Math.min(s, ln.length), ln.dir, ln.off, near2);
+        if (Math.hypot(near2.x - px, near2.z - pz) > 2) continue;
+        // A taxi standing still is waited for only along its own road: crossing traffic goes on past
+        // its nose (a crossing car stopped for a stopped taxi, and the taxi for it, for good).
+        if (ob.v < 1 && Math.abs(Math.cos(ob.heading - near2.yaw)) < .7) continue;
+        if (!ln.block || s < ln.block.s) ln.block = {s, v: Math.max(0, ob.v * Math.cos(ob.heading - near2.yaw))};
+      }
+    }
+  }
+
   const traffic = {
+    obstacle: null,
     ways, lights, heads, get near() { return near; }, get lanes() { return lanes; }, get transfers() { return transfers; },
     stats: {cars: 0, bikes: 0},
     /** Each frame: t in seconds, the clock's hour, the camera's position. */
@@ -409,6 +471,7 @@ export async function createWorldTraffic({world}) {
       let dt = lastT == null ? 0 : t - lastT;
       lastT = t;
       if (dt < 0 || dt > 2) dt = 0;
+      blocks();
       for (let left = dt; left > 1e-6;) {
         const h = Math.min(.1, left);
         left -= h;

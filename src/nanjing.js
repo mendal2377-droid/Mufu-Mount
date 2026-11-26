@@ -18,6 +18,9 @@ import {createWorldBirds} from './world-birds.js';
 import {createWorldCyclists} from './world-cyclists.js';
 import {createJourneys} from './world-journeys.js';
 import {createMusic} from './generative-music.js';
+import {createWorldNav} from './world-nav.js';
+import {createWorldTaxi} from './world-taxi.js';
+import {createRadio} from './radio.js';
 
 // A separate illustrated atlas: its compressed map coordinates must never be
 // confused with the photo-informed, unregistered Mufu reconstruction.
@@ -128,11 +131,13 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   function leaveHome(){if(!home)return;home.overview=false;home.scene.remove(camera);scene.add(camera);postfx.setScene(scene);orbit.maxPolarAngle=polar;
     for(const r of records){r.home=null;r.pin.classList.remove('edge');}home=null;}
   const music=audio?createMusic(audio):null;
+  // The radio in the taxi, on the bike and in the boat (src/radio.js; design/TAXI-PLAN.md).
+  const radio=audio?createRadio(audio):null;
   // The ways-to-explore strip: shown inside a Blender world, boat only where there is water.
   function showWays(){const nav=$('#ways');if(!nav)return;nav.hidden=!world;if(!world)return;
     nav.querySelector('[data-way="boat"]').hidden=!world.canBoat;
     const way=state.flying?'fly':world.vehicle;for(const b of nav.children)b.classList.toggle('active',b.dataset.way===way);}
-  function exitWorld(){if(!world)return;$('#ways').hidden=true;music?.stop();world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
+  function exitWorld(){if(!world)return;$('#ways').hidden=true;music?.stop();radio?.off();world.nav?.show(false);world.taxi?.show(false);world.stand();world.scene.remove(camera);world=null;scene.add(camera);postfx.setScene(scene);}
   async function enterWorld(p,opts){
     const id=WORLDS[p.id].world;
     if(!worlds[id]){toast(`${p.zh} · on the wind…`);
@@ -158,6 +163,10 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     if(w.keepsakes===undefined)w.keepsakes=createWorldLanterns({world:w,game,camera,onPick:(id,index,r)=>gameView.present(id,index,r)});
     // Journeys (src/world-journeys.js): real trips to make here, ticked off in the menu.
     if(w.journeys===undefined)w.journeys=createJourneys(w.id,storage);
+    // The map, its routes and the taxis (src/world-nav.js, src/world-taxi.js): where there are streets.
+    if(w.nav===undefined){w.nav=null;createWorldNav({world:w,toast}).then(n=>{w.nav=n;if(n&&world===w)n.show(true);
+      if(n)createWorldTaxi({world:w,nav:n,toast,storage}).then(t=>{w.taxi=t;}).catch(e=>console.warn('Taxis did not load',e));}).catch(e=>console.warn('The map did not load',e));}
+    else w.nav?.show(true);
     $('#city-journeys-open').hidden=!w.journeys;
     w.setVehicle('walk');showWays();
     // Flight bounds: the map's own extent (skyline_clip, three.js x and z) where it has one, else
@@ -394,6 +403,11 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     world.boats?.update(t,weather.hour??12);
     world.birds?.update(t,weather.hour??12,camera.position);
     world.cyclists?.update(t,weather.hour??12,camera.position);
+    world.nav?.update(t,camera);
+    world.taxi?.update(t,dt,weather.hour??12);
+    // The radio plays in the taxi, on the bike and in the boat; on foot it goes off.
+    if(radio?.station&&world.vehicle==='walk')radio.off();
+    radio?.update();
     if(wasGliding&&!world.gliding){
       // Touchdown: level the chase camera behind the traveller, looking where they ran out.
       camera.rotation.set(-.12,world.heading+Math.PI,0,'YXZ');
@@ -405,7 +419,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     world.placeCamera(camera,dt);
     // Keepsake lanterns: found by walking or riding the bike into them, not from a bus, train or boat.
     const ks=world.keepsakes;
-    if(ks){const tr=world.transit,free=!world.seated&&!world.riding&&!tr?.busRide&&!tr?.metroRide&&world.vehicle!=='boat';
+    if(ks){const tr=world.transit,free=!world.seated&&!world.riding&&!tr?.busRide&&!tr?.metroRide&&world.vehicle!=='boat'&&world.vehicle!=='car';
       ks.update(t,world.body,free);
       if(t-lastNearest>.5){lastNearest=t;gameView.setCurrent(ks.near(world.body)||selected.id);}
       if(free&&t-lastLanternHint>25){const l=ks.nearestUnfound(world.body);
@@ -547,7 +561,20 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // F: sit on the nearest seat (benches, the Music Stage terraces), or stand up again.
     // F; or, from the bus chooser, F again with the line picked.
     interactWith(picked){api.interact(picked);},
+    // H hails a taxi to the nearest kerb; N opens the map; R turns the radio (in a vehicle).
+    hail(){if(!world||state.flying||world.gliding)return;if(!world.taxi){toast(world.nav===null&&world.id!=='core'?'No taxis here':'The taxis are still on their way…');return;}
+      toast(world.taxi.hail());},
+    get radioStation(){return radio?.station?.id||null;},
+    openMap(){if(!world)return;if(!world.nav){toast('The map is still being drawn…');return;}world.nav.openMap();},
+    radio(){if(!world||!radio)return;if(world.vehicle==='walk'&&!world.riding){toast('The radio plays in the taxi, on the bike and in the boat');return;}
+      if(audio?.started){radio.next(lastWeather);return;}
+      if(audio&&soundButton)soundButton.click();
+      setTimeout(()=>radio.next(lastWeather),300);},
     interact(picked=null){if(!world||state.overview||state.flying||world.gliding)return;
+      // The taxi (src/world-taxi.js): F gets out; beside a parked one, F gets in.
+      if(world.vehicle==='car'){const m=world.taxi?.exit();if(m)toast(m);showWays();return;}
+      const cab=!picked&&!world.seated&&!world.riding&&world.taxi?.near();
+      if(cab){const m=world.taxi.enter(cab);if(m){camera.rotation.set(-.16,world.heading+Math.PI,0,'YXZ');toast(m);showWays();}return;}
       if(world.seated){world.stand();music?.stop();toast('Standing up');return;}
       if(world.riding){world.leaveBoat();music?.stop();toast('Ashore');return;}
       // Metro and buses (src/transit.js): wait at a stop and ride; F again gets off at the next stop.

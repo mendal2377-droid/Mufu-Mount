@@ -1098,6 +1098,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const fwd = Number(keys.has('KeyW') || keys.has('ArrowUp')) - Number(keys.has('KeyS') || keys.has('ArrowDown'));
     const steer = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft'));
     const fast = keys.has('ShiftLeft') || keys.has('ShiftRight'), bike = vehicle === 'bike';
+    if (vehicle === 'car') return driveCar(fwd, steer, fast, dt);
     const top = bike ? (fast ? 9 : 5.5) : (fast ? 5 : 3);
     vspeed = THREE.MathUtils.damp(vspeed, fwd > 0 ? top : fwd < 0 ? (bike ? 0 : -1.2) : 0, fwd ? 1.4 : bike ? .9 : .5, dt);
     heading -= steer * dt * (bike ? 1.8 : .9) * THREE.MathUtils.clamp(Math.abs(vspeed) / 2.5, .25, 1);
@@ -1128,6 +1129,56 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       if (w !== null) { body.x = nx; body.z = nz; moved = true; body.y = w; } else vspeed *= -.2;
     }
     return moved && Math.abs(vspeed) > .2;
+  }
+
+  // The taxi (src/world-taxi.js; design/TAXI-PLAN.md): on the carriageway only, by the bike's road
+  // rule; about 50 km/h, 70 with Shift; S brakes, then backs slowly. Steering is a bicycle model on a
+  // 2.7 m wheelbase: the wheels turn up to 0.55 rad when slow, less at speed, so the turn never pulls
+  // more than about 0.6 g. Nothing is ever hit: world.carLimit (set by the taxi) caps the speed behind a
+  // car or a walker ahead, and a kerb or a wall stops the car without harm.
+  const WHEELBASE = 2.7;
+  let wheel = 0;
+  function driveCar(fwd, steer, fast, dt) {
+    const top = fast ? 19.4 : 13.9, prevV = vspeed;
+    if (fwd > 0) vspeed = THREE.MathUtils.damp(vspeed, top, vspeed < 0 ? 4 : .45, dt);
+    else if (fwd < 0) vspeed = vspeed > .3 ? THREE.MathUtils.damp(vspeed, 0, 2.2, dt) - dt * 2 : THREE.MathUtils.damp(vspeed, -4, 1.2, dt);
+    else vspeed = THREE.MathUtils.damp(vspeed, 0, .35, dt);
+    // Held behind something: brake (up to 8 m/s2) down to the limit, and no creeping on under it.
+    const lim = world.carLimit ? world.carLimit(body.x, body.z, heading, vspeed) : Infinity;
+    if (vspeed > lim) vspeed = Math.max(lim, Math.min(vspeed, prevV) - 8 * dt);
+    const v = Math.abs(vspeed), most = Math.min(.55, Math.atan(WHEELBASE * 6 / Math.max(v * v, 1)));
+    wheel = THREE.MathUtils.damp(wheel, -steer * most, 5, dt);
+    heading += vspeed / WHEELBASE * Math.tan(wheel) * dt;
+    steerLean = 0;
+    // On the road: carriageway within 2.5 m of the car's middle, or across a gap of up to 8 m with
+    // carriageway on both sides of it, ahead and behind (a junction's paved crossing).
+    const onRoad = (px, pz, h) => {
+      if (!hasRoads) return true;
+      const sx = Math.sin(h), sz = Math.cos(h);
+      if (roadAt(px, pz) !== null) return true;
+      for (const [a, b] of [[2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5]]) if (roadAt(px + sx * a + sz * b, pz + sz * a - sx * b) !== null) return true;
+      let fore = false, aft = false;
+      for (let d = 2; d <= 8 && !(fore && aft); d += 2) { fore ||= roadAt(px + sx * d, pz + sz * d) !== null; aft ||= roadAt(px - sx * d, pz - sz * d) !== null; }
+      return fore && aft;
+    };
+    // Off it already (a hailed taxi at the kerb, a turn on a crossing): a move toward carriageway,
+    // within 12 m the way it goes, forward or back.
+    const lost = !onRoad(body.x, body.z, heading);
+    const toward = (px, pz, h) => {
+      const k = vspeed >= 0 ? 1 : -1, sx = Math.sin(h) * k, sz = Math.cos(h) * k;
+      for (let d = 1; d <= 12; d += 1.5) if (roadAt(px + sx * d, pz + sz * d) !== null) return true;
+      return false;
+    };
+    const fits = (h) => {
+      const sx = Math.sin(h), sz = Math.cos(h), px = body.x + sx * vspeed * dt, pz = body.z + sz * vspeed * dt;
+      return canStep({x: body.x, z: body.z}, px, pz) && (onRoad(px, pz, h) || lost && toward(px, pz, h)) ? [px, pz] : null;
+    };
+    let to = fits(heading);
+    for (const d of [.12, -.12, .25, -.25]) if (!to) to = fits(heading + d);
+    if (to) { body.x = to[0]; body.z = to[1]; } else vspeed = 0;
+    const h = surface(body.x, body.z);
+    if (h !== null) body.y = THREE.MathUtils.damp(body.y, h, 10, dt);
+    return !!to && v > .2;
   }
 
   function feetAt(x, z, fallback) { return surface(x, z) ?? fallback; }
@@ -1181,8 +1232,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     placeAt(s) {
       body.fromArray(s.feet); lastBody.copy(body); heading = Math.atan2(s.look[0] - s.feet[0], s.look[2] - s.feet[2]);
       seated = null; glide = null; mode = 'walk';
-      // Arriving anywhere is on foot: a boat kept from before hovered over the new place's ground.
-      if (vehicle === 'boat') { vehicle = 'walk'; vspeed = 0; }
+      // Arriving anywhere is on foot: a boat kept from before hovered over the new place's ground
+      // (a taxi is left parked where it was: src/world-taxi.js).
+      if (vehicle === 'boat' || vehicle === 'car') { vehicle = 'walk'; vspeed = 0; }
     },
     // from: glide from where the traveller stands (a moon gate) instead of the arrival approach.
     startGlide(s, {from = null, seconds = from ? 18 : 15} = {}) {
@@ -1249,13 +1301,34 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       }});
     },
     get vehicle() { return vehicle; },
+    get vspeed() { return vspeed; },
+    carLimit: null,     // (x, z, heading, speed) -> the most the taxi may go: set by src/world-taxi.js
     get canBike() { return true; },
     get canBoat() { return !!waterHeights; },
     get xuanwu() { return xuanwu; },
     // Switch the way of moving. Returns a short message for the toast, or null if it cannot.
-    setVehicle(v) {
+    setVehicle(v, spot = null) {
       if (glide || ride || mode === 'glide') return null;
       seated = null; mode = 'walk';
+      // Into the taxi where it stands (src/world-taxi.js): spot {x, z, heading}.
+      if (v === 'car') {
+        if (!spot) return null;
+        body.set(spot.x, surface(spot.x, spot.z) ?? body.y, spot.z); heading = spot.heading; vehicle = 'car'; vspeed = 0; wheel = 0;
+        return 'Taxi · W drive · S brake · A / D steer · Shift faster · F get out · R radio';
+      }
+      if (vehicle === 'car') {
+        // Out onto the pavement beside the car: the nearest walkable cell off the carriageway.
+        const sx = Math.cos(heading), sz = -Math.sin(heading);
+        let at = null;
+        for (const d of [2.2, 3, 4, -2.2, -3, -4]) {
+          const x = body.x + sx * d, z = body.z + sz * d;
+          if (heightAt(x, z) !== null && (!hasRoads || roadAt(x, z) === null) && canStep({x: body.x, z: body.z}, x, z)) { at = [x, z]; break; }
+        }
+        at = at || nearest((x, z) => (roadAt(x, z) === null ? heightAt(x, z) : null), body.x, body.z, 25) || [body.x + sx * 2.2, body.z + sz * 2.2];
+        const h = heightAt(at[0], at[1]);
+        body.set(at[0], h ?? body.y, at[1]); vehicle = 'walk'; vspeed = 0;
+        if (v === 'walk') return 'On foot';
+      }
       if (v === 'boat') {
         if (!waterHeights) return null;
         const at = waterAt(body.x, body.z) !== null ? [body.x, body.z] : nearest(waterAt, body.x, body.z, 90);
@@ -1398,7 +1471,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           camera.rotation.y += dy * (1 - Math.exp(-dt * 2.2));
         }
         camera.getWorldDirection(camDir);
-        const eye = body.clone().add(new THREE.Vector3(0, vehicle === 'boat' ? 2.6 : 2.2, 0)).addScaledVector(camDir, vehicle === 'boat' ? -7 : -5.5);
+        const car = vehicle === 'car';
+        const eye = body.clone().add(new THREE.Vector3(0, car ? 3.4 : vehicle === 'boat' ? 2.6 : 2.2, 0)).addScaledVector(camDir, car ? -9.5 : vehicle === 'boat' ? -7 : -5.5);
         clearOfTrunks(eye, body);
         const g = surface(eye.x, eye.z);
         if (g !== null) eye.y = Math.max(eye.y, g + .6);
@@ -1441,7 +1515,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       lastBody.copy(body);
       traveller.root.position.copy(body);
       traveller.root.rotation.y = heading;
-      traveller.root.visible = (view === 'third' || !!glide) && !transit?.busRide && !transit?.metroRide;
+      traveller.root.visible = (view === 'third' || !!glide) && !transit?.busRide && !transit?.metroRide && vehicle !== 'car';
       glider.visible = mode === 'glide';
       traveller.update(dt, mode === 'glide' ? 0 : speed, vehicle === 'bike' && mode !== 'glide' ? 'bike' : vehicle === 'boat' ? 'sit' : mode, t);
       // Lean into a turn on the bike; a boat bobs.

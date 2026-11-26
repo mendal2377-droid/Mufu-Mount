@@ -53,10 +53,11 @@ export class Lane {
     return !last || last.s - this.from > this.p.len + this.p.s0 + 2;
   }
   /** Fill [a, b] with vehicles spaced `gap` apart at speed v, where there are none: a lane coming into view. */
-  fill(a, b, gap, v, id) {
+  fill(a, b, gap, v, id, ok = null) {
     if (!isFinite(gap) || gap <= 0) return;
     const add = [];
     for (let s = b - gap * .5; s > a; s -= gap) {
+      if (ok && !ok(s)) continue;   // not on the visitor's taxi (src/world-traffic.js)
       if (!this.vehicles.some(q => Math.abs(q.s - s) < gap * .5)) add.push({s, v, id: id(), dx: 0, dz: 0, dyaw: 0});
     }
     this.vehicles.push(...add);
@@ -72,6 +73,8 @@ export class Lane {
     let leader = null;
     for (let i = 0; i < vs.length; i++) {
       const q = vs[i];
+      // Held this step: it would come up against the visitor's taxi (src/world-traffic.js).
+      if (q.held) { q.v = 0; leader = q; continue; }
       // The nearest obstacle ahead: the vehicle in front, or a red light it can still stop for.
       let gap = Infinity, dv = 0;
       if (leader) { gap = leader.s - q.s - p.len; dv = q.v - leader.v; }
@@ -81,12 +84,18 @@ export class Lane {
         if (!green(t, st.offset, st.group) && d > q.v * q.v / (2 * p.b * 1.6) - 1 && d < gap) { gap = d; dv = q.v; }
         break;
       }
+      // The visitor's taxi standing in this lane (src/world-taxi.js; `block` set each frame by
+      // src/world-traffic.js): followed like the vehicle in front, never driven into.
+      const bk = this.block;
+      // Only one still behind the point waits: one past it (an e-bike beside the taxi's nose) rides on.
+      if (bk && bk.s > q.s && bk.s - q.s - p.len < gap) { gap = Math.max(.1, bk.s - q.s - p.len); dv = q.v - bk.v; }
       // At the end of the stretch with nowhere to go yet: the end is a wall.
       if (q.wait && this.to - q.s < gap) { gap = Math.max(.1, this.to - q.s); dv = q.v; }
       const acc = idm(q.v, this.v0 * (q.slow || 1), gap, dv, p);
       q.v = Math.max(0, q.v + acc * dt);
       q.s += q.v * dt;
       if (leader && q.s > leader.s - p.len - .3) { q.s = leader.s - p.len - .3; q.v = Math.min(q.v, leader.v); }
+      if (bk && q.s - q.v * dt < bk.s - p.len && q.s > bk.s - p.len - .3) { q.s = bk.s - p.len - .3; q.v = Math.min(q.v, bk.v); }
       // Fade a turn's offset over the first 15 m of the new lane.
       if (q.dx || q.dz || q.dyaw) { const k = Math.max(0, 1 - q.v * dt / Math.max(1, 15 * (q.fade ?? 1))); q.fade = (q.fade ?? 1) * k; q.dx *= k; q.dz *= k; q.dyaw *= k; if (q.fade < .02) q.dx = q.dz = q.dyaw = 0; }
       leader = q;

@@ -1403,3 +1403,37 @@ body.flying #game-lanterns { opacity: .35; }
 .journey-card ul li.done::before { content: "\2713  "; color: #ffcb7d; }
 .journey-card li.done { color: #ffcb7d; }
 .journey-card ol li.done::after { content: "  \2713"; }
+
+/* The map, the taxi's meter and the radio's dial (src/world-nav.js, src/world-taxi.js, src/radio.js;
+   design/TAXI-PLAN.md). */
+#minimap { position: fixed; left: 20px; bottom: 20px; z-index: 6; width: 190px; height: 190px; border-radius: 50%;
+  box-shadow: 0 0 0 3px #f3ecd9, 0 6px 18px #0006; cursor: pointer; display: none; }
+body.city-mode.playing #minimap:not([hidden]) { display: block; }
+#taxi-meter { position: fixed; left: 222px; bottom: 28px; z-index: 6; display: none; min-width: 168px; padding: 8px 14px 9px;
+  border-radius: 14px; background: #1b1d1ee6; border: 2px solid #f2cf3a; color: #fffbea; font-variant-numeric: tabular-nums; }
+body.city-mode.playing #taxi-meter:not([hidden]) { display: grid; grid-template-columns: auto auto; column-gap: 10px; align-items: baseline; }
+#taxi-meter b { font: 700 24px/1.1 "DM Mono", ui-monospace, monospace; color: #ff6b4a; text-shadow: 0 0 8px #ff6b4a66; }
+#taxi-meter span { font-size: 12px; color: #f2cf3a; }
+#taxi-meter small { grid-column: 1 / -1; font-size: 11px; opacity: .85; margin-top: 3px; }
+#radio-sign { position: fixed; top: 16%; left: 50%; transform: translateX(-50%); z-index: 7; text-align: center; pointer-events: none;
+  color: #fffbea; text-shadow: 0 2px 10px #000a, 0 0 2px #000; }
+#radio-sign[hidden] { display: none; }
+#radio-sign small { display: block; font: 600 12px "DM Sans", sans-serif; letter-spacing: .25em; color: #f2cf3a; }
+#radio-sign b { display: block; font: 700 46px/1.15 "Noto Serif SC", "Songti SC", serif; letter-spacing: .08em; }
+#radio-sign span { display: block; font: italic 500 18px "Playfair Display", Georgia, serif; }
+#radio-sign.show { animation: radio-in 3.2s ease both; }
+@keyframes radio-in { 0% { opacity: 0; transform: translate(-50%, -8px); } 10%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+#city-map { width: min(1100px, 94vw); max-width: none; height: min(760px, 88vh); max-height: none; padding: 0; border: 0; border-radius: 18px; overflow: hidden;
+  background: #e2d9c4; color: #2e3b33; }
+#city-map[open] { display: flex; flex-direction: column; }
+#city-map::backdrop { background: #0a141199; }
+#city-map header { position: static; pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #f3ecd9; }
+#city-map header strong { font: 700 17px "Playfair Display", Georgia, serif; }
+#city-map header span { flex: 1; font-size: 12px; opacity: .7; }
+#city-map header button { font-size: 13px; padding: 5px 12px; border-radius: 14px; background: #2e3b3314; color: #2e3b33; }
+#city-map canvas { flex: 1; width: 100%; min-height: 0; cursor: crosshair; touch-action: none; }
+@media (max-width: 640px) {
+  #minimap { width: 120px; height: 120px; left: 12px; bottom: 76px; }
+  #taxi-meter { left: 140px; bottom: 80px; min-width: 0; }
+  #radio-sign b { font-size: 32px; }
+}

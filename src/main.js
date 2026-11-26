@@ -1944,11 +1944,14 @@ window.addEventListener("keydown", (e) => {
   ) {
     endTour(false);
   }
-  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open || $("#city-passport").open || $("#city-places").open || $("#metro-map")?.open || $("#bus-pick")?.open) return;
+  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open || $("#city-passport").open || $("#city-places").open || $("#metro-map")?.open || $("#bus-pick")?.open || $("#city-map")?.open) return;
   if (city?.active && !e.repeat && state.ready) {
     if (e.code === "KeyG") { city.openPlaces(true); e.preventDefault(); return; }
     if (e.code === "KeyF") { city.interact(); e.preventDefault(); return; }
     if (e.code === "KeyV") { city.toggleView(); e.preventDefault(); return; }
+    if (e.code === "KeyH") { city.hail(); e.preventDefault(); return; }
+    if (e.code === "KeyN") { city.openMap(); e.preventDefault(); return; }
+    if (e.code === "KeyR") { city.radio(); e.preventDefault(); return; }
     if (e.code === "BracketRight" || e.code === "BracketLeft") { city.hop(e.code === "BracketRight" ? 1 : -1); e.preventDefault(); return; }
   }
   if (city && e.code === "KeyJ" && !e.repeat && state.ready) { city.passport(true); e.preventDefault(); return; }
