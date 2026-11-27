@@ -1480,3 +1480,5 @@ body.city-mode.playing #transit-hint:not([hidden]) { display: flex; }
 #transit-hint b { font-size: 13px; }
 #transit-hint small { display: block; opacity: .75; }
 @media (max-width: 640px) { #transit-hint { left: 12px; bottom: 204px; } }
+/* The home panel's buttons take the page's dark text: the map button keeps its own light text. */
+#nanjing-home .city-card .city-open-map, #nanjing-home .city-card .city-open-map small { color: #f6efd9; }

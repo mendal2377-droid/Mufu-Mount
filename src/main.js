@@ -63,9 +63,13 @@ try {
   foundMemories = JSON.parse(localStorage.getItem("mufu-memories") || "[]");
   if (!Array.isArray(foundMemories)) foundMemories = [];
 } catch {}
-let storedQuality = null;
+// The quality last used, and whether the visitor chose it: a choice is kept; a setting the app lowered
+// itself to is only where the next visit starts, and is lowered further if frames are still slow (it
+// was never lowered again on a later visit: every setting was saved as if chosen).
+let storedQuality = null, qualityChosen = false;
 try {
   storedQuality = localStorage.getItem("mufu-quality");
+  qualityChosen = localStorage.getItem("mufu-quality-chosen") === "1";
 } catch {}
 
 const places = [
@@ -132,6 +136,7 @@ const sunDirection = new THREE.Vector3(-0.8, 0.55, -0.6).normalize();
 const clockSun = new THREE.Vector3();
 const u = {
   time: { value: 0 },
+  lite: { value: 0 },        // 1 on the Light quality: the worlds draw less (src/landmark-world.js)
   dawn: { value: 0 },
   sunset: { value: 0 },
   storm: { value: 0 },
@@ -565,6 +570,7 @@ function pickInitialQuality() {
 function applyQuality(name, announce = false) {
   if (!TIERS[name]) return;
   state.quality = name;
+  u.lite.value = name === "lite" ? 1 : 0;
   const hadShadows = renderer.shadowMap.enabled;
   const tier = postfx.setTier(name);
   renderer.shadowMap.enabled = tier.shadow > 0;
@@ -595,6 +601,7 @@ function applyQuality(name, announce = false) {
   if (announce)
     toast(
       {
+        lite: "Light: for older computers. A nearer horizon, fewer trees, fewer pixels.",
         smooth: "Smooth: effects off, frame rate first.",
         balanced: "Balanced: shafts, bloom and soft shadows.",
         cinematic: "Cinematic: shadows, shafts, bloom and grain.",
@@ -1459,7 +1466,7 @@ function updateSunPosition() {
 }
 
 function trackQuality(dt) {
-  if (qualityLocked || storedQuality || state.overview || !state.playing) return;
+  if (qualityLocked || qualityChosen || state.overview || !state.playing) return;
   qualitySamples.push(dt);
   if (qualitySamples.length < 150) return;
   const sorted = qualitySamples.slice().sort((a, b) => a - b);
@@ -1470,8 +1477,11 @@ function trackQuality(dt) {
     toast("Lowered to Balanced so the walk stays smooth. Change it under ?");
   } else if (median > 1 / 20 && state.quality === "balanced") {
     applyQuality("smooth");
-    qualityLocked = true;
     toast("Lowered to Smooth for frame rate. Change it under ?");
+  } else if (median > 1 / 22 && state.quality === "smooth") {
+    applyQuality("lite");
+    qualityLocked = true;
+    toast("Lowered to Light for an older computer: a nearer horizon, fewer trees. Change it under ?");
   } else if (median < 1 / 58 && state.quality === "balanced") {
     applyQuality("cinematic");
     qualityLocked = true;
@@ -1849,7 +1859,9 @@ document
   .querySelectorAll("[data-quality]")
   .forEach((b) => (b.onclick = () => {
     qualityLocked = true;
+    qualityChosen = true;
     storedQuality = b.dataset.quality;
+    try { localStorage.setItem("mufu-quality-chosen", "1"); } catch {}
     applyQuality(b.dataset.quality, true);
   }));
 $("#sound").onclick = async () => {

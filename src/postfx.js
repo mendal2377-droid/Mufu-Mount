@@ -9,6 +9,9 @@ import { FXAAPass } from "three/addons/postprocessing/FXAAPass.js";
 // Three quality tiers. "smooth" still goes through the composer so that the
 // raw-ShaderMaterial sky and water are tone mapped exactly once, by OutputPass.
 export const TIERS = {
+  // Light: for older computers (the owner's note 3): Smooth, drawn at three quarters of the screen's
+  // pixels, and in the city a nearer horizon and fewer detailed trees (src/landmark-world.js).
+  lite: { bloom: false, shafts: false, ao: false, smaa: false, pixelRatio: 0.75, shadow: 0 },
   smooth: { bloom: false, shafts: false, ao: false, smaa: false, pixelRatio: 1.0, shadow: 0 },
   balanced: { bloom: true, shafts: true, ao: true, smaa: true, pixelRatio: 1.0, shadow: 1024 },
   cinematic: { bloom: true, shafts: true, ao: true, smaa: true, pixelRatio: 1.25, shadow: 2048 },

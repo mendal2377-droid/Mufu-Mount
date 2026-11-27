@@ -8,6 +8,7 @@ import {loadTransit} from './transit.js';
 import {paintedTree} from './painted-trees.js';
 import {createXuanwuLife, shoreField} from './xuanwu-life.js';
 import {addInscriptions} from './inscriptions.js';
+import {tileScene} from './mesh-tiles.js';
 
 // A landmark scene modelled in Blender (blender/build_<id>.py, exported by blender/export_web.py)
 // and streamed on arrival. Unlike the atlas it is in true metres: the walker's eye is 1.65 m, the
@@ -549,6 +550,11 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     o.castShadow = !GROUND_MATERIALS.has(mat.name); o.receiveShadow = true;
     staticTriangles += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3;
   });
+  // Big meshes cut into 800 m tiles (src/mesh-tiles.js; 400 m made 2,500 draw calls a frame): drawn only where in view and within the haze.
+  // The horizon's far land and skyline stay whole: they are there to be seen from everywhere.
+  const tiling = tileScene(gltf.scene, {size: 800, keep: (o) => /^(Far|Skyline|Horizon)/.test(o.name) || /^(Far|Skyline|Horizon)/.test(o.parent?.name || '')});
+  const tiles = [];
+  gltf.scene.traverse((o) => { if (o.userData.tileOf) { o.updateWorldMatrix(true, false); const c = o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld); tiles.push({o, c, r: o.geometry.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis()}); } });
   scene.add(gltf.scene);
 
   // The city's towers on the horizon, wherever this world is.
@@ -678,7 +684,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   // Level of detail: near trees (within NEAR_R of the traveller, at most NEAR_CAP of them) get the
   // full painted crown; every other tree is a silhouette of a few triangles in the same colour. All
   // trees at full detail were ~2.6 M triangles in Zhongshan, too heavy for a phone.
-  const NEAR_R = 280, NEAR_CAP = 2500;
+  const NEAR_R = 280, NEAR_CAP = 2500, NEAR_R_LITE = 150;
   const lodKinds = [];
   let treeTriangles = 0;
   // Street lamps on a carriageway (dual carriageways: one side's pavement lamps fell on the other
@@ -736,23 +742,64 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const farGeo = silhouetteGeometry(spec), far = new THREE.InstancedMesh(farGeo, spec.lamp ? lampMat : treeMaterial(kind, spec), list.length);
     mats.forEach((m, i) => { far.setMatrixAt(i, m); far.setColorAt(i, cols[i]); });
     far.computeBoundingSphere(); far.name = `trees ${kind} far`; scene.add(far);
-    lodKinds.push({list, mats, cols, near, far, caster, shown: new Set()});
+    lodKinds.push({list, mats, cols, near, far, caster, shown: new Set(), slot: new Int32Array(list.length).fill(-1), packed: false});
     treeTriangles += farGeo.attributes.position.count / 3 * list.length;
   }
-  let lodAt = -1, lodX = 1e9, lodZ = 1e9;
+  // How far one sees: where the haze is 99 % thick (exp(-(density d)^2) = e^-4.8), on the home page's
+  // high view all of it. Tiles and far trees past it are not drawn.
+  function viewRange() {
+    if (world.overview || !scene.fog) return Infinity;
+    return Math.round(Math.min(8000, Math.max(400, 2.2 / scene.fog.density)) / 50) * 50;
+  }
+  let tilesAt = -1;
+  function cullTiles(t, eye) {
+    if (t - tilesAt < .25) return;
+    tilesAt = t;
+    const see = viewRange();
+    for (const q of tiles) q.o.visible = !Number.isFinite(see) || Math.hypot(q.c.x - eye.x, q.c.z - eye.z) - q.r < see;
+  }
+  let lodAt = -1, lodX = 1e9, lodZ = 1e9, lodSee = -1;
   function updateTreeLod(t, centre) {
-    // Every half second, or sooner after a long move (a glide or a gate).
-    if (t - lodAt < .5 && Math.hypot(centre.x - lodX, centre.z - lodZ) < 40) return;
-    lodAt = t; lodX = centre.x; lodZ = centre.z;
-    const r2 = NEAR_R * NEAR_R;
+    // Every half second, or sooner after a long move (a glide or a gate) or a change in how far one sees.
+    const see = viewRange();
+    if (t - lodAt < .5 && Math.hypot(centre.x - lodX, centre.z - lodZ) < 40 && see === lodSee) return;
+    const moved = Math.hypot(centre.x - lodX, centre.z - lodZ) > 60 || see !== lodSee;
+    lodAt = t; lodX = centre.x; lodZ = centre.z; lodSee = see;
+    const nr = shared.lite?.value ? NEAR_R_LITE : NEAR_R, r2 = nr * nr;
+    // The far stand-ins only within the haze's reach (all 330,000 were drawn, 3 M triangles at any
+    // distance): repacked into the front of the buffer when the walker has moved on.
+    if (moved && Number.isFinite(see)) {
+      const s2 = see * see;
+      for (const k of lodKinds) {
+        let n = 0;
+        k.slot.fill(-1);
+        for (let i = 0; i < k.list.length; i++) {
+          const tr = k.list[i], dx = tr[1] - centre.x, dz = tr[3] - centre.z;
+          if (dx * dx + dz * dz > s2) continue;
+          k.far.setMatrixAt(n, k.mats[i]); if (k.far.instanceColor) k.far.setColorAt(n, k.cols[i]); k.slot[i] = n; n++;
+        }
+        k.far.count = n; k.packed = true; k.shown = new Set();
+        k.far.instanceMatrix.needsUpdate = true; if (k.far.instanceColor) k.far.instanceColor.needsUpdate = true;
+      }
+    } else if (moved) {
+      // The home page's view: every far tree again, each in its own slot.
+      for (const k of lodKinds) {
+        if (!k.packed) continue;
+        k.mats.forEach((mm, i) => { k.far.setMatrixAt(i, mm); if (k.far.instanceColor) k.far.setColorAt(i, k.cols[i]); });
+        k.far.count = k.list.length; k.packed = false; k.slot.fill(-1); k.shown = new Set();
+        k.far.instanceMatrix.needsUpdate = true; if (k.far.instanceColor) k.far.instanceColor.needsUpdate = true;
+      }
+    }
     for (const k of lodKinds) {
       const now = new Set();
       for (let i = 0; i < k.list.length && now.size < NEAR_CAP; i++) {
         const tr = k.list[i], dx = tr[1] - centre.x, dz = tr[3] - centre.z;
         if (dx * dx + dz * dz < r2) now.add(i);
       }
-      for (const i of k.shown) if (!now.has(i)) k.far.setMatrixAt(i, k.mats[i]);
-      for (const i of now) if (!k.shown.has(i)) k.far.setMatrixAt(i, ZERO);
+      // A tree drawn near is hidden among the far ones (at its slot when the far ones are repacked).
+      const slot = (i) => (k.packed ? k.slot[i] : i);
+      for (const i of k.shown) if (!now.has(i) && slot(i) >= 0) k.far.setMatrixAt(slot(i), k.mats[i]);
+      for (const i of now) if (!k.shown.has(i) && slot(i) >= 0) k.far.setMatrixAt(slot(i), ZERO);
       let n = 0;
       for (const i of now) { k.near.setMatrixAt(n, k.mats[i]); k.near.setColorAt(n, k.cols[i]); n++; }
       k.near.count = n; k.caster.count = n;
@@ -1555,6 +1602,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       const haze = meta.fog ?? .0011;
       // From the home page's height the street haze would bury the city: a fifth of it up there.
       scene.fog.density = (world.overview ? haze * .2 : mode === 'glide' ? haze * .45 : haze) + weather.storm * .004 + weather.snow * .003;
+      // Light quality: the haze closes in to 1.8 km, so what is not drawn past it is not missed.
+      if (shared.lite?.value && !world.overview) scene.fog.density = Math.max(scene.fog.density, 2.2 / 1800);
       // In the metro carriage: the tunnel's own dark, whatever the weather above.
       if (transit?.inCarriage) { scene.fog.color.setRGB(.07, .08, .085); scene.fog.density = .006; }
       sky.position.copy(camera.position);
@@ -1564,6 +1613,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       updatePigeons(t, dt, !!seated);
       updatePetals(t, dt, body);
       updateTreeLod(t, glide || mode === 'glide' ? camera.position : body);
+      cullTiles(t, camera.position);
       updateTraffic(dt);
       // A metro train passing under the walker shakes the view a little.
       if (transit && !glide && mode !== 'glide' && !transit.metroRide) rumble = Math.max(rumble, transit.rumbleAt(body.x, body.z) * .6);

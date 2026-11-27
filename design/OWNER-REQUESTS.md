@@ -13,7 +13,7 @@ The owner tried the taxi, map and radio on the live site ("great progress, some 
 - **N1. Redesign the way to each place:** **Built with N2 and N7 (28 Nov; design/NAVIGATOR-PLAN.md):** one flat map, the same on the home page (it opens on it) and in the city (N, G, M, the pin button, the minimap). A place's card offers Go now, the gold route, and the metro with its legs and changes; stations and stops are on the map and the minimap, and a chip by the minimap names one within 60 m. The Places grid, the four tabs and [ ] are gone. there are many entrances to each place (pins, the places panel, G, moon gates), and it is confusing.
 - **N2. A 2D map option.**
 - **N7. Buses and the metro easier and more obvious to take.**
-- **N3. Performance:** the city walk runs badly on an old PC.
+- **N3. Performance:** the city walk runs badly on an old PC. **Done (28 Nov; design/PERFORMANCE.md):** the big meshes cut into tiles and what the haze hides not drawn (triangles a frame 11 M to 5-6 M on Balanced), a new Light tier for older computers (2-2.5 M), and the automatic lowering now works on every visit.
 - **N8. Landmarks still weak** in model detail, seasons and weather.
 
 ## Open work, in order (updated 22 November 2026)
