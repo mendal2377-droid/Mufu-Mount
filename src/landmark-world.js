@@ -1232,6 +1232,24 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
   }
 
   function feetAt(x, z, fallback) { return surface(x, z) ?? fallback; }
+  // A spot off the carriageway near (x, z): itself when it is not road, else the nearest walkable cell
+  // within 40 m that is not road (pavement, square, path); itself if there is none.
+  function offRoad(x, z, look = null) {
+    if (!hasRoads || roadAt(x, z) === null) return [x, z];
+    // With room: 1.5 m clear of carriageway all round, on walkable ground, no trunk within 2.5 m, and
+    // (facing `look`) open ground where the camera stands 4.4 m behind: at Gulou the first spot off the
+    // road had a plane tree at its back, and the camera, kept clear of the trunk, lost the traveller.
+    const clear = (px, pz) => {
+      if (roadAt(px, pz) !== null || nearTrunk(px, pz, 2.5)) return null;
+      if (![[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].every(([a, b]) => roadAt(px + a, pz + b) === null && heightAt(px + a, pz + b) !== null)) return null;
+      if (look) {
+        const dx = look[0] - px, dz = look[2] - pz, L = Math.hypot(dx, dz) || 1, cx = px - dx / L * 4.4, cz = pz - dz / L * 4.4;
+        if (nearTrunk(cx, cz, 1.5) || nearTrunk((px + cx) / 2, (pz + cz) / 2, 1.2)) return null;
+      }
+      return heightAt(px, pz);
+    };
+    return nearest(clear, x, z, 40) || nearest((px, pz) => (roadAt(px, pz) === null ? heightAt(px, pz) : null), x, z, 40) || [x, z];
+  }
   function glideCurve(feet, look, from = null) {
     // Approach from behind the arrival view: a long descending S-turn that ends running out onto
     // the spawn. Points are lifted clear of the ground under them. From a gate, the traveller
@@ -1259,9 +1277,11 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     overview: false,     // set while this world is the home page's aerial view
     spawn(name = 'axis') {
       const s = meta.spawns[name] || Object.values(meta.spawns)[0];
-      const h = surface(s.position[0], s.position[2]) ?? s.position[1];
-      return {position: [s.position[0], h + EYE, s.position[2]], feet: [s.position[0], h, s.position[2]],
-        look: [s.look[0], h + EYE, s.look[2]]};
+      // Off the carriageway: Gulou's and Xinjiekou's arrival points stood in the traffic (the owner,
+      // 28 Nov). The nearest pavement or square within 40 m, still looking at the same sight.
+      const [x, z] = offRoad(s.position[0], s.position[2], s.look);
+      const h = surface(x, z) ?? s.position[1];
+      return {position: [x, h + EYE, z], feet: [x, h, z], look: [s.look[0], h + EYE, s.look[2]]};
     },
     ground: (x, z) => surface(x, z),
     // For route-finding in tests (tests/mufu-journey-browser.mjs): the walk grid as it is.
@@ -1491,7 +1511,9 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     land() {
       const h = surface(body.x, body.z);
       if (h === null) return false;
-      body.y = h; mode = 'walk'; return true;
+      // Not down in the traffic: onto the pavement beside it.
+      const [x, z] = offRoad(body.x, body.z);
+      body.set(x, surface(x, z) ?? h, z); mode = 'walk'; return true;
     },
     // Camera: chase behind the traveller (third person) or at the eye (first person). The look
     // direction stays the visitor's (drag to look), except on the arrival glide.

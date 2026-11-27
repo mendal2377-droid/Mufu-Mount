@@ -35,6 +35,8 @@ try {
       const m = window.__mufu, w = m.city.world, meta = w.meta, bad = [];
       const onGround = (kind, name, p) => { const h = w.ground(p[0], p[2]); if (h === null || Math.abs(h - p[1]) > 2.5) bad.push(`${kind} ${name} ${h}`); };
       for (const [k, s] of Object.entries(meta.spawns)) onGround('spawn', k, s.position);
+      // Every arrival lands off the carriageway (the owner saw arrivals in the middle of the road, 28 Nov).
+      for (const k of Object.keys(meta.spawns)) { const f = w.spawn(k).feet; if (w.grid.road(f[0], f[2]) !== null) bad.push(`spawn ${k} on the road`); }
       for (const s of w.seats) onGround('seat', s.id, s.position);
       (meta.gates || []).forEach((g, i) => onGround('gate', `${i}->${g.target}`, g.position));
       for (const [k, b] of Object.entries(meta.bells || {})) onGround('bell', k, b.position);
