@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import {buildGraph, shortest, nearestNode, nearestReachable, offRoute, waysFrom} from './nav-graph.js';
 
-// The map: a round minimap in the lower left that turns with the traveller, a big map (N, or a click
-// on the minimap) to set a waypoint, and a route to it on the mapped roads and paths, led on the
+// The map: a round minimap in the lower left that turns with the traveller (a click on it opens the big
+// map, src/atlas-map.js), with the buses and metro marked, and a route to a waypoint on the mapped roads and paths, led on the
 // ground by gold chevrons (design/TAXI-PLAN.md). The routes are src/nav-graph.js's; the roads and
 // paths are OSM's (streets.json, paths.json); water and walkable ground are the world's own grids.
 
@@ -14,7 +14,7 @@ const ROAD_W = {motorway: 5, trunk: 4.5, primary: 4, secondary: 3.4, tertiary: 2
 const C = {land: '#ebe3cf', water: '#8fb8d6', park: '#cfdcae', road: '#ffffff', roadEdge: '#c9bea6', path: '#d9cdb2', route: '#e2a93b', me: '#c0392b'};
 
 export async function createWorldNav({world, toast = () => {}}) {
-  const [streets, paths, transit] = await Promise.all(['streets', 'paths', 'transit'].map(n =>
+  const [streets, paths] = await Promise.all(['streets', 'paths'].map(n =>
     fetch(`/scenes/${world.id}/${n}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null)));
   if (!streets) return null;
   const g = world.grid;
@@ -51,12 +51,6 @@ export async function createWorldNav({world, toast = () => {}}) {
   };
   for (const [cls, , , f] of streets.ways) { const p = []; for (let i = 0; i < f.length; i += 2) p.push([f[i], f[i + 1]]); addLine(p, ROAD_W[streets.classes[cls]] || 2, false); }
   for (const [, , f] of paths?.ways || []) { const p = []; for (let i = 0; i < f.length; i += 2) p.push([f[i], f[i + 1]]); addLine(p, 1.2, true); }
-
-  // Named places for the big map: metro stations and the world's arrival points.
-  const places = [];
-  for (const l of transit?.lines || []) if (l.kind === 'metro') for (const st of l.stops) {
-    if (!places.some(p => p.name === st.name)) places.push({en: st.en, name: st.name, x: st.at[0], z: -st.at[1], metro: l.colour});
-  }
 
   // --- The route -------------------------------------------------------------------------------
   let route = null;   // {pts, length, target: [x, z], label, car}
@@ -186,6 +180,24 @@ export async function createWorldNav({world, toast = () => {}}) {
     drawRoads(ctx, b.x - span, b.z - span, b.x + span, b.z + span, scale);
     drawRoute(ctx, scale);
     for (const m of markers) pin(ctx, m.x, m.z, scale, m.color, -(cam - Math.PI));
+    // Buses and the metro (the owner: make them obvious to take): each stop a blue square, each metro
+    // entrance a ring in its line's colour, upright as the map turns.
+    const tr = world.transit;
+    if (tr) {
+      const up = -(cam - Math.PI), near = (x, z) => Math.abs(x - b.x) < span && Math.abs(z - b.z) < span;
+      for (const st of tr.stops || []) if (near(st.spot[0], st.spot[1])) {
+        ctx.save(); ctx.translate(st.spot[0], st.spot[1]); ctx.rotate(up); ctx.scale(dpr / scale, dpr / scale);
+        ctx.fillStyle = '#2f6fc0'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.fillRect(-5, -5, 10, 10); ctx.strokeRect(-5, -5, 10, 10);
+        ctx.fillStyle = '#fff'; ctx.font = '700 8px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('B', 0, .5);
+        ctx.restore();
+      }
+      for (const e of tr.entrances || []) if (near(e.spot[0], e.spot[1])) {
+        ctx.save(); ctx.translate(e.spot[0], e.spot[1]); ctx.rotate(up); ctx.scale(dpr / scale, dpr / scale);
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = e.line.colour; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 6.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = e.line.colour; ctx.font = '800 8px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M', 0, .5);
+        ctx.restore();
+      }
+    }
     if (route) pin(ctx, route.target[0], route.target[1], scale, C.route, -(cam - Math.PI));
     ctx.restore();
     // The traveller: an arrow in the middle, pointing up; north marked on the rim.
@@ -206,87 +218,33 @@ export async function createWorldNav({world, toast = () => {}}) {
     miniT = t;
   }
   let camera = null;
-  const camYaw = () => (camera ? camera.rotation.y : world.heading + Math.PI);
-
-  // --- The big map ---------------------------------------------------------------------------------
-  const dlg = document.createElement('dialog');
-  dlg.id = 'city-map'; dlg.setAttribute('aria-label', 'Map');
-  dlg.innerHTML = `<header><strong>Map</strong><span id="city-map-hint">Click to set a waypoint · drag to move · wheel to zoom</span>
-    <button type="button" data-act="clear">Clear route</button><button type="button" data-act="close" aria-label="Close map">✕</button></header><canvas></canvas>`;
-  document.body.append(dlg);
-  const big = dlg.querySelector('canvas'), bc = big.getContext('2d');
-  let view = {x: 0, z: 0, mpp: 3}, drag = null;
-  function drawBig() {
-    const W = big.width, H = big.height, s = dpr / view.mpp;
-    const x0 = view.x - W / 2 / s, z0 = view.z - H / 2 / s, x1 = view.x + W / 2 / s, z1 = view.z + H / 2 / s;
-    bc.save(); bc.fillStyle = '#e2d9c4'; bc.fillRect(0, 0, W, H);
-    bc.scale(s, s); bc.translate(-x0, -z0);
-    // Water and walkable ground, sampled at the map's own scale.
-    const cell = Math.max(4, view.mpp * 3), nx = Math.ceil((x1 - x0) / cell), nz = Math.ceil((z1 - z0) / cell);
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
-      const x = x0 + (i + .5) * cell, z = z0 + (j + .5) * cell;
-      if (g.water(x, z) !== null) bc.fillStyle = C.water; else if (g.height(x, z) !== null) bc.fillStyle = '#f1ead6'; else continue;
-      bc.fillRect(x0 + i * cell, z0 + j * cell, cell + .5, cell + .5);
-    }
-    drawRoads(bc, x0, z0, x1, z1, s);
-    drawRoute(bc, s);
-    if (route) pin(bc, route.target[0], route.target[1], s, C.route);
-    for (const m of markers) pin(bc, m.x, m.z, s, m.color);
-    bc.restore();
-    // Labels in screen space: stations, then the traveller.
-    const sx = (x) => (x - x0) * s, sz = (z) => (z - z0) * s;
-    bc.font = `600 ${12 * dpr}px system-ui, sans-serif`; bc.textAlign = 'left'; bc.textBaseline = 'middle';
-    for (const p of places) {
-      const X = sx(p.x), Z = sz(p.z);
-      if (X < 0 || Z < 0 || X > W || Z > H) continue;
-      bc.fillStyle = '#fff'; bc.beginPath(); bc.arc(X, Z, 5 * dpr, 0, Math.PI * 2); bc.fill();
-      bc.strokeStyle = p.metro; bc.lineWidth = 3 * dpr; bc.stroke();
-      if (view.mpp < 6) { bc.fillStyle = '#2e3b33'; bc.fillText(`${p.en} ${p.name}`, X + 9 * dpr, Z); }
-    }
-    const b = world.body;
-    bc.save(); bc.translate(sx(b.x), sz(b.z)); bc.rotate(Math.PI - world.heading);
-    bc.fillStyle = C.me; bc.strokeStyle = '#fff'; bc.lineWidth = 2 * dpr;
-    bc.beginPath(); bc.moveTo(0, -11 * dpr); bc.lineTo(8 * dpr, 9 * dpr); bc.lineTo(0, 5 * dpr); bc.lineTo(-8 * dpr, 9 * dpr); bc.closePath(); bc.fill(); bc.stroke();
-    bc.restore();
+  // On foot within 60 m of a metro entrance or a bus stop: a chip by the minimap says which, how far, and
+  // that F rides from there (the owner: make the buses and metro obvious to take).
+  const chip = document.createElement('div');
+  chip.id = 'transit-hint'; chip.hidden = true; chip.setAttribute('role', 'status');
+  document.body.append(chip);
+  let chipKey = '';
+  function transitHint() {
+    const tr = world.transit, b = world.body;
+    const n = !mini.hidden && tr && world.vehicle === 'walk' && !tr.busRide && !tr.metroRide ? tr.nearest(b.x, b.z, 60) : null;
+    if (!n) { if (!chip.hidden) { chip.hidden = true; chipKey = ''; } return; }
+    const here = n.d < 6, key = `${n.kind}${n.stop.name}${here}${Math.round(n.d / 10)}`;
+    if (key === chipKey) return;
+    chipKey = key; chip.hidden = false;
+    chip.className = n.kind;
+    chip.style.setProperty('--c', n.kind === 'metro' ? n.line.colour : '#2f6fc0');
+    chip.innerHTML = n.kind === 'metro'
+      ? `<i>M</i><span><b>${n.stop.en} ${n.stop.name}</b> ${n.line.en}<small>${here ? 'F to choose a station and ride' : `entrance ${Math.round(n.d / 5) * 5} m away`}</small></span>`
+      : `<i>B</i><span><b>${n.stop.en} ${n.stop.name}</b> bus stop<small>${here ? 'F to choose a bus and ride' : `${Math.round(n.d / 5) * 5} m away`}</small></span>`;
   }
-  const toWorld = (e) => {
-    const r = big.getBoundingClientRect(), s = dpr / view.mpp;
-    return [view.x + ((e.clientX - r.left) * dpr - big.width / 2) / s, view.z + ((e.clientY - r.top) * dpr - big.height / 2) / s];
-  };
-  big.addEventListener('pointerdown', (e) => { drag = {x: e.clientX, y: e.clientY, vx: view.x, vz: view.z, moved: false}; big.setPointerCapture(e.pointerId); });
-  big.addEventListener('pointermove', (e) => {
-    if (!drag) return;
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (Math.hypot(dx, dy) > 4) drag.moved = true;
-    view.x = drag.vx - dx * view.mpp; view.z = drag.vz - dy * view.mpp; drawBig();
-  });
-  big.addEventListener('pointerup', (e) => {
-    const d = drag; drag = null;
-    if (!d || d.moved) return;
-    const [x, z] = toWorld(e);
-    const near = places.find(p => Math.hypot(p.x - x, p.z - z) < 14 * view.mpp);
-    const r = nav.setWaypoint(near ? near.x : x, near ? near.z : z, {label: near ? `${near.en} ${near.name}` : 'Waypoint'});
-    drawBig();
-    if (r) toast(`${r.label} · ${fmt(r.length)} ${r.straight ? 'as the crow flies (no mapped way found)' : r.car ? 'by road' : 'on foot'}`);
-  });
-  big.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    view.mpp = Math.min(20, Math.max(.6, view.mpp * (e.deltaY > 0 ? 1.2 : 1 / 1.2))); drawBig();
-  }, {passive: false});
-  dlg.addEventListener('click', (e) => {
-    const act = e.target.closest('button')?.dataset.act;
-    if (act === 'clear') { nav.clear(); drawBig(); toast('Route cleared'); }
-    if (act === 'close') dlg.close();
-  });
-  dlg.addEventListener('keydown', (e) => { if (e.code === 'KeyN') { dlg.close(); e.preventDefault(); } });
-  mini.addEventListener('click', () => nav.openMap());
+  const camYaw = () => (camera ? camera.rotation.y : world.heading + Math.PI);
 
   const fmt = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m / 10) * 10} m`);
 
   const nav = {
     get route() { return route; },
     graphs: {car: carGraph, get walk() { return graphFor(false); }},
-    places, markers,
+    markers,
     /** Set a waypoint and plan the route there (by road in the taxi, on foot otherwise). */
     setWaypoint(x, z, opts = {}) { return plan(x, z, opts); },
     clear() { route = null; chevrons.count = 0; },
@@ -309,20 +267,14 @@ export async function createWorldNav({world, toast = () => {}}) {
     driveRoute(ax, az, bx, bz) {
       return shortest(carGraph, nearestNode(carGraph, ax, az, {car: true, radius: 150}), nearestNode(carGraph, bx, bz, {car: true, radius: 150}), {car: true});
     },
-    openMap() {
-      if (dlg.open) { dlg.close(); return; }
-      const b = world.body;
-      view = {x: route ? (b.x + route.target[0]) / 2 : b.x, z: route ? (b.z + route.target[1]) / 2 : b.z, mpp: route ? Math.min(12, Math.max(2, Math.hypot(route.target[0] - b.x, route.target[1] - b.z) / 500)) : 3};
-      dlg.showModal();
-      const r = big.getBoundingClientRect();
-      big.width = Math.round(r.width * dpr); big.height = Math.round(r.height * dpr);
-      drawBig();
-    },
-    show(on) { mini.hidden = !on; if (!on) { chevrons.count = 0; if (dlg.open) dlg.close(); } },
+    // The big map is src/atlas-map.js's: src/nanjing.js sets openMap to open it.
+    openMap() {},
+    show(on) { mini.hidden = !on; if (!on) { chevrons.count = 0; chip.hidden = true; chipKey = ''; } },
     stats: {ms: 0},
     update(t, cam) {
       const t0 = performance.now();
       camera = cam;
+      transitHint();
       if (route && t - checkAt > 1) {
         checkAt = t;
         const b = world.body;

@@ -21,6 +21,7 @@ import {createMusic} from './generative-music.js';
 import {createWorldNav} from './world-nav.js';
 import {createWorldTaxi} from './world-taxi.js';
 import {createRadio} from './radio.js';
+import {createAtlasMap} from './atlas-map.js';
 
 // A separate illustrated atlas: its compressed map coordinates must never be
 // confused with the photo-informed, unregistered Mufu reconstruction.
@@ -164,7 +165,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     // Journeys (src/world-journeys.js): real trips to make here, ticked off in the menu.
     if(w.journeys===undefined)w.journeys=createJourneys(w.id,storage);
     // The map, its routes and the taxis (src/world-nav.js, src/world-taxi.js): where there are streets.
-    if(w.nav===undefined){w.nav=null;createWorldNav({world:w,toast}).then(n=>{w.nav=n;if(n&&world===w)n.show(true);
+    if(w.nav===undefined){w.nav=null;createWorldNav({world:w,toast}).then(n=>{w.nav=n;if(n){n.openMap=()=>api.openMap();if(world===w)n.show(true);}
       if(n)createWorldTaxi({world:w,nav:n,toast,storage}).then(t=>{w.taxi=t;}).catch(e=>console.warn('Taxis did not load',e));}).catch(e=>console.warn('The map did not load',e));}
     else w.nav?.show(true);
     $('#city-journeys-open').hidden=!w.journeys;
@@ -185,6 +186,18 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   const $=s=>document.querySelector(s),records=[];
   const storage=(()=>{try{return window.localStorage;}catch{return null;}})();
   const gameView=createCityGame({scene,places,routes,ground,camera,shared,toast,storage,onChange:()=>refreshPins()});
+  // One map to every place (src/atlas-map.js; design/NAVIGATOR-PLAN.md): the home page opens on it, and in
+  // the city N, G, M, the pin button and the minimap open it. Where the visitor is counts only in the
+  // core city, the map's own frame.
+  let home3d=false;
+  const atlas=createAtlasMap({data,places,toast,walkIn:id=>!!WORLDS[id],facts:id=>FACTS[id]?.[0]?.t||'',
+    ctx:()=>{const inCity=!!world&&world.id==='core'&&!state.overview;
+      return {world:world?.id==='core'?world:home,inCity,body:inCity?world.body:null,heading:inCity?world.heading:0,route:inCity?world.nav?.route:null,clear:()=>world?.nav?.clear()};},
+    go:id=>api.enter(id,{drop:true}),
+    // To a station: its nearest entrance in the world (the station's map point lies inside a block).
+    lead:(x,z,label,car,station)=>{if(station&&world?.transit){const b=world.body,e=world.transit.entrances.filter(q=>q.stop.name===station)
+        .sort((p,q)=>Math.hypot(p.spot[0]-b.x,p.spot[1]-b.z)-Math.hypot(q.spot[0]-b.x,q.spot[1]-b.z))[0];if(e){x=e.spot[0];z=e.spot[1];}}
+      return world?.nav?.setWaypoint(x,z,{label,...(car===false?{car:false}:{})})||null;}});
   const game=gameView.game;
   let arrival=null,currentRoute=0,lastNearest=-1,userWeather=false;
   // Routes now include the streets between landmarks, so a walker can pass from
@@ -446,8 +459,8 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     const footstep=state.moving&&t-lastFootstep>.5;if(footstep)lastFootstep=t;return footstep;
   }
   const api={...built,data,game,gameView,refreshPins,renderPassport,renderPlaces,
-    openPlaces(open=true){const d=$('#city-places');if(!d||!active||state.overview)return;
-      if(open){controls.unlock();keys.clear();$('#city-menu').close();renderPlaces();if(!d.open)d.showModal();}else d.close();},
+    // G, the pin button: the map (the Places grid it replaces stays unused in the page for now).
+    openPlaces(open=true){if(open)api.openMap();else atlas.close();},
     // [ and ] hop to the previous or next landmark in the atlas order.
     hop(step){if(!active||state.overview)return;const list=walkable(),i=list.findIndex(p=>p.id===selected?.id);
       api.enter(list[(Math.max(0,i)+step+list.length)%list.length].id,{drop:true});},
@@ -469,10 +482,12 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
       $('#nanjing-home').hidden=false;$('#walk-environment').hidden=true;$('#walk-menu').hidden=true;$('#walk-places').hidden=true;$('#back-to-plan').hidden=true;
       $('#city-scope').value=scope;frameMap();
       homeLoad||=(worlds.core||=loadLandmarkWorld('core',{shared,skyShared,bands,rain,snow}).catch(e=>{delete worlds.core;homeLoad=null;throw e;}));
-      homeLoad.then(showHome).catch(e=>console.warn('home city',e));},
+      homeLoad.then(showHome).catch(e=>console.warn('home city',e));
+      // The home page opens on the flat map, unless the visitor chose the 3D view this visit.
+      if(!home3d)atlas.open({home:true,onView3d:()=>{home3d=true;}});},
     // `drop` plays the descent onto the avenue. Pins and menus ask for it;
     // programmatic entry (tests, the debug API) stays instant and deterministic.
-    enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');leaveHome();
+    enter(id,opts={}){const p=places.find(p=>p.id===id);if(!p)throw Error('Unknown Nanjing destination');atlas.close();leaveHome();
       if(id==='mufu'&&opts.walk){api.leave();onMufu();return;}
       exitWorld();useScene();reset();clearOrbitMotion(orbit);selected=p;currentRoute=p.route;flying(false);gameView.cancelRun();arrival=null;
       const mood=WORLDS[id]?.weather||p.vista?.weather;
@@ -565,7 +580,9 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
     hail(){if(!world||state.flying||world.gliding)return;if(!world.taxi){toast(world.nav===null&&world.id!=='core'?'No taxis here':'The taxis are still on their way…');return;}
       toast(world.taxi.hail());},
     get radioStation(){return radio?.station?.id||null;},
-    openMap(){if(!world)return;if(!world.nav){toast('The map is still being drawn…');return;}world.nav.openMap();},
+    openMap(){if(!active)return;controls.unlock();keys.clear();$('#city-menu').close();
+      atlas.open({home:state.overview,onView3d:()=>{home3d=true;if(!state.overview)api.showPlan();}});},
+    get atlas(){return atlas;},
     radio(){if(!world||!radio)return;if(world.vehicle==='walk'&&!world.riding){toast('The radio plays in the taxi, on the bike and in the boat');return;}
       if(audio?.started){radio.next(lastWeather);return;}
       if(audio&&soundButton)soundButton.click();
@@ -637,7 +654,7 @@ export async function createNanjing({camera,orbit,controls,postfx,state,shared,b
   $('#journeys-reset').onclick=()=>{if(world?.journeys&&confirm('Clear the journeys you have made?')){world.journeys.reset();renderJourneys();}};
   // Each composed view has the light it looks best in; a visitor who has chosen their own keeps it.
   $('#walk-weather').addEventListener('change',()=>{userWeather=true;});$('#city-weather').addEventListener('click',()=>{userWeather=true;});
-  $('#walk-places').onclick=()=>api.openPlaces(true);$('#places-close').onclick=()=>$('#city-places').close();
+  $('#walk-places').onclick=()=>api.openMap();$('#city-open-map')?.addEventListener('click',()=>{home3d=false;api.openMap();});$('#places-close').onclick=()=>$('#city-places').close();
   $('#places-map').onclick=()=>{$('#city-places').close();api.showPlan();};
   $('#passport-run').onclick=()=>{api.passport(false);api.startWindRun();};
   $('#passport-reset').onclick=()=>{if(confirm('Clear all lanterns, seals and your best run?'))game.reset();};

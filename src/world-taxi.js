@@ -224,7 +224,10 @@ export async function createWorldTaxi({world, nav, toast = () => {}, storage = n
       if (ignore.some(q => now < q.until && Math.hypot(q.x - ox, q.z - oz) < 1)) continue;
       const dx = ox - x, dz = oz - z, f = dx * fx + dz * fz, side = Math.abs(dx * fz - dz * fx);
       if (f < 0 || f > 45 || side > 1.2 + half) continue;
-      const l = Math.sqrt(12 * Math.max(0, f - 5.5));
+      // Squarely ahead (within a metre of its line): stop behind it. Only clipping the lane's edge (a car
+      // stopped in the next lane, 1.5 m aside): pass it at a crawl, as a driver eases by (the taxi and such
+      // a car waited on each other for good, 28 Nov).
+      const l = side > 1 ? Math.max(2, Math.sqrt(12 * Math.max(0, f - 5.5))) : Math.sqrt(12 * Math.max(0, f - 5.5));
       if (l < lim) { lim = l; by = [ox, oz]; }
     }
     // (Only one already under the nose, within 3.5 m middle to middle: a car queued ahead is waited for;

@@ -78,3 +78,8 @@ All four pieces as above. What the browser audit taught, and the rules it led to
   lane, while the taxi moves faster than a jog (3 m/s) and is not braking: running into it unslowed. Slower touches, as when an e-bike cuts in as a
   hailed taxi pulls out of the kerb, are counted as grazes. A route through the city's lights takes as
   long as the lights make it: the audit allows 10 minutes for the pickup and 20 for the ride.
+- **28 Nov:** the taxi eases past (at 2 m/s) what only clips its lane's edge, a car stopped in the next
+  lane 1.5 m aside, instead of waiting on it for good. Still seen in the audit: a car turning in a few
+  metres ahead of the taxi at a junction, the taxi braking hard, the two overlapping for a few seconds.
+  The ride check fails on such runs; it depends on which fare the dice give.
+

@@ -66,18 +66,19 @@
       <aside class="city-card">
         <div class="city-card-top"><span>金陵 · Places</span><button id="city-reset" title="Reset map view" aria-label="Reset map view">⌗</button></div>
         <select id="city-scope" aria-label="Map area" hidden><option value="central">Central Nanjing</option></select>
-        <div id="city-tabs" role="tablist" aria-label="Kinds of place"></div>
-        <nav id="city-destinations" aria-label="Nanjing destinations"></nav>
+        <button id="city-open-map" class="city-open-map">地图 · Map of Nanjing<small>every place, and the ways to go</small></button>
+        <div id="city-tabs" role="tablist" aria-label="Kinds of place" hidden></div>
+        <nav id="city-destinations" aria-label="Nanjing destinations" hidden></nav>
         <p class="city-caption">✦ walk in · OpenStreetMap, terrain data and photographs; not surveyed.</p>
       </aside>
-      <p class="city-hint">Drag to turn · Scroll to zoom · Choose a pin to enter</p>
+      <p class="city-hint">Drag to turn · Scroll to zoom · Choose a pin, or open the map</p>
       <div class="city-credit">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · <a href="/city/nanjing.json" target="_blank">ODbL / sources</a></div>
       <button id="city-passport-plan" class="plan-passport" aria-label="Open passport">印 <span id="plan-seals">0/18</span></button>
       <button id="city-weather" class="plan-weather">☀ Change weather</button>
     </section>
     <button id="nanjing-return" hidden>↖ Nanjing atlas</button>
     <dialog id="city-menu"><button id="city-menu-close" aria-label="Close menu">×</button><h2 id="city-menu-title">Nanjing</h2>
-      <p>WASD move · Drag to look · Shift faster<br>K bird kite · E up · Q down · M map · J passport</p>
+      <p>WASD move · Drag to look · Shift faster<br>K bird kite · E up · Q down · N or M map · J passport</p>
       <button id="city-passport-open">Passport · 金陵拾遗</button><button id="city-journeys-open" hidden>Journeys · 行程</button><button id="city-map-return">Nanjing map</button><button id="city-mufu">Detailed Mufu walk</button><button id="city-sound">Enable nature sound</button>
       <p class="city-caption">A scenic interpretation based on public map anchors and landmark photo references. Not a surveyed city model.</p>
     </dialog>

@@ -1944,7 +1944,7 @@ window.addEventListener("keydown", (e) => {
   ) {
     endTour(false);
   }
-  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open || $("#city-passport").open || $("#city-places").open || $("#metro-map")?.open || $("#bus-pick")?.open || $("#city-map")?.open) return;
+  if (e.target.matches("input,select,textarea") || $("#info").open || $("#city-menu").open || $("#city-passport").open || $("#city-places").open || $("#metro-map")?.open || $("#bus-pick")?.open || $("#city-map")?.open || $("#atlas-map")?.open) return;
   if (city?.active && !e.repeat && state.ready) {
     if (e.code === "KeyG") { city.openPlaces(true); e.preventDefault(); return; }
     if (e.code === "KeyF") { city.interact(); e.preventDefault(); return; }
@@ -1952,7 +1952,6 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "KeyH") { city.hail(); e.preventDefault(); return; }
     if (e.code === "KeyN") { city.openMap(); e.preventDefault(); return; }
     if (e.code === "KeyR") { city.radio(); e.preventDefault(); return; }
-    if (e.code === "BracketRight" || e.code === "BracketLeft") { city.hop(e.code === "BracketRight" ? 1 : -1); e.preventDefault(); return; }
   }
   if (city && e.code === "KeyJ" && !e.repeat && state.ready) { city.passport(true); e.preventDefault(); return; }
   // Ways to explore inside a world: 1 on foot, 2 bike, 3 boat, 4 paraglider.
@@ -1960,7 +1959,7 @@ window.addEventListener("keydown", (e) => {
     city.setWay(["walk","bike","boat","fly"][Number(e.code.slice(5))-1]);e.preventDefault();return;
   }
   if(city?.active && ["KeyM","KeyT","KeyP"].includes(e.code)) {
-    if(e.code==="KeyM" && !e.repeat) city.showPlan();
+    if(e.code==="KeyM" && !e.repeat) city.openMap();   // the map (src/atlas-map.js); its 3D view switch goes to the air
     e.preventDefault();return;
   }
   if (e.code === "KeyK" && !e.repeat && state.ready) { toggleKite(); e.preventDefault(); return; }

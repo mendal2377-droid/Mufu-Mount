@@ -47,3 +47,27 @@ or an entrance you must find first.
 - Whether the home page opens on the 2D map (proposed) or the 3D view.
 - Whether "Go now" should exist at all in a keepsake about travelling the city (proposed: yes, it is the
   one quick way, and the owner's friend may only have a few minutes).
+
+## Built (28 November 2026)
+
+- **The map** (`src/atlas-map.js`): the Yangtze, the Qinhuai and the lakes for the whole area
+  (public/city/nanjing.json), the core's roads (the main ones at every scale) and metro lines in their
+  colours, the world's own water and walkable ground when near enough, the 18 places as named pins
+  (names where they have room), "you are here" in the core city, the gold route.
+- **The card:** the place's names, its distance, the first of its sourced facts, and: Go now (glide in);
+  the gold route on foot or by taxi when it lies in the walkable city; by metro when a station near you
+  and one near it make the trip shorter, with the line, the stops, the change and the walks
+  (src/atlas-map.js, `metroRide`: 12 m/s between stations, 30 s a stop, 3 minutes to change: ours).
+  A place in a lake is reached at its shore (Xuanwu Lake: Line 1 to Xuanwumen, 370 m on foot).
+  "Lead me" walks you to the station's nearest real entrance.
+- **The home page** opens on the map; its 3D view switch closes it, and the home panel's "Map of
+  Nanjing" opens it again. In the city N, G and M open it, and so do the pin button and the minimap.
+- **The minimap** marks metro entrances (M, in the line's colour) and bus stops (B); within 60 m of one
+  on foot a chip names it, its distance, and at it "F to choose … and ride".
+- **Gone:** the Places grid (G), the home panel's four tabs, and the [ ] hop.
+- **Audit:** tests/atlas-browser.mjs (home, keys, metro, route, stops, go now); tests/atlas-map.test.js
+  (the frame, metro rides and changes, nearest station); tests/city-browser.mjs and
+  tests/city-game-browser.mjs now go through the map.
+- **Not yet:** labels crowd at the whole-city scale (some pins in the centre show without a name until
+  you zoom in); the bus lines are not routed by the card, only shown as stops.
+

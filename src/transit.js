@@ -616,6 +616,7 @@ export async function loadTransit(base, {scene, bands, heightAt, roadAt, surface
   return {
     lines: data.lines,
     entrances,
+    stops: stopsAll,      // the bus stops, one per shelter (the map and the minimap draw them)
     buses,
     // Places that must stay clear: within r of these nothing should stand (trees, lamps).
     clearings() {

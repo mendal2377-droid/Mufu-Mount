@@ -196,14 +196,14 @@ try {
   check("minimap", mini.car.y < -20 && Math.abs(mini.car.x) < 3 && miniWalk.ahead.y < -20 && Math.abs(miniWalk.ahead.x) < 3 && turn < .5,
     `in the taxi the way ahead is drawn at ${JSON.stringify(mini.car)}; on foot looking north, north is at ${JSON.stringify(miniWalk.ahead)}, the arrow turned ${turn.toFixed(2)} rad from up`);
 
-  // --- the big map ------------------------------------------------------------------------------------
+  // --- the big map (src/atlas-map.js) -----------------------------------------------------------------
   const map = await page.evaluate(() => { const m = window.__mufu, w = m.city.world; w.nav.clear(); window.__press("KeyN"); m.step(2, .1);
-    const d = document.querySelector("#city-map"); return { open: d.open }; });
-  const box = await page.locator("#city-map canvas").boundingBox();
-  // Click 150 px up and right of the middle: about 450 m away at the map's 3 m a pixel.
+    return { open: document.querySelector("#atlas-map").open }; });
+  const box = await page.locator("#atlas-map canvas").boundingBox();
+  // Click up and right of the middle: about 900 m away at the map's 6 m a pixel.
   await page.mouse.click(box.x + box.width / 2 + 110, box.y + box.height / 2 - 110);
   await page.screenshot({ path: "test-results/shots/taxi-map.png" });
-  const way = await page.evaluate(() => { const w = window.__mufu.city.world, r = w.nav.route; document.querySelector("#city-map").close(); window.__mufu.step(30, .1);
+  const way = await page.evaluate(() => { const w = window.__mufu.city.world, r = w.nav.route; document.querySelector("#atlas-map").close(); window.__mufu.step(30, .1);
     return r && { n: r.pts.length, len: Math.round(r.length), straight: r.straight, car: r.car, chevrons: w.scene.getObjectByName("Route chevrons").count }; });
   check("map", map.open && way && way.n > 2 && !way.straight && !way.car && way.chevrons > 5, JSON.stringify({ map, way }));
   await page.screenshot({ path: "test-results/shots/taxi-route.png" });

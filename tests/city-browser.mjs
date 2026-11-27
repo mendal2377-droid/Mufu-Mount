@@ -72,12 +72,15 @@ try{
   // The single-option area menu is hidden now; show the central map directly.
   await page.evaluate(()=>{window.__mufu.city.showPlan('central');window.__mufu.step(2,.1);});
   await page.screenshot({path:'test-results/nanjing-municipal.png',timeout:60000});
-  await page.evaluate(()=>window.__mufu.city.enter('mufu'));assert.equal(await page.evaluate(()=>window.__mufu.city.active),false);
+  // Mufu Mountain is merged into the city (1 Nov); its detailed walk with the photographs is the menu's
+  // "Detailed Mufu walk".
+  await page.evaluate(()=>document.querySelector('#city-mufu').click());assert.equal(await page.evaluate(()=>window.__mufu.city.active),false);
   assert.equal(await page.locator('.plan-card').isVisible(),true);assert.equal(await page.locator('.access-pin').count(),6);
   await page.locator('#nanjing-return').click();assert.equal(await page.evaluate(()=>window.__mufu.city.active),true);
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.__mufu.step(2,.1));
-  // The home page lists places under four tabs; Qinhuai is under City.
-  await page.locator('#city-tabs button[data-group="city"]').click();await page.locator('#city-destinations button[data-city="qinhuai"]').click();
+  // The home page's map (src/atlas-map.js): choose Qinhuai, and Go now.
+  await page.evaluate(()=>window.__mufu.city.openMap());await page.waitForFunction(()=>document.querySelector('#atlas-map').open);
+  await page.evaluate(()=>window.__mufu.city.atlas.pick('qinhuai'));await page.locator('#atlas-card [data-go="now"]').click();
   assert.equal(await page.evaluate(()=>window.__mufu.city.selected.id),'qinhuai');
   await page.evaluate(()=>window.__mufu.city.showPlan('central'));await page.screenshot({path:'test-results/nanjing-mobile.png',timeout:60000});
   report.errors=errors;assert.equal(errors.length,0,errors.join('\n'));console.log('Map, walking, kite, weather, Mufu portal and mobile checks passed');

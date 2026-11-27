@@ -78,24 +78,21 @@ try {
     const m = window.__mufu;
     m.city.enter('palace'); m.step(2, .1);
     const visible = !document.querySelector('#walk-places').hidden;
+    // G opens the map (src/atlas-map.js) with every place on it; choosing one and Go now goes there.
     document.body.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyG', key: 'g', bubbles: true}));
-    const open = document.querySelector('#city-places').open;
-    const cards = [...document.querySelectorAll('#places-grid .place-card')].map(c => c.dataset.id);   // the home list's grouped cards share the class
-    const nearest = cards[1];
-    document.querySelector(`.place-card[data-id="${nearest}"]`).click();
+    const open = document.querySelector('#atlas-map').open, cards = m.city.atlas.pins.length;
+    const nearest = 'qinhuai', buttons = m.city.atlas.pick(nearest);
+    document.querySelector('#atlas-card [data-go="now"]').click();
     m.step(60, .1);
-    const moved = m.city.selected.id, closed = !document.querySelector('#city-places').open, stillWalking = m.city.active && !m.state.overview;
-    document.body.dispatchEvent(new KeyboardEvent('keydown', {code: 'BracketRight', key: ']', bubbles: true}));
-    m.step(60, .1);
-    return {visible, open, cards: cards.length, first: cards[0], nearest, moved, closed, stillWalking, hopped: m.city.selected.id};
+    const moved = m.city.selected.id, closed = !document.querySelector('#atlas-map').open, stillWalking = m.city.active && !m.state.overview;
+    return {visible, open, cards, buttons, nearest, moved, closed, stillWalking};
   });
   report.places = places;
   assert.ok(places.visible, 'the Places button shows while walking');
-  assert.ok(places.open && places.cards === 18, 'G opens a list of every destination');
-  assert.equal(places.first, 'palace', 'the current place leads the list');
-  assert.equal(places.moved, places.nearest, 'choosing a card enters that place');
+  assert.ok(places.open && places.cards === 18, 'G opens the map with every destination');
+  assert.ok(places.buttons.includes('now'), 'a place card offers Go now');
+  assert.equal(places.moved, places.nearest, 'Go now enters that place');
   assert.ok(places.closed && places.stillWalking, 'and goes straight there, still walking');
-  assert.notEqual(places.hopped, places.moved, ']' + ' hops to the next landmark');
 
   // Lanterns -> fact cards -> seal, then persistence across a reload.
   await page.evaluate(() => { localStorage.removeItem('mufu-city-game-v1'); });

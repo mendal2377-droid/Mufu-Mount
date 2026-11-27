@@ -1437,3 +1437,46 @@ body.city-mode.playing #taxi-meter:not([hidden]) { display: grid; grid-template-
   #taxi-meter { left: 140px; bottom: 80px; min-width: 0; }
   #radio-sign b { font-size: 32px; }
 }
+
+/* One map to every place (src/atlas-map.js; design/NAVIGATOR-PLAN.md). */
+#atlas-map { width: min(1280px, 96vw); max-width: none; height: min(860px, 92vh); max-height: none; padding: 0; border: 0;
+  border-radius: 18px; overflow: hidden; background: #ece4d0; color: #2e3b33; }
+#atlas-map[open] { display: flex; flex-direction: column; }
+#atlas-map::backdrop { background: #0a141199; }
+#atlas-map header { position: static; pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f3ecd9; flex-wrap: wrap; }
+#atlas-map header strong { font: 700 18px "Playfair Display", Georgia, serif; }
+#atlas-map header span { flex: 1; font-size: 12px; opacity: .7; min-width: 120px; }
+#atlas-map header button { font-size: 13px; padding: 6px 12px; border-radius: 14px; background: #2e3b3314; color: #2e3b33; }
+#atlas-map header button[hidden] { display: none; }
+#atlas-map .atlas-body { position: relative; flex: 1; min-height: 0; }
+#atlas-map canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+#atlas-card { position: absolute; top: 14px; right: 14px; width: min(340px, calc(100% - 28px)); max-height: calc(100% - 28px); overflow: auto;
+  background: #fbf7ec; border-radius: 14px; padding: 16px 18px; box-shadow: 0 10px 30px #0003; font-size: 13px; line-height: 1.45; }
+#atlas-card[hidden] { display: none; }
+#atlas-card h3 { margin: 0 24px 6px 0; font: 700 24px "Noto Serif SC", serif; }
+#atlas-card h3 small { display: block; font: italic 500 15px "Playfair Display", Georgia, serif; opacity: .8; }
+#atlas-card .atlas-d { margin: 0 0 6px; font-weight: 600; color: #8a5a2a; }
+#atlas-card .atlas-x { position: absolute; top: 8px; right: 10px; font-size: 20px; background: none; color: #2e3b33; }
+#atlas-card .atlas-go { display: grid; gap: 8px; margin-top: 10px; }
+#atlas-card .atlas-go button { text-align: left; padding: 9px 12px; border-radius: 12px; background: #2e3b3312; color: #2e3b33; font-weight: 600; }
+#atlas-card .atlas-go button.primary { background: #2e3b33; color: #f6efd9; }
+#atlas-card .atlas-go button small { display: block; font-weight: 400; opacity: .75; }
+#atlas-card .atlas-go button i { font-style: normal; opacity: .8; font-weight: 400; }
+#atlas-card .atlas-metro { background: #2e3b330c; border-radius: 12px; padding: 8px 10px; }
+#atlas-card .atlas-metro p { margin: 0 0 6px; }
+#atlas-card .line { display: inline-block; padding: 0 6px; border-radius: 6px; background: var(--c); color: #fff; font-weight: 700; font-size: 12px; }
+.city-open-map { display: block; width: 100%; margin: 10px 0 6px; padding: 12px 14px; border-radius: 14px; background: #2e3b33; color: #f6efd9;
+  font: 700 16px "Noto Serif SC", serif; text-align: left; }
+.city-open-map small { display: block; font: 400 12px "DM Sans", sans-serif; opacity: .8; }
+@media (max-width: 640px) {
+  #atlas-card { top: auto; bottom: 10px; right: 10px; left: 10px; width: auto; max-height: 55%; }
+  #atlas-map header span { display: none; }
+}
+#transit-hint { position: fixed; left: 222px; bottom: 120px; z-index: 6; display: none; align-items: center; gap: 10px; padding: 8px 14px 8px 8px;
+  border-radius: 14px; background: #fbf7ecf0; color: #2e3b33; box-shadow: 0 4px 14px #0004; font-size: 12px; }
+body.city-mode.playing #transit-hint:not([hidden]) { display: flex; }
+#transit-hint i { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: #fff; font: 800 15px system-ui, sans-serif; font-style: normal; }
+#transit-hint.bus i { border-radius: 7px; }
+#transit-hint b { font-size: 13px; }
+#transit-hint small { display: block; opacity: .75; }
+@media (max-width: 640px) { #transit-hint { left: 12px; bottom: 204px; } }
