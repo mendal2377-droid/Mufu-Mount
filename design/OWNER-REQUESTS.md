@@ -14,7 +14,7 @@ The owner tried the taxi, map and radio on the live site ("great progress, some 
 - **N2. A 2D map option.**
 - **N7. Buses and the metro easier and more obvious to take.**
 - **N3. Performance:** the city walk runs badly on an old PC. **Done (28 Nov; design/PERFORMANCE.md):** the big meshes cut into tiles and what the haze hides not drawn (triangles a frame 11 M to 5-6 M on Balanced), a new Light tier for older computers (2-2.5 M), and the automatic lowering now works on every visit.
-- **N8. Landmarks still weak** in model detail, seasons and weather.
+- **N8. Landmarks still weak** in model detail, seasons and weather. Audited and planned 28 Nov (design/LANDMARK-DETAIL-PLAN.md); round 1, weather and seasons in every world, built and checked 28 Nov. Next: people on the landmark plazas, then the weakest models one by one.
 
 ## Open work, in order (updated 22 November 2026)
 

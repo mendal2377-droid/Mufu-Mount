@@ -17,6 +17,10 @@ import {tileScene} from './mesh-tiles.js';
 // Materials that only receive the sun's shadow (see the static mesh loop).
 const GROUND_MATERIALS = new Set(['lawn', 'forest_floor', 'city_ground', 'river_bed', 'water', 'canal_stone', 'paving_joint',
   'far_ground', 'city_paving', 'pitch', 'road_city', 'sidewalk']);
+// Hard ground, where rain lies in puddles; lawns, which follow the season (see paint()).
+const HARD_MATERIALS = new Set(['granite', 'granite_shade', 'paving', 'paving_joint', 'road', 'road_city', 'sidewalk',
+  'city_paving', 'canal_stone']);
+const LAWN_MATERIALS = {lawn: 1, pitch: .6, forest_floor: .45};
 const EYE = 1.65, SIT_EYE = 1.15, STEP_UP = .65, WALK = 1.7, RUN = 4.6;
 
 // Palette names from design/ART-BIBLE.md; the GLB carries them as material names.
@@ -304,6 +308,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.shoreTex = {value: sh.tex}; s.uniforms.shoreBox = {value: sh.box};
       s.uniforms.worldLotus = {value: name === 'lotus' ? 1 : 0}; s.uniforms.citySeason = shared.season || {value: 1};
       s.uniforms.worldWindows = {value: style.windows || 0};
+      s.uniforms.worldHard = {value: HARD_MATERIALS.has(name) || /asphalt|paving|flagstone|promenade/i.test(name) ? 1 : 0}; s.uniforms.worldLawn = {value: LAWN_MATERIALS[name] || 0};
+      s.uniforms.cityWet = shared.wet || {value: 0}; s.uniforms.cityCover = shared.cover || shared.snow; s.uniforms.cityRain = shared.storm || {value: 0};
       s.uniforms.citySunset = shared.sunset || {value: 0}; s.uniforms.cityDawn = shared.dawn || {value: 0};
       s.uniforms.worldFar = {value: far ? 1 : 0}; s.uniforms.hazeColor = hazeColor;
       s.uniforms.worldFacade = {value: facade ? 1 : 0}; s.uniforms.worldRoad = {value: road ? 1 : 0}; s.uniforms.worldWalk = {value: walkway ? 1 : 0};
@@ -312,7 +318,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       s.uniforms.skyClip = {value: new THREE.Vector4(...(meta.skyline_clip || [1, -1, 1, -1]))};
       s.vertexShader = 'varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nattribute float wallTop;varying float vTop;\n#endif\n' + s.vertexShader.replace('#include <worldpos_vertex>',
         '#include <worldpos_vertex>\nvWorldPos=(modelMatrix*vec4(transformed,1.)).xyz;vUp=normalize(mat3(modelMatrix)*objectNormal).y;\n#ifdef FACADE_TOP\nvTop=wallTop;\n#endif\n');
-      s.fragmentShader = 'uniform float worldOdd;uniform vec3 worldTint;uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops,worldLotus,citySeason;uniform vec3 hazeColor;uniform vec2 worldCourses;uniform vec4 skyClip,shoreBox;uniform sampler2D shoreTex;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
+      s.fragmentShader = 'uniform float worldOdd;uniform vec3 worldTint;uniform float citySnow,worldMottle,worldScale,worldJoints,cityTime,worldWater,worldWindows,citySunset,cityDawn,worldFar,worldFacade,worldRoad,worldWalk,cityNight,cityLit,cityShops,worldLotus,citySeason,worldHard,worldLawn,cityWet,cityCover,cityRain;uniform vec3 hazeColor;uniform vec2 worldCourses;uniform vec4 skyClip,shoreBox;uniform sampler2D shoreTex;varying vec3 vWorldPos;varying float vUp;\n#ifdef FACADE_TOP\nvarying float vTop;\n#endif\n' +
         'float lwHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n' +
         'float lwNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(lwHash(i),lwHash(i+vec2(1,0)),f.x),mix(lwHash(i+vec2(0,1)),lwHash(i+1.),f.x),f.y);}\n' +
         s.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -346,7 +352,33 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
               diffuseColor.rgb*=mix(vec3(1.),oc,seen*worldOdd);}
             diffuseColor.rgb*=1.+(lwNoise(vec2(run*.45,vWorldPos.y*.07))-.55)*.14*upright;
           }
-          diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.9,.86),citySnow*.7*smoothstep(.4,.9,vUp));
+          // Lawns through the year: Nanjing's park lawns are mostly warm-season grasses that go
+          // straw-coloured from late autumn to early spring (an assumption from the grasses' habit; no
+          // Nanjing survey found), with a fresh flush in spring.
+          if(worldLawn>0.){float s4=mod(citySeason,4.);
+            float winter=smoothstep(2.35,2.9,s4)*(1.-smoothstep(3.55,3.95,s4)),autumn=smoothstep(1.4,2.,s4)*(1.-smoothstep(2.6,3.,s4));
+            float spring=(1.-smoothstep(.2,.8,s4))*step(s4,1.)+smoothstep(3.6,3.95,s4);
+            float lum=dot(diffuseColor.rgb,vec3(.3,.59,.11));
+            diffuseColor.rgb=mix(diffuseColor.rgb,lum*vec3(1.12,.95,.56),(winter*.75+autumn*.22)*worldLawn);
+            diffuseColor.rgb*=mix(vec3(1.),vec3(1.02,1.08,.92),spring*worldLawn);}
+          // Snow lies where it can settle (cityCover builds over a minute or two of snowfall and melts
+          // over several after it), never on open water; the lotus stubble keeps most of its colour.
+          diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.88,.9,.86),cityCover*.75*smoothstep(.4,.9,vUp)*(1.-worldWater)*(1.-worldLotus*.7));
+          // Rain: level ground darkens as it soaks (cityWet builds within a minute of rain and dries over
+          // several after it), and puddles gather in the low spots of hard ground with the grey sky in
+          // them and rings where the drops land. The amounts are ours, for the look.
+          float wetUp=cityWet*smoothstep(.35,.9,vUp)*(1.-worldWater)*(1.-worldLotus)*(1.-worldFar)*(1.-cityCover);
+          diffuseColor.rgb*=1.-wetUp*(.16+.16*worldHard);
+          float puddle=0.;
+          if(worldHard>0.&&wetUp>.01){
+            vec2 pq=vWorldPos.xz;
+            float pn=lwNoise(pq*.21)*.7+lwNoise(pq*.83+3.1)*.3;
+            puddle=smoothstep(.75-.06*cityWet,.78-.06*cityWet,pn)*wetUp*smoothstep(.95,.99,vUp);
+            vec2 rq=pq/.6,rc=floor(rq),rf=fract(rq)-.5;float ph=fract(cityTime*1.3+lwHash(rc));
+            vec2 ro=(vec2(lwHash(rc+3.7),lwHash(rc+9.1))-.5)*.4;
+            float ring=smoothstep(.05,0.,abs(length(rf-ro)-ph*.4))*(1.-ph)*cityRain*(1.-smoothstep(.04,.15,max(fwidth(rq.x),fwidth(rq.y))));
+            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.05,.06,.07),puddle*.85)+ring*puddle*.18;
+          }
           // Water: drifting brush ripples, and the pale sky at grazing angles.
           if(worldWater>.5){
             vec2 w=vWorldPos.xz*.08;
@@ -360,6 +392,10 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
             diffuseColor.rgb*=mix(vec3(1.08,1.12,.94),vec3(.8,.88,1.),smoothstep(.05,.9,sd));
             diffuseColor.rgb=mix(diffuseColor.rgb*(.9+rip*.22),vec3(.78,.88,.96),fres*.35);
             diffuseColor.rgb+=smoothstep(.78,.86,rip)*.08;
+            // Rain on the water: greyer, with rings spreading where the drops land.
+            if(cityRain>.02){vec2 rq=vWorldPos.xz/.9,rc=floor(rq),rf=fract(rq)-.5;float ph=fract(cityTime*1.1+lwHash(rc));
+              float ring=smoothstep(.06,0.,abs(length(rf)-ph*.46))*(1.-ph)*(1.-smoothstep(.04,.15,max(fwidth(rq.x),fwidth(rq.y))));
+              diffuseColor.rgb=mix(diffuseColor.rgb,hazeColor*.8,cityRain*.25)+ring*cityRain*.1;}
           }
           // Lotus beds: a crowd of round leaves over the water, not a lawn. How much of the water they
           // cover follows the season (ours, from the plant's year: leaves come up in spring, close over
@@ -514,12 +550,15 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
           #endif`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           // At dusk and dawn a third of the windows glow warm.
           totalEmissiveRadiance+=winLit*max(worldWindows,worldFacade)*clamp(citySunset+cityDawn+cityNight*1.3,0.,1.3)*vec3(1.,.50,.16)*.85;
-          totalEmissiveRadiance+=pool*cityNight*vec3(1.,.62,.28)*1.8;`)
+          totalEmissiveRadiance+=pool*cityNight*vec3(1.,.62,.28)*1.8*(1.+cityWet*1.2);
+          // The puddles mirror the sky whatever light falls on them.
+          float pfres=pow(1.-clamp(dot(normalize(vViewPosition),normalize(vNormal)),0.,1.),3.);
+          totalEmissiveRadiance+=hazeColor*puddle*(.3+.55*pfres)*(1.-cityNight*.7);`)
         .replace('#include <dithering_fragment>', `#include <dithering_fragment>
           // Skyline haze: towers fade toward the sky colour with distance, never to nothing.
           if(worldFar>.5){float d=length(vViewPosition);gl_FragColor.rgb=mix(gl_FragColor.rgb,hazeColor,smoothstep(800.,9000.,d)*.45);}`);
     };
-    mat.customProgramCacheKey = () => 'landmark-paint-v11' + (facade ? 'f' : road ? 'r' : walkway ? 'w' : '');
+    mat.customProgramCacheKey = () => 'landmark-paint-v13' + (facade ? 'f' : road ? 'r' : walkway ? 'w' : '');
     cache.set(name, mat);
     return mat;
   }
@@ -649,7 +688,7 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
     const fall = (plan.fall || ['#' + year[2].getHexString()]).map(h => new THREE.Color(h));
     while (fall.length < 4) fall.push(fall[fall.length - 1]);
     m.onBeforeCompile = s => {
-      s.uniforms.cityTime = shared.time; s.uniforms.citySnow = shared.snow; s.uniforms.cityStorm = shared.storm || {value: 0};
+      s.uniforms.cityTime = shared.time; s.uniforms.citySnow = shared.cover || shared.snow; s.uniforms.cityStorm = shared.storm || {value: 0};
       s.uniforms.citySeason = shared.season || {value: 1};
       s.uniforms.seasonCol = {value: year}; s.uniforms.fallCol = {value: fall}; s.uniforms.crownBase = {value: base};
       s.vertexShader = 'uniform float cityTime,cityStorm;attribute float crown;varying float vCrown,vTreeHash;\n' + s.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -1614,6 +1653,8 @@ export async function loadLandmarkWorld(id, {shared, skyShared, bands, rain, sno
       sun.position.copy(focus).addScaledVector(direction, 600); sun.target.position.copy(focus);
       // At night the directional light is the moon: faint and blue.
       const night = weather.night || 0;
+      // Under a rain or snow sky the light is diffuse: the sun's shadows fade to a faint trace.
+      sun.shadow.intensity = 1 - Math.min(.9, weather.storm * .9 + weather.snow * .8);
       sun.intensity = (2.1 - weather.storm * 1.5 - weather.snow * .6) * (1 - weather.dawn * .6) * (1 - night * .86) * LIGHT.sun;
       sun.color.setRGB(1 - night * .45, 1 - weather.sunset * .3 - night * .3, 1 - weather.sunset * .55);
       hemi.intensity = (1.05 - weather.storm * .35 - weather.dawn * .55) * (1 - night * .84) * LIGHT.sky;

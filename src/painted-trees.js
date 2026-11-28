@@ -416,7 +416,7 @@ function leafMaterial(kind, sp, bands, shared, plan, base, map) {
   while (fall.length < 4) fall.push(fall[fall.length - 1]);
   const bloom = sp.bloom || [-9, -9];
   m.onBeforeCompile = s => {
-    s.uniforms.cityTime = shared.time; s.uniforms.citySnow = shared.snow; s.uniforms.cityStorm = shared.storm || {value: 0};
+    s.uniforms.cityTime = shared.time; s.uniforms.citySnow = shared.cover || shared.snow; s.uniforms.cityStorm = shared.storm || {value: 0};
     s.uniforms.citySeason = shared.season || {value: 1};
     s.uniforms.seasonCol = {value: year}; s.uniforms.fallCol = {value: fall}; s.uniforms.leafGain = {value: sp.gain || 1};
     s.vertexShader = `uniform float cityTime,cityStorm,citySeason;attribute float cardSeed,cardShade;attribute vec2 corner;varying float vSeed,vTreeHash,vShade,vBloom;

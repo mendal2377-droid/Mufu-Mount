@@ -141,6 +141,10 @@ const u = {
   sunset: { value: 0 },
   storm: { value: 0 },
   snow: { value: 0 },
+  // What the weather leaves on the ground, slower than the weather itself: wet (rain soaks it within a
+  // minute and it dries over several) and cover (snow settles over a minute or two, melts over several).
+  wet: { value: 0 },
+  cover: { value: 0 },
   night: { value: 0 },
   // The season as a number round the year: 0 spring, 1 summer, 2 autumn, 3 winter (4 = spring again).
   season: { value: 2 },
@@ -795,6 +799,7 @@ async function load() {
     window.__mufu = {
       state,
       weather,
+      u,   // the shared uniforms (season, wet, cover...), for the browser checks
       places,
       routes,
       camera,
@@ -1524,6 +1529,12 @@ function frame(elapsed) {
     weather[key] = THREE.MathUtils.damp(weather[key], target[key], 0.75, weatherDt);
     u[key].value = weather[key];
   }
+  // The rates are ours, for the look: rain soaks the ground within a minute and it dries over about
+  // four; snow whitens it within a minute and melts over about six
+  // (faster in rain).
+  const wetTo = target.storm, coverTo = target.snow;
+  u.wet.value = THREE.MathUtils.damp(u.wet.value, wetTo, wetTo > u.wet.value ? 0.06 : 0.012, weatherDt);
+  u.cover.value = THREE.MathUtils.damp(u.cover.value, coverTo, coverTo > u.cover.value ? 0.05 : 0.008 + target.storm * 0.03, weatherDt);
 
   if (city?.active) {
     updateGrade(dt);updateSunPosition();
